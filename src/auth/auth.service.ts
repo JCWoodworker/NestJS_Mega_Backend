@@ -9,7 +9,7 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  //  MAKE SURE TO USE bcrypt WHEN PERSISTING PASSWORDS TO A DB
+  //  MAKE SURE TO USE bcrypt WHEN PERSISTING PASSWORDS TO THE DB
 
   async signIn(username, pass) {
     const user = await this.userService.findOne(username);
