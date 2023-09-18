@@ -3,10 +3,13 @@ import { Injectable } from '@nestjs/common';
 // import { UpdateUserDto } from './dto/update-user.dto';
 
 // This should be a real class/interface representing a user entity
+// For now it just represents the the fake user objects in userList
 export type User = any;
 
 @Injectable()
 export class UserService {
+  // THESE ARE FOR DEMO PURPOSES ONLY
+  // MAKE SURE TO DELETE THESE AFTER ADDING THE DATABASE CONNECTIONS
   private readonly userList = [
     {
       userId: 1,
