@@ -1,34 +1,25 @@
 import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { User } from './entities/user.entity';
 // import { CreateUserDto } from './dto/create-user.dto';
 // import { UpdateUserDto } from './dto/update-user.dto';
 
-// This should be a real class/interface representing a user entity
-// For now it just represents the the fake user objects in userList
-export type User = any;
-
 @Injectable()
 export class UserService {
-  // THESE ARE FOR DEMO PURPOSES ONLY
-  // MAKE SURE TO DELETE THESE AFTER ADDING THE DATABASE CONNECTIONS
-  private readonly userList = [
-    {
-      userId: 1,
-      username: 'james',
-      password: 'pass',
-    },
-    {
-      userId: 2,
-      username: 'amanda',
-      password: 'pass',
-    },
-    {
-      userId: 3,
-      username: 'sully',
-      password: 'pass',
-    },
-  ];
+  constructor(
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+  ) {}
+  findAll(): Promise<User[]> {
+    return this.userRepository.find();
+  }
 
-  async findOne(username: string): Promise<User | undefined> {
-    return this.userList.find((user) => user.username === username);
+  findOne(userId: number): Promise<User | null> {
+    return this.userRepository.findOneBy({ userId });
+  }
+
+  async remove(id: number): Promise<void> {
+    await this.userRepository.delete(id);
   }
 }
