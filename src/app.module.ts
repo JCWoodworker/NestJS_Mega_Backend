@@ -21,7 +21,7 @@ import { User } from './user/entities/user.entity';
       password: 'postgres',
       database: 'nestBoilerplate',
       entities: [User],
-      // autoLoadEntities: true,
+      autoLoadEntities: true,
       synchronize: true,
     }),
   ],
