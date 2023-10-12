@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { AuthGuard } from './auth/auth.guard';
 import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import 'dotenv/config';
 
 import { User } from './user/entities/user.entity';
 
@@ -15,10 +16,10 @@ import { User } from './user/entities/user.entity';
     AuthModule,
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: 'localhost',
-      port: 5432,
+      host: process.env.DB_HOST,
+      port: parseInt(process.env.DB_PORT),
       username: 'postgres',
-      password: 'postgres',
+      password: process.env.DB_PASSWORD,
       database: 'nestBoilerplate',
       entities: [User],
       autoLoadEntities: true,

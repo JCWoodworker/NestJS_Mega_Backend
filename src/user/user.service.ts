@@ -14,7 +14,7 @@ export class UserService {
   async findAll(): Promise<any> {
     const users = await this.userRepository.find();
     return users.map((user) => {
-      return `User ${user.userId} - ${user.username}`;
+      return `This fucking guy's ID --> ${user.userId} and their fucking name --> ${user.username}`;
     });
   }
 
