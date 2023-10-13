@@ -16,6 +16,7 @@ import { SkipAuth } from 'src/auth/decorators/skipAuth.decorator';
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
+  // remember to get the fuck rid of this ... just testing SkipAuth
   @SkipAuth()
   @Get('getallusers')
   findAll() {
