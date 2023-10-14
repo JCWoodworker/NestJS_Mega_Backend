@@ -24,7 +24,7 @@ import { User } from './user/entities/user.entity';
       entities: [User],
       migrations: ['src/database/migrations/*.ts'],
       autoLoadEntities: true,
-      synchronize: true,
+      // synchronize: true,
     }),
   ],
   controllers: [AppController],
