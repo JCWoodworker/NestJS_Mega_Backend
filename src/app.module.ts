@@ -22,6 +22,7 @@ import { User } from './user/entities/user.entity';
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
       entities: [User],
+      migrations: ['src/database/migrations/*.ts'],
       autoLoadEntities: true,
       synchronize: true,
     }),
