@@ -6,9 +6,8 @@ import { AuthModule } from './auth/auth.module';
 import { AuthGuard } from './auth/auth.guard';
 import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import 'dotenv/config';
-
-import { User } from './user/entities/user.entity';
 
 @Module({
   imports: [
@@ -21,10 +20,8 @@ import { User } from './user/entities/user.entity';
       username: process.env.DB_USERNAME,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
-      entities: [User],
-      migrations: ['src/database/migrations/*.ts'],
+      // migrations: ['src/database/migrations/*.{ts,js}'],
       autoLoadEntities: true,
-      // synchronize: true,
     }),
   ],
   controllers: [AppController],
@@ -36,4 +33,6 @@ import { User } from './user/entities/user.entity';
     },
   ],
 })
-export class AppModule {}
+export class AppModule {
+  constructor(private dataSource: DataSource) {}
+}
