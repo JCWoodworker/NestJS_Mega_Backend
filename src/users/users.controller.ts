@@ -7,16 +7,17 @@ import {
   Param,
   Delete,
 } from '@nestjs/common';
-import { UserService } from './user.service';
+import { UsersService } from './users.service';
 import { SkipAuth } from 'src/auth/decorators/skipAuth.decorator';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
-@Controller('user')
+@Controller('users')
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly userService: UsersService) {}
 
   // remember to get the fuck rid of this ... just testing SkipAuth
+
   @SkipAuth()
   @Get('getallusers')
   findAll() {
