@@ -8,9 +8,6 @@ import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 
-// const isDevelopmentEnvironment =
-//   process.env.NODE_ENV === 'development' ? true : false;
-
 @Module({
   imports: [
     UserModule,
