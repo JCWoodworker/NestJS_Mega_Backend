@@ -8,8 +8,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 
-const isDevelopmentEnvironment =
-  process.env.NODE_ENV === 'development' ? true : false;
+// const isDevelopmentEnvironment =
+//   process.env.NODE_ENV === 'development' ? true : false;
 
 @Module({
   imports: [
@@ -26,7 +26,6 @@ const isDevelopmentEnvironment =
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
       autoLoadEntities: true,
-      synchronize: isDevelopmentEnvironment,
     }),
   ],
   controllers: [AppController],
