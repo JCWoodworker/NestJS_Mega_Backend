@@ -5,7 +5,7 @@ export class Users1697386288899 implements MigrationInterface {
     queryRunner.query(
       `CREATE TABLE "users" (
         "userId" SERIAL NOT NULL PRIMARY KEY,
-        "username" character varying NOT NULL,
+        "username" character varying NOT NULL UNIQUE,
         "password" character varying NOT NULL,
         "userType" character varying NOT NULL DEFAULT 'user')`,
     );
