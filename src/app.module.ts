@@ -6,12 +6,17 @@ import { AuthModule } from './auth/auth.module';
 import { AuthGuard } from './auth/auth.guard';
 import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import 'dotenv/config';
+import { ConfigModule } from '@nestjs/config';
+
+const isDev = process.env.NODE_ENV === 'development';
 
 @Module({
   imports: [
     UserModule,
     AuthModule,
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DB_HOST,
@@ -20,7 +25,7 @@ import 'dotenv/config';
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
       autoLoadEntities: true,
-      synchronize: true,
+      synchronize: isDev,
     }),
   ],
   controllers: [AppController],
