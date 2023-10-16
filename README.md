@@ -1,5 +1,9 @@
 # This is a Nest.JS boilerplate and will include JWT auth and PostgreSQL integration
 
+## This README is a work in progress, and is more of a notebook for me while I build this API
+
+* Please be patient while I construct a proper readme
+
 ## Handling Migrations
 
 * FIRST - Run ```yarn build``` before running ```run``` or ```revert```
