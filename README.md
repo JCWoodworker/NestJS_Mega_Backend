@@ -36,3 +36,5 @@ Multiple user endpoints have been set up at '/users':
   * '/' --> creates a new user if username and/or email doesn't already exist
 * PATCH, DELETE
   * '/:id' --> updates or deletes a user by id
+
+* NEST.JS VALIDATION - <https://docs.nestjs.com/techniques/validation>
