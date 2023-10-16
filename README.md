@@ -39,4 +39,3 @@ Multiple user endpoints have been set up at '/users':
 
 * NEST.JS VALIDATION - <https://docs.nestjs.com/techniques/validation>
 
-Testing sub-preprod
