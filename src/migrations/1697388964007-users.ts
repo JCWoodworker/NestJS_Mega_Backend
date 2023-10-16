@@ -7,6 +7,7 @@ export class Users1697386288899 implements MigrationInterface {
         "userId" SERIAL NOT NULL PRIMARY KEY,
         "username" character varying NOT NULL UNIQUE,
         "password" character varying NOT NULL,
+        "email" character varying NOT NULL UNIQUE,
         "userType" character varying NOT NULL DEFAULT 'user')`,
     );
   }
