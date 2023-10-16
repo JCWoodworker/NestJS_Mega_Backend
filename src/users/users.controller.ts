@@ -16,17 +16,22 @@ import { UpdateUserDto } from './dto/update-user.dto';
 export class UserController {
   constructor(private readonly userService: UsersService) {}
 
-  // remember to get the fuck rid of this ... just testing SkipAuth
-
+  // @SkipAuth()
   @Get('getallusers')
   findAll() {
     return this.userService.findAll();
   }
 
-  @SkipAuth()
+  // @SkipAuth()
   @Get(':id')
   findOne(@Param('id') id: number) {
     return this.userService.findOne(id);
+  }
+
+  // @SkipAuth()
+  @Get('username/:username')
+  findOneByUsername(@Param('username') username: string) {
+    return this.userService.findOneByUsername(username);
   }
 
   @SkipAuth()
@@ -35,13 +40,13 @@ export class UserController {
     return this.userService.create(createUserDto);
   }
 
-  @SkipAuth()
+  // @SkipAuth()
   @Patch(':id')
   update(@Param('id') id: number, @Body() updateUserDto: UpdateUserDto) {
     return this.userService.update(id, updateUserDto);
   }
 
-  @SkipAuth()
+  // @SkipAuth()
   @Delete(':id')
   remove(@Param('id') id: number) {
     return this.userService.remove(id);
