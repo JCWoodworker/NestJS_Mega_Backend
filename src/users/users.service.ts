@@ -26,7 +26,7 @@ export class UsersService {
         where: { userId: userId },
       });
     }
-    throw new Error('Unauthorized');
+    throw new Error('Unauthorized - user must be admin to perform this action');
   }
   async findOneByUsername(username: string) {
     return await this.usersRepository.findOne({

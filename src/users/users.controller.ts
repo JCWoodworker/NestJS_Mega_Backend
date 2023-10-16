@@ -12,6 +12,7 @@ import { UsersService } from './users.service';
 import { SkipAuth } from 'src/auth/decorators/skipAuth.decorator';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { SerializedUserDto } from './dto/serialezed-user';
 
 @Controller('users')
 export class UserController {
@@ -23,28 +24,46 @@ export class UserController {
   }
 
   @Get(':id')
-  findOneById(@Param('id') id: number, @Req() req) {
-    return this.userService.findOneById(id, req.user.userType);
+  async findOneById(
+    @Param('id') id: number,
+    @Req() req,
+  ): Promise<SerializedUserDto> {
+    const user = await this.userService.findOneById(id, req.user.userType);
+    return {
+      username: user.username,
+      email: user.email,
+      userType: user.userType,
+    };
   }
 
   @Get('username/:username')
-  findOneByUsername(@Param('username') username: string) {
-    return this.userService.findOneByUsername(username);
+  async findOneByUsername(
+    @Param('username') username: string,
+  ): Promise<SerializedUserDto> {
+    const user = await this.userService.findOneByUsername(username);
+    return {
+      username: user.username,
+      email: user.email,
+      userType: user.userType,
+    };
   }
 
   @SkipAuth()
   @Post()
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.userService.create(createUserDto);
+  async create(@Body() createUserDto: CreateUserDto) {
+    const user = await this.userService.create(createUserDto);
+    return { message: `User ${user.username} has been created` };
   }
 
   @Patch(':id')
-  update(@Param('id') id: number, @Body() updateUserDto: UpdateUserDto) {
-    return this.userService.update(id, updateUserDto);
+  async update(@Param('id') id: number, @Body() updateUserDto: UpdateUserDto) {
+    const user = await this.userService.update(id, updateUserDto);
+    return { message: `User ${user.username} has been updated` };
   }
 
   @Delete(':id')
-  remove(@Param('id') id: number, @Req() req) {
-    return this.userService.remove(id, req.user.userType);
+  async remove(@Param('id') id: number, @Req() req) {
+    const user = await this.userService.remove(id, req.user.userType);
+    return { message: `User ${user.username} has been deleted` };
   }
 }
