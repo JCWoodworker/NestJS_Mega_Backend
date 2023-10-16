@@ -11,7 +11,7 @@ export class AuthService {
 
   //  MAKE SURE TO USE bcrypt WHEN PERSISTING PASSWORDS TO THE DB
 
-  async signIn(username, pass) {
+  async signIn(username: string, pass: string) {
     const user = await this.usersService.findOneByUsername(username);
     if (user?.password !== pass) {
       throw new UnauthorizedException();
@@ -19,6 +19,7 @@ export class AuthService {
     const payload = { sub: user.userId, username: user.username };
     return {
       access_token: await this.jwtService.signAsync(payload),
+      userId: user.userId,
     };
   }
 }
