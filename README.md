@@ -21,3 +21,18 @@
 * Use ```Authorization: Bearer {yourAccessTokenHere}``` in the header of any request that requires a JWT
   * NOTE - AuthGuard() is globally enabled.  This means that every endpoint is protected and requires a valid JWT
   * Use the custom SkipAuth() decorator to make any of your endpoints public
+* When writing a new endpoint that requires auth, use @Req to get req.user
+  * The JWT will have all user information including userType!
+
+## Pre-built endpoints
+
+Multiple user endpoints have been set up at '/users':
+
+* GET:
+  * '/getallusers' --> returns an array of all users (id, username, email)
+  * '/:id' --> returns one specific user by id
+  * ':/username/:username' --> returns one specific user by username
+* POST
+  * '/' --> creates a new user if username and/or email doesn't already exist
+* PATCH, DELETE
+  * '/:id' --> updates or deletes a user by id
