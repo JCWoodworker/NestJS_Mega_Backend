@@ -29,12 +29,12 @@
 Multiple user endpoints have been set up at '/users':
 
 * GET:
-  * '/getallusers' --> returns an array of all users (id, username, email)
-  * '/:id' --> returns one specific user by id
-  * ':/username/:username' --> returns one specific user by username
+  * /getallusers --> returns an array of all users (id, username, email)
+  * /:id --> returns one specific user by id
+  * :/username/:username --> returns one specific user by username
 * POST
-  * '/' --> creates a new user if username and/or email doesn't already exist
+  * / --> creates a new user if username and/or email doesn't already exist
 * PATCH, DELETE
-  * '/:id' --> updates or deletes a user by id
+  * /:id --> updates or deletes a user by id
 
 * NEST.JS VALIDATION - <https://docs.nestjs.com/techniques/validation>
