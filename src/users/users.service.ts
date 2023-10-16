@@ -6,6 +6,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
 import 'dotenv/config';
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -19,8 +20,13 @@ export class UsersService {
     });
   }
 
-  async findOne(userId: number) {
-    return await this.usersRepository.findOne({ where: { userId: userId } });
+  async findOneById(userId: number, userType: string) {
+    if (userType === 'admin') {
+      return await this.usersRepository.findOne({
+        where: { userId: userId },
+      });
+    }
+    throw new Error('Unauthorized');
   }
   async findOneByUsername(username: string) {
     return await this.usersRepository.findOne({
@@ -46,8 +52,8 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
-  async remove(userId: number) {
-    const user = await this.findOne(userId);
+  async remove(userId: number, userType: string) {
+    const user = await this.findOneById(userId, userType);
     return this.usersRepository.remove(user);
   }
 }

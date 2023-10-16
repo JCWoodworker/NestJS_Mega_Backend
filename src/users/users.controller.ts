@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Req,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { SkipAuth } from 'src/auth/decorators/skipAuth.decorator';
@@ -16,19 +17,16 @@ import { UpdateUserDto } from './dto/update-user.dto';
 export class UserController {
   constructor(private readonly userService: UsersService) {}
 
-  // @SkipAuth()
   @Get('getallusers')
   findAll() {
     return this.userService.findAll();
   }
 
-  // @SkipAuth()
   @Get(':id')
-  findOne(@Param('id') id: number) {
-    return this.userService.findOne(id);
+  findOneById(@Param('id') id: number, @Req() req) {
+    return this.userService.findOneById(id, req.user.userType);
   }
 
-  // @SkipAuth()
   @Get('username/:username')
   findOneByUsername(@Param('username') username: string) {
     return this.userService.findOneByUsername(username);
@@ -40,15 +38,13 @@ export class UserController {
     return this.userService.create(createUserDto);
   }
 
-  // @SkipAuth()
   @Patch(':id')
   update(@Param('id') id: number, @Body() updateUserDto: UpdateUserDto) {
     return this.userService.update(id, updateUserDto);
   }
 
-  // @SkipAuth()
   @Delete(':id')
-  remove(@Param('id') id: number) {
-    return this.userService.remove(id);
+  remove(@Param('id') id: number, @Req() req) {
+    return this.userService.remove(id, req.user.userType);
   }
 }
