@@ -14,12 +14,17 @@ export class UsersService {
   async findAll(): Promise<any> {
     const users = await this.usersRepository.find();
     return users.map((user) => {
-      return `ID --> ${user.userId}, Name --> ${user.username}`;
+      return `ID --> ${user.userId}, Name --> ${user.username}, Email --> ${user.email}`;
     });
   }
 
   async findOne(userId: number) {
     return await this.usersRepository.findOne({ where: { userId: userId } });
+  }
+  async findOneByUsername(username: string) {
+    return await this.usersRepository.findOne({
+      where: { username: username },
+    });
   }
 
   async create(createUserDto: CreateUserDto) {

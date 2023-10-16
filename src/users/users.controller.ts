@@ -18,7 +18,6 @@ export class UserController {
 
   // remember to get the fuck rid of this ... just testing SkipAuth
 
-  @SkipAuth()
   @Get('getallusers')
   findAll() {
     return this.userService.findAll();

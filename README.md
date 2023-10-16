@@ -10,4 +10,10 @@
 * ```npx typeorm migration:revert -d dist/typeorm-cli.config```
   * ```yarn migration:revert```
 
+## Auth
 
+* Send POST request with JSON of username and password.
+* You'll receive an access token
+* Use ```Authorization: Bearer {yourAccessTokenHere}``` in the header of any request that requires a JWT
+  * NOTE - AuthGuard() is globally enabled.  This means that every endpoint is protected and requires a valid JWT
+  * Use the custom SkipAuth() decorator to make any of your endpoints public
