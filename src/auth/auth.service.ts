@@ -10,7 +10,7 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async signIn(username: string, pass: string) {
+  async signIn(username: string, pass: string, expiration: string) {
     const user = await this.usersService.findOneByUsername(username);
     const isMatch = await bcrypt.compare(pass, user.password);
     if (!isMatch) {
@@ -20,6 +20,7 @@ export class AuthService {
       sub: user.userId,
       username: user.username,
       userType: user.userType,
+      expiresIn: expiration,
     };
     return await this.jwtService.signAsync(payload);
   }

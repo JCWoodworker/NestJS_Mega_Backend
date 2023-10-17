@@ -26,18 +26,33 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const accessToken = await this.authService.signIn(
-      signInDto.username,
-      signInDto.password,
-    );
+    const [accessToken, refreshToken] = [
+      await this.authService.signIn(
+        signInDto.username,
+        signInDto.password,
+        '15m',
+      ),
+      await this.authService.signIn(
+        signInDto.username,
+        signInDto.password,
+        '7d',
+      ),
+    ];
     res
       .cookie('access_token', accessToken, {
         httpOnly: true,
         sameSite: 'lax',
         secure: false,
-        expires: new Date(Date.now() + 1000 * 60 * 60 * 24),
+        expires: new Date(Date.now() + 60000 * 15),
       })
       .send({ status: 'ok' });
+  }
+
+  @Post('refresh')
+  refreshToken() {
+    return {
+      message: 'Placeholder for refreshing tokens - no actions taken yet',
+    };
   }
 
   @UseGuards(AuthGuard)
