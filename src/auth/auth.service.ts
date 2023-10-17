@@ -47,10 +47,17 @@ export class AuthService {
     return [accessToken, refreshToken];
   }
 
-  async refreshToken(token: string, userId: number, userType: string) {
+  async refreshToken(
+    currentRefreshToken: string,
+    userId: number,
+    userType: string,
+  ) {
     const user = await this.usersService.findOneById(userId, userType);
     debugger;
-    const isMatch = await bcrypt.compare(token, user.refreshToken);
+    const isMatch = await bcrypt.compare(
+      currentRefreshToken,
+      user.refreshToken,
+    );
     if (!isMatch) {
       throw new UnauthorizedException(
         'Access Denied --> Please try your login again',

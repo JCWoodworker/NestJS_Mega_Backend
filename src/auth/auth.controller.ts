@@ -51,14 +51,22 @@ export class AuthController {
   }
 
   @Post('refresh')
-  refreshToken(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+  async refreshToken(@Req() req, @Res({ passthrough: true }) res) {
     if (!req.cookies.refresh_token) {
       return {
         message: 'Refresh token not found',
       };
     }
 
-    return { message: 'Refresh token found - no actions are set up yet' };
+    if (!req.user) {
+      return {
+        message: 'User not found',
+      };
+    }
+
+    return {
+      message: 'User and Refresh token found - no actions are set up yet',
+    };
   }
 
   @UseGuards(AuthGuard)
