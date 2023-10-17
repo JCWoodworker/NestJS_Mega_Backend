@@ -10,8 +10,6 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  //  MAKE SURE TO USE bcrypt WHEN PERSISTING PASSWORDS TO THE DB
-
   async signIn(username: string, pass: string) {
     const user = await this.usersService.findOneByUsername(username);
     const isMatch = await bcrypt.compare(pass, user.password);

@@ -33,7 +33,7 @@ export class AuthGuard implements CanActivate {
     }
     try {
       const payload = await this.jwtService.verifyAsync(token, {
-        secret: jwtConstants.secret,
+        secret: jwtConstants.accessSecret,
       });
       request['user'] = payload;
     } catch {
@@ -42,15 +42,15 @@ export class AuthGuard implements CanActivate {
     return true;
   }
 
-  private extractTokenFromHeader(request: Request): string | undefined {
-    const [type, token] = request.headers.authorization?.split(' ') ?? [];
-    return type === 'Bearer' ? token : undefined;
-  }
+  // private extractTokenFromHeader(request: Request): string | undefined {
+  //   const [type, token] = request.headers.authorization?.split(' ') ?? [];
+  //   return type === 'Bearer' ? token : undefined;
+  // }
 
   private extractTokenFromCookie(req: Request): string | undefined {
     if (req.cookies && req.cookies.access_token) {
       return req.cookies.access_token;
     }
-    return null;
+    return undefined;
   }
 }
