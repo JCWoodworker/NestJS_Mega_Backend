@@ -51,9 +51,10 @@ export class AuthService {
     currentRefreshToken: string,
     userId: number,
     userType: string,
+    accessTokenexpiration: string = '15m',
+    refreshTokenExpiration: string = '7d',
   ) {
     const user = await this.usersService.findOneById(userId, userType);
-    debugger;
     const isMatch = await bcrypt.compare(
       currentRefreshToken,
       user.refreshToken,
@@ -63,6 +64,27 @@ export class AuthService {
         'Access Denied --> Please try your login again',
       );
     }
-    // return [newAccessToken, newRefreshToken];
+    const payload = {
+      sub: user.userId,
+      username: user.username,
+      userType: user.userType,
+    };
+    const [newAccessToken, newRefreshToken] = await Promise.all([
+      this.jwtService.signAsync({
+        ...payload,
+        expiresIn: accessTokenexpiration,
+      }),
+      this.jwtService.signAsync({
+        ...payload,
+        expiresIn: refreshTokenExpiration,
+      }),
+    ]);
+    const salt = bcrypt.genSaltSync(parseInt(process.env.SALT_ROUNDS));
+    const encryptedRefreshToken = await bcrypt.hash(newRefreshToken, salt);
+    await this.usersService.update(user.userId, {
+      refreshToken: encryptedRefreshToken,
+    });
+
+    return [newAccessToken, newRefreshToken];
   }
 }

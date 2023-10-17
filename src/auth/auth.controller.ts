@@ -52,7 +52,7 @@ export class AuthController {
 
   @Post('refresh')
   async refreshToken(@Req() req, @Res({ passthrough: true }) res) {
-    if (!req.cookies.refresh_token) {
+    if (!req.cookies.refresh_token && req.user.refreshToken) {
       return {
         message: 'Refresh token not found',
       };
@@ -64,8 +64,32 @@ export class AuthController {
       };
     }
 
+    const [newAccessToken, newRefreshToken] =
+      await this.authService.refreshToken(
+        req.cookies.refresh_token,
+        req.user.sub,
+        req.user.userType,
+      );
+
+    res
+      .cookie('access_token', newAccessToken, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: false,
+        expires: new Date(Date.now() + 60000 * 15),
+      })
+      .cookie('refresh_token', newRefreshToken, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: false,
+        expires: new Date(Date.now() + 60000 * 60 * 24 * 7),
+      })
+      .send({
+        status: 'Login successful',
+      });
+
     return {
-      message: 'User and Refresh token found - no actions are set up yet',
+      message: 'Tokens refreshed',
     };
   }
 
