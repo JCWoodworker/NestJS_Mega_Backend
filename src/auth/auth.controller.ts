@@ -85,12 +85,8 @@ export class AuthController {
         expires: new Date(Date.now() + 60000 * 60 * 24 * 7),
       })
       .send({
-        status: 'Login successful',
+        status: `Token refresh successful - Woooooo!`,
       });
-
-    return {
-      message: 'Tokens refreshed',
-    };
   }
 
   @UseGuards(AuthGuard)
