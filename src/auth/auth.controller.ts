@@ -26,18 +26,12 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const [accessToken, refreshToken] = [
-      await this.authService.signIn(
-        signInDto.username,
-        signInDto.password,
-        '15m',
-      ),
-      await this.authService.signIn(
-        signInDto.username,
-        signInDto.password,
-        '7d',
-      ),
-    ];
+    const [accessToken, refreshToken] = await this.authService.signIn(
+      signInDto.username,
+      signInDto.password,
+      '15m',
+      '7d',
+    );
     res
       .cookie('access_token', accessToken, {
         httpOnly: true,
@@ -45,11 +39,23 @@ export class AuthController {
         secure: false,
         expires: new Date(Date.now() + 60000 * 15),
       })
-      .send({ status: 'ok' });
+      .cookie('refresh_token', refreshToken, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: false,
+        expires: new Date(Date.now() + 60000 * 60 * 24 * 7),
+      })
+      .send({
+        status: 'Login successful',
+      });
   }
 
   @Post('refresh')
   refreshToken() {
+    //  TODO
+    //  Hash the refresh token and save it to the users table
+    //  Use the refresh token to generate a new access token
+    //  Return the new access token
     return {
       message: 'Placeholder for refreshing tokens - no actions taken yet',
     };
