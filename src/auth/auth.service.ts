@@ -26,15 +26,36 @@ export class AuthService {
       username: user.username,
       userType: user.userType,
     };
-    return [
-      await this.jwtService.signAsync({
+
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync({
         ...payload,
         expiresIn: accessTokenexpiration,
       }),
-      await this.jwtService.signAsync({
+      this.jwtService.signAsync({
         ...payload,
         expiresIn: refreshTokenExpiration,
       }),
-    ];
+    ]);
+
+    const salt = bcrypt.genSaltSync(parseInt(process.env.SALT_ROUNDS));
+    const encryptedRefreshToken = await bcrypt.hash(refreshToken, salt);
+    await this.usersService.update(user.userId, {
+      refreshToken: encryptedRefreshToken,
+    });
+
+    return [accessToken, refreshToken];
+  }
+
+  async refreshToken(token: string, userId: number, userType: string) {
+    const user = await this.usersService.findOneById(userId, userType);
+    debugger;
+    const isMatch = await bcrypt.compare(token, user.refreshToken);
+    if (!isMatch) {
+      throw new UnauthorizedException(
+        'Access Denied --> Please try your login again',
+      );
+    }
+    // return [newAccessToken, newRefreshToken];
   }
 }

@@ -16,4 +16,7 @@ export class Users {
 
   @Column({ default: 'basic' })
   userType: string;
+
+  @Column({ default: '' })
+  refreshToken: string;
 }

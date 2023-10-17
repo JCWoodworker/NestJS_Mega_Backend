@@ -51,14 +51,14 @@ export class AuthController {
   }
 
   @Post('refresh')
-  refreshToken() {
-    //  TODO
-    //  Hash the refresh token and save it to the users table
-    //  Use the refresh token to generate a new access token
-    //  Return the new access token
-    return {
-      message: 'Placeholder for refreshing tokens - no actions taken yet',
-    };
+  refreshToken(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    if (!req.cookies.refresh_token) {
+      return {
+        message: 'Refresh token not found',
+      };
+    }
+
+    return { message: 'Refresh token found - no actions are set up yet' };
   }
 
   @UseGuards(AuthGuard)
