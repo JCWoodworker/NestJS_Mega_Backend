@@ -70,7 +70,7 @@ export class AuthController {
         req.user.sub,
         req.user.userType,
       );
-
+    // SET { secure: true } in production for the below cookies
     res
       .cookie('access_token', newAccessToken, {
         httpOnly: true,
