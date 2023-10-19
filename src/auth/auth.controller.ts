@@ -37,7 +37,7 @@ export class AuthController {
         httpOnly: true,
         sameSite: 'lax',
         secure: false,
-        expires: new Date(Date.now() + 60000 * 15),
+        expires: new Date(Date.now() + 60000 * 60 * 24),
       })
       .cookie('refresh_token', refreshToken, {
         httpOnly: true,
@@ -52,7 +52,7 @@ export class AuthController {
 
   @Post('refresh')
   async refreshToken(@Req() req, @Res({ passthrough: true }) res) {
-    if (!req.cookies.refresh_token && req.user.refreshToken) {
+    if (!req.cookies.refresh_token) {
       return {
         message: 'Refresh token not found',
       };
@@ -76,7 +76,7 @@ export class AuthController {
         httpOnly: true,
         sameSite: 'lax',
         secure: false,
-        expires: new Date(Date.now() + 60000 * 15),
+        expires: new Date(Date.now() + 60000 * 60 * 24),
       })
       .cookie('refresh_token', newRefreshToken, {
         httpOnly: true,
