@@ -16,7 +16,12 @@ export class UsersService {
   async findAll(): Promise<any> {
     const users = await this.usersRepository.find();
     return users.map((user) => {
-      return `ID --> ${user.userId}, Name --> ${user.username}, Email --> ${user.email}`;
+      return {
+        id: user.userId,
+        name: user.username,
+        email: user.email,
+        userType: user.userType,
+      };
     });
   }
 
@@ -41,7 +46,16 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
-  async update(id: number, updateUserDto: UpdateUserDto) {
+  async update(
+    id: number,
+    updateUserDto: UpdateUserDto,
+    authorizationToChangeRefreshToken = false,
+  ) {
+    if (!authorizationToChangeRefreshToken && updateUserDto.refreshToken) {
+      throw new Error(
+        'Unauthorized - cannot manually change your refresh token',
+      );
+    }
     const user = await this.usersRepository.preload({
       userId: +id,
       ...updateUserDto,

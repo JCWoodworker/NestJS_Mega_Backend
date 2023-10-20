@@ -40,9 +40,13 @@ export class AuthService {
 
     const salt = bcrypt.genSaltSync(parseInt(process.env.SALT_ROUNDS));
     const encryptedRefreshToken = await bcrypt.hash(refreshToken, salt);
-    await this.usersService.update(user.userId, {
-      refreshToken: encryptedRefreshToken,
-    });
+    await this.usersService.update(
+      user.userId,
+      {
+        refreshToken: encryptedRefreshToken,
+      },
+      true,
+    );
 
     return [accessToken, refreshToken];
   }
@@ -81,17 +85,25 @@ export class AuthService {
     ]);
     const salt = bcrypt.genSaltSync(parseInt(process.env.SALT_ROUNDS));
     const encryptedRefreshToken = await bcrypt.hash(newRefreshToken, salt);
-    await this.usersService.update(user.userId, {
-      refreshToken: encryptedRefreshToken,
-    });
+    await this.usersService.update(
+      user.userId,
+      {
+        refreshToken: encryptedRefreshToken,
+      },
+      true,
+    );
 
     return [newAccessToken, newRefreshToken];
   }
 
   clearRefreshToken = async (userId) => {
-    await this.usersService.update(userId, {
-      refreshToken: null,
-    });
+    await this.usersService.update(
+      userId,
+      {
+        refreshToken: null,
+      },
+      true,
+    );
     return true;
   };
 }

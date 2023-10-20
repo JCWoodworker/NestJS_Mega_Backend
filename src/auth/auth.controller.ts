@@ -9,7 +9,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { AuthGuard } from './auth.guard';
 import { AuthService } from './auth.service';
 import { SkipAuth } from './decorators/skipAuth.decorator';
@@ -23,7 +23,6 @@ export class AuthController {
   @Post('login')
   async signIn(
     @Body() signInDto: Record<string, any>,
-    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
     const [accessToken, refreshToken] = await this.authService.signIn(
