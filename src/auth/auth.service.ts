@@ -87,6 +87,7 @@ export class AuthService {
 
     return [newAccessToken, newRefreshToken];
   }
+
   clearRefreshToken = async (userId) => {
     await this.usersService.update(userId, {
       refreshToken: null,

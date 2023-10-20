@@ -8,4 +8,10 @@ export class CreateUserDto {
 
   @IsString()
   readonly email: string;
+
+  @IsString()
+  readonly userType: string;
+
+  @IsString()
+  readonly refreshToken: string;
 }
