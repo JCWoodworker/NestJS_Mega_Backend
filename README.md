@@ -16,11 +16,20 @@
 
 ## Auth
 
-* Send POST request with JSON of username and password.
-* You'll receive an access token
-* Use ```Authorization: Bearer {yourAccessTokenHere}``` in the header of any request that requires a JWT
+* Send POST request in the following format:
+  { "username": "someuser",
+    "password": "mypassword"
+  }
+* Upon successful login the following will happen:
+  * An access_token and refresh_token will be created and sent in the response cookie
+    * This is an http only cookie and cannot be accessed using JS in the frontend
+    * The refresh token will be encrypted and persisted in the users table for the logged in user
   * NOTE - AuthGuard() is globally enabled.  This means that every endpoint is protected and requires a valid JWT
-  * Use the custom SkipAuth() decorator to make any of your endpoints public
+    * Thanks to the http only cookie every request from the front end will have the valid JWT until the user logs out our the JWT expires
+    * The endpoint ```/auth/refresh``` will refresh the user's token when pinged.
+      * No logic has been written to make this happen automatically yet
+    * Use the endpoint ```/auth/logout``` to log the user out and clear http only cookies
+    * Use the custom SkipAuth() decorator to make any of your endpoints public
 * When writing a new endpoint that requires auth, use @Req to get req.user
   * The JWT will have all user information including userType!
 
@@ -38,4 +47,3 @@ Multiple user endpoints have been set up at '/users':
   * /:id --> updates or deletes a user by id
 
 * NEST.JS VALIDATION - <https://docs.nestjs.com/techniques/validation>
-

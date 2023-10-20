@@ -91,6 +91,12 @@ export class AuthController {
 
   @Post('logout')
   async logout(@Req() req, @Res({ passthrough: true }) res) {
+    if (!req.user) {
+      return {
+        message: 'User not found',
+      };
+    }
+    await this.authService.clearRefreshToken(req.user.sub);
     res
       .clearCookie('access_token')
       .clearCookie('refresh_token')
