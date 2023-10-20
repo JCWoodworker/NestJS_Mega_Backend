@@ -89,6 +89,16 @@ export class AuthController {
       });
   }
 
+  @Post('logout')
+  async logout(@Req() req, @Res({ passthrough: true }) res) {
+    res
+      .clearCookie('access_token')
+      .clearCookie('refresh_token')
+      .send({
+        status: `User ${req.user.username} logged out successfully`,
+      });
+  }
+
   @UseGuards(AuthGuard)
   @Get('profile')
   getProfile(@Req() req) {
