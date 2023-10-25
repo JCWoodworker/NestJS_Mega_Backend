@@ -19,7 +19,7 @@ async function bootstrap() {
 
   // Remember to set specific sites for CORS to ensure that only specific sites can access!!!
   app.enableCors();
-  
+
   await app.listen(3000);
 }
 bootstrap();
