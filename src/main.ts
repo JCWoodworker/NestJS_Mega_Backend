@@ -16,6 +16,8 @@ async function bootstrap() {
     }),
   );
   app.use(cookieParser());
+  // Remember to set specific sites for CORS to ensure that only specific sites can access!!!
+  app.enableCors();
   await app.listen(3000);
 }
 bootstrap();
