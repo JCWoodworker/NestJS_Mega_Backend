@@ -13,6 +13,7 @@ import { Response } from 'express';
 import { AuthGuard } from './auth.guard';
 import { AuthService } from './auth.service';
 import { SkipAuth } from './decorators/skipAuth.decorator';
+import { ResetPasswordDto } from './dto/resetPassword.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -106,8 +107,8 @@ export class AuthController {
 
   @SkipAuth()
   @Post('reset_password')
-  async resetPassword() {
-    return await this.authService.resetPassword();
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return await this.authService.resetPassword(resetPasswordDto);
   }
 
   @UseGuards(AuthGuard)

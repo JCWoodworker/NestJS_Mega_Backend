@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from 'src/users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { ResetPasswordDto } from './dto/resetPassword.dto';
 
 @Injectable()
 export class AuthService {
@@ -107,7 +108,7 @@ export class AuthService {
     return true;
   };
 
-  resetPassword = async () => {
-    return { message: 'Password reset placeholder' };
+  resetPassword = async (resetPasswordDto: ResetPasswordDto) => {
+    return resetPasswordDto;
   };
 }
