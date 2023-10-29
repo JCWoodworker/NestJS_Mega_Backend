@@ -1,23 +1,38 @@
-# This is a Nest.JS boilerplate and will include JWT auth and PostgreSQL integration
+# JC's Nest.JS boilerplate
+
+* Current features include:
+  * PostgreSQL integration
+    * TypeORM
+    * Migrations
+  * Auth via JWT in http-only cookies
+    * Auth is enabled globally
+      * Use the ```@SkipAuth``` custom decorator to change any endpoints to public
+    * Password reset functionality is coming in the first week of November, 2023
+      * I'll be utilizing Email.JS so send reset emails
+
+--
 
 ## This README is a work in progress, and is more of a notebook for me while I build this API
 
 * Please be patient while I construct a proper readme
 
+--
+
 ## Handling Migrations
 
-* FIRST - Run ```yarn build``` before running ```run``` or ```revert```
-
 * ```npx typeorm migration:create src/migrations/{yourMigrationName}```
-* ```npx typeorm migration:run -d dist/typeorm-cli.config```
-  * ```yarn migration:run```
-* ```npx typeorm migration:revert -d dist/typeorm-cli.config```
-  * ```yarn migration:revert```
+
+* Run ```yarn build``` before running ```run``` or ```revert```
+  * ```npx typeorm migrate:run -d dist/typeorm-cli.config```
+    * package.json shortcut: ```yarn migrate:run```
+  * ```npx typeorm migrate:revert -d dist/typeorm-cli.config```
+    * package.json shortcut: ```yarn migrate:revert```
 
 ## Auth
 
-* Send POST request in the following format:
-  { "username": "someuser",
+* Send POST request in the following JSON format:
+  {
+    "username": "someuser",
     "password": "mypassword"
   }
 * Upon successful login the following will happen:
@@ -40,10 +55,22 @@ Multiple user endpoints have been set up at '/users':
 * GET:
   * /getallusers --> returns an array of all users (id, username, email)
   * /:id --> returns one specific user by id
-  * :/username/:username --> returns one specific user by username
+  * /:username --> returns one specific user by username
 * POST
   * / --> creates a new user if username and/or email doesn't already exist
 * PATCH, DELETE
   * /:id --> updates or deletes a user by id
 
 * NEST.JS VALIDATION - <https://docs.nestjs.com/techniques/validation>
+
+## Configurations
+
+### CORS
+
+* Remember to update ```app.enableCors()``` in main.ts
+  * You'll want to specify the exact origins that are allowed to communicate with your api
+
+### Password Reset
+
+* This will be configured to use my Email JS account when I eventually build it
+* You can set up your own account at <https://www.emailjs.com>
