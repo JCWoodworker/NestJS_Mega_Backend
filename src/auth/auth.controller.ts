@@ -104,6 +104,12 @@ export class AuthController {
       });
   }
 
+  @SkipAuth()
+  @Post('reset_password')
+  async resetPassword() {
+    return await this.authService.resetPassword();
+  }
+
   @UseGuards(AuthGuard)
   @Get('profile')
   getProfile(@Req() req) {

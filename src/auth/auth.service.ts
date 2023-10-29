@@ -106,4 +106,8 @@ export class AuthService {
     );
     return true;
   };
+
+  resetPassword = async () => {
+    return { message: 'Password reset placeholder' };
+  };
 }
