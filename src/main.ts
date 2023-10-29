@@ -17,8 +17,13 @@ async function bootstrap() {
   );
   app.use(cookieParser());
 
-  // Remember to ensure that only specific sites can access!!!
-  app.enableCors();
+  // Remember to ensure that only specific sites can communicate with your API!!!
+  app.enableCors({
+    allowedHeaders: 'Content-Type, Accept',
+    origin: ['http://localhost:3000', 'http://localhost:5173'],
+    methods: 'GET,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
 
   await app.listen(3000);
 }
