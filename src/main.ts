@@ -17,7 +17,7 @@ async function bootstrap() {
   );
   app.use(cookieParser());
 
-  // Remember to ensure that only specific sites can communicate with your API!!!
+  // Remember to ensure that only specific origins can communicate with your API!!!
   app.enableCors({
     allowedHeaders: 'Content-Type, Accept',
     origin: ['http://localhost:3000', 'http://localhost:5173'],
