@@ -13,7 +13,7 @@ import { Response } from 'express';
 import { AuthGuard } from './auth.guard';
 import { AuthService } from './auth.service';
 import { SkipAuth } from './decorators/skipAuth.decorator';
-import { ResetPasswordDto } from './dto/reset-password.dto';
+import { GeneratePasswordResetUrlDto } from './dto/password-reset-url.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -107,13 +107,15 @@ export class AuthController {
 
   @SkipAuth()
   @Post('generate_password_reset_url')
-  async generatePasswordResetUrl(@Body() resetPasswordDto: ResetPasswordDto) {
+  async generatePasswordResetUrl(
+    @Body() resetPasswordDto: GeneratePasswordResetUrlDto,
+  ) {
     return await this.authService.generatePasswordResetUrl(resetPasswordDto);
   }
 
   @SkipAuth()
   @Post('password_reset')
-  async resetPasswordByToken() {
+  async resetPassword() {
     return {
       message: `This will eventually accept a temp token and let the user reset their password`,
     };

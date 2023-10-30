@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from 'src/users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { ResetPasswordDto } from './dto/reset-password.dto';
+import { GeneratePasswordResetUrlDto } from './dto/password-reset-url.dto';
 
 @Injectable()
 export class AuthService {
@@ -108,8 +108,10 @@ export class AuthService {
     return true;
   };
 
-  generatePasswordResetUrl = async (resetPasswordDto: ResetPasswordDto) => {
-    const userEmailToReset = resetPasswordDto.email;
+  generatePasswordResetUrl = async (
+    passwordResetUrlDto: GeneratePasswordResetUrlDto,
+  ) => {
+    const userEmailToReset = passwordResetUrlDto.email;
     const resetMessage = `If user with email ${userEmailToReset} exists, a password reset link will be sent`;
 
     const user = await this.usersService.findOneByEmail(userEmailToReset);
@@ -150,9 +152,10 @@ export class AuthService {
     // console.log(passwordResetUrl);
     // debugger;
 
-    // 3 - Generate password reset link
-    //     - Below is just an example link!!
-    //     - http://localhost:3000/auth/reset-password?token=${resetToken}&jwt=${jwtToken}
+    // Instead of setting the token in the url, set it as an http only cookie!!
+    // - FIRST clear all cookies
+    // - THEN set a new cookie for password_reset
+
     // 4 - Email password reset link to user
     // 5 - When user creates a new password successfully:
     //     - Persist a new encrtypted password to the database
