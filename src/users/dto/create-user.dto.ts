@@ -12,9 +12,7 @@ export class CreateUserDto {
   @IsString()
   readonly userType: string;
 
-  @IsString()
   readonly refreshToken: string;
 
-  @IsString()
   readonly passwordResetToken: string;
 }
