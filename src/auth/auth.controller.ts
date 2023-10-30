@@ -106,9 +106,17 @@ export class AuthController {
   }
 
   @SkipAuth()
-  @Post('reset_password')
-  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
-    return await this.authService.resetPassword(resetPasswordDto);
+  @Post('generate_password_reset_url')
+  async generatePasswordResetUrl(@Body() resetPasswordDto: ResetPasswordDto) {
+    return await this.authService.generatePasswordResetUrl(resetPasswordDto);
+  }
+
+  @SkipAuth()
+  @Post('password_reset')
+  async resetPasswordByToken() {
+    return {
+      message: `This will eventually accept a temp token and let the user reset their password`,
+    };
   }
 
   @UseGuards(AuthGuard)

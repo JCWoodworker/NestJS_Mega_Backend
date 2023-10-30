@@ -108,7 +108,7 @@ export class AuthService {
     return true;
   };
 
-  resetPassword = async (resetPasswordDto: ResetPasswordDto) => {
+  generatePasswordResetUrl = async (resetPasswordDto: ResetPasswordDto) => {
     const userEmailToReset = resetPasswordDto.email;
     const resetMessage = `If user with email ${userEmailToReset} exists, a password reset link will be sent`;
 
@@ -145,8 +145,11 @@ export class AuthService {
       true,
     );
 
-    console.log(passwordResetToken);
-    debugger;
+    const passwordResetUrl = `http://localhost:3000/auth/reset-password?token=${passwordResetToken}`;
+
+    // console.log(passwordResetUrl);
+    // debugger;
+
     // 3 - Generate password reset link
     //     - Below is just an example link!!
     //     - http://localhost:3000/auth/reset-password?token=${resetToken}&jwt=${jwtToken}
@@ -154,8 +157,11 @@ export class AuthService {
     // 5 - When user creates a new password successfully:
     //     - Persist a new encrtypted password to the database
     //     - Delete the password reset link
+
+    // REMOVE passwordResetUrl AFTER TESTING
     return {
       message: resetMessage,
+      passwordResetUrl: passwordResetUrl,
     };
   };
 }
