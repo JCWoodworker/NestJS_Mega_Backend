@@ -111,6 +111,7 @@ export class AuthService {
   resetPassword = async (resetPasswordDto: ResetPasswordDto) => {
     const userEmailToReset = resetPasswordDto.email;
     const resetMessage = `If user with email ${userEmailToReset} exists, a password reset link will be sent`;
+
     const user = await this.usersService.findOneByEmail(userEmailToReset);
     // FUTURE FEATURE - save invalid emails to a table along with timestamps and ip address\
     if (!user) {
@@ -118,20 +119,24 @@ export class AuthService {
         message: resetMessage,
       };
     }
+
     const payload = {
       sub: user.userId,
       username: user.username,
       userType: user.userType,
     };
+
     const passwordResetToken = await this.jwtService.signAsync({
       ...payload,
       expiresIn: new Date(Date.now() + 60000 * 5),
     });
+
     const salt = bcrypt.genSaltSync(parseInt(process.env.SALT_ROUNDS));
     const encryptedPasswordResetToken = await bcrypt.hash(
       passwordResetToken,
       salt,
     );
+
     await this.usersService.update(
       user.userId,
       {
