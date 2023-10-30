@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from 'src/users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { ResetPasswordDto } from './dto/resetPassword.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -109,6 +109,17 @@ export class AuthService {
   };
 
   resetPassword = async (resetPasswordDto: ResetPasswordDto) => {
-    return resetPasswordDto;
+    const userEmail = resetPasswordDto.email;
+    // 1 - Check if user exists
+    // 2 - Generate and sign jwt - 5 minute expiration
+    //     - Save the token in the database
+    // 3 - Generate password reset link
+    // 4 - Email password reset link to user
+    // 5 - When user creates a new password successfully:
+    //     - Persist a new encrtypted password to the database
+    //     - Delete the password reset link
+    return {
+      message: `If user with email ${userEmail} exists, a password reset link will be sent`,
+    };
   };
 }

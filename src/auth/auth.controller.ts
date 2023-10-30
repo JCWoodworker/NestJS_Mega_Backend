@@ -13,7 +13,7 @@ import { Response } from 'express';
 import { AuthGuard } from './auth.guard';
 import { AuthService } from './auth.service';
 import { SkipAuth } from './decorators/skipAuth.decorator';
-import { ResetPasswordDto } from './dto/resetPassword.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Controller('auth')
 export class AuthController {
