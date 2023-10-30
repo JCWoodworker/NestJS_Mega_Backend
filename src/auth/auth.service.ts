@@ -85,6 +85,7 @@ export class AuthService {
     ]);
     const salt = bcrypt.genSaltSync(parseInt(process.env.SALT_ROUNDS));
     const encryptedRefreshToken = await bcrypt.hash(newRefreshToken, salt);
+    debugger;
     await this.usersService.update(
       user.userId,
       {
