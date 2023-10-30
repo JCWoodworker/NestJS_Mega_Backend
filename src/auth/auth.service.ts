@@ -143,7 +143,7 @@ export class AuthService {
     console.log(passwordResetToken);
     debugger;
     // 3 - Generate password reset link
-    //     - This link needs to be set up properly!!
+    //     - Below is just an example link!!
     //     - http://localhost:3000/auth/reset-password?token=${resetToken}&jwt=${jwtToken}
     // 4 - Email password reset link to user
     // 5 - When user creates a new password successfully:
