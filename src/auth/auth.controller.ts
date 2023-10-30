@@ -107,7 +107,7 @@ export class AuthController {
   }
 
   @SkipAuth()
-  @Post('send_password_reset_url')
+  @Post('reset_password/request')
   async sendPasswordResetUrl(
     @Body() resetPasswordDto: PasswordResetRequestDto,
   ) {
@@ -115,12 +115,13 @@ export class AuthController {
   }
 
   @SkipAuth()
-  @Post('password_reset')
+  @Post('reset_password/reset')
   async resetPassword(
     @Res({ passthrough: true }) res,
     @Query() query: any,
     @Req() req,
   ) {
+    // This will eventually handle the the submission of a password reset
     debugger;
     console.log(req, res, query);
     return {

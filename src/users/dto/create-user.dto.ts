@@ -15,4 +15,6 @@ export class CreateUserDto {
   readonly refreshToken: string;
 
   readonly passwordResetToken: string;
+
+  readonly passwordResetJwt: string;
 }

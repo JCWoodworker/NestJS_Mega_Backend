@@ -74,3 +74,8 @@ Multiple user endpoints have been set up at '/users':
 
 * This will be configured to use my Email JS account when I eventually build it
 * You can set up your own account at <https://www.emailjs.com>
+
+* Currently a passwordResetJwt and passwordResetToken are created, encrypted, then persisted to the user database under the specific email requesting the reset
+  * These tokens need to be in their own separate table with a one-to-one relationship set up with their user
+  * A request with body ```{ "email": "<useremail@whatever.com>"}``` must be sent to /auth/reset-password/request
+* A URL is generated in the form of `http://localhost:3000/auth/reset-password/reset_password?token=${passwordResetJwt}&jwt=${passwordResetToken}` and sent to the user
