@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from 'src/users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { GeneratePasswordResetUrlDto } from './dto/password-reset-url.dto';
+import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
 
 @Injectable()
 export class AuthService {
@@ -108,14 +108,25 @@ export class AuthService {
     return true;
   };
 
-  generatePasswordResetUrl = async (
-    passwordResetUrlDto: GeneratePasswordResetUrlDto,
+  sendPasswordResetUrl = async (
+    passwordResetRequestDto: PasswordResetRequestDto,
   ) => {
-    const userEmailToReset = passwordResetUrlDto.email;
+    const userEmailToReset = passwordResetRequestDto.email;
+    const user = await this.usersService.findOneByEmail(userEmailToReset);
+
+    if (!user) {
+      return {
+        message: `If user with email ${userEmailToReset} exists, a password reset link will be sent`,
+      };
+    }
+    const passwordResetUrl =
+      await this.generatePasswordResetUrl(userEmailToReset);
+  };
+
+  generatePasswordResetUrl = async (userEmailToReset: string) => {
     const resetMessage = `If user with email ${userEmailToReset} exists, a password reset link will be sent`;
 
     const user = await this.usersService.findOneByEmail(userEmailToReset);
-    // FUTURE FEATURE - save invalid emails to a table along with timestamps and ip address\
     if (!user) {
       return {
         message: resetMessage,
@@ -149,21 +160,7 @@ export class AuthService {
 
     const passwordResetUrl = `http://localhost:3000/auth/reset-password?token=${passwordResetToken}`;
 
-    // console.log(passwordResetUrl);
-    // debugger;
-
-    // Instead of setting the token in the url, set it as an http only cookie!!
-    // - FIRST clear all cookies
-    // - THEN set a new cookie for password_reset
-
-    // 4 - Email password reset link to user
-    // 5 - When user creates a new password successfully:
-    //     - Persist a new encrtypted password to the database
-    //     - Delete the password reset link
-
-    // REMOVE passwordResetUrl AFTER TESTING
     return {
-      message: resetMessage,
       passwordResetUrl: passwordResetUrl,
     };
   };

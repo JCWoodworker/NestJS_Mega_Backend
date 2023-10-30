@@ -8,12 +8,13 @@ import {
   Post,
   HttpCode,
   HttpStatus,
+  Query,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { AuthGuard } from './auth.guard';
 import { AuthService } from './auth.service';
 import { SkipAuth } from './decorators/skipAuth.decorator';
-import { GeneratePasswordResetUrlDto } from './dto/password-reset-url.dto';
+import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -106,16 +107,22 @@ export class AuthController {
   }
 
   @SkipAuth()
-  @Post('generate_password_reset_url')
-  async generatePasswordResetUrl(
-    @Body() resetPasswordDto: GeneratePasswordResetUrlDto,
+  @Post('send_password_reset_url')
+  async sendPasswordResetUrl(
+    @Body() resetPasswordDto: PasswordResetRequestDto,
   ) {
-    return await this.authService.generatePasswordResetUrl(resetPasswordDto);
+    return await this.authService.sendPasswordResetUrl(resetPasswordDto);
   }
 
   @SkipAuth()
   @Post('password_reset')
-  async resetPassword() {
+  async resetPassword(
+    @Res({ passthrough: true }) res,
+    @Query() query: any,
+    @Req() req,
+  ) {
+    debugger;
+    console.log(req, res, query);
     return {
       message: `This will eventually accept a temp token and let the user reset their password`,
     };
