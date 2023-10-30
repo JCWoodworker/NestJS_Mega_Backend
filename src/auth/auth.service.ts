@@ -110,7 +110,24 @@ export class AuthService {
 
   resetPassword = async (resetPasswordDto: ResetPasswordDto) => {
     const userEmail = resetPasswordDto.email;
-    // 1 - Check if user exists
+    const resetMessage = `If user with email ${userEmail} exists, a password reset link will be sent`
+    const user = await this.usersService.findOneByEmail(userEmail);
+    // FUTURE FEATURE - save invalid emails to a table along with timestamps and ip address\
+    if (!user) {
+      return {
+        message: resetMessage,
+      };
+    }
+    const payload = {
+      sub: user.userId,
+      username: user.username,
+      userType: user.userType,
+    };
+    const passwordResetToken = await this.jwtService.signAsync({
+      ...payload,
+      expiresIn: new Date(Date.now() + 60000 * 5),
+    });
+    debugger;
     // 2 - Generate and sign jwt - 5 minute expiration
     //     - Save the token in the database
     // 3 - Generate password reset link
@@ -119,7 +136,7 @@ export class AuthService {
     //     - Persist a new encrtypted password to the database
     //     - Delete the password reset link
     return {
-      message: `If user with email ${userEmail} exists, a password reset link will be sent`,
+      message: resetMessage,
     };
   };
 }

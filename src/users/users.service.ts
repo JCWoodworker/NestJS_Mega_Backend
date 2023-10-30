@@ -39,6 +39,12 @@ export class UsersService {
     });
   }
 
+  async findOneByEmail(email: string) {
+    return await this.usersRepository.findOne({
+      where: { email: email },
+    });
+  }
+
   async create(createUserDto: CreateUserDto) {
     const user = this.usersRepository.create(createUserDto);
     const salt = bcrypt.genSaltSync(parseInt(process.env.SALT_ROUNDS));
