@@ -14,4 +14,7 @@ export class CreateUserDto {
 
   @IsString()
   readonly refreshToken: string;
+
+  @IsString()
+  readonly passwordResetToken: string;
 }

@@ -19,4 +19,7 @@ export class Users {
 
   @Column({ default: null })
   refreshToken: string;
+
+  @Column({ default: null })
+  passwordResetToken: string;
 }

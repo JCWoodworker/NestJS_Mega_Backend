@@ -109,9 +109,9 @@ export class AuthService {
   };
 
   resetPassword = async (resetPasswordDto: ResetPasswordDto) => {
-    const userEmail = resetPasswordDto.email;
-    const resetMessage = `If user with email ${userEmail} exists, a password reset link will be sent`
-    const user = await this.usersService.findOneByEmail(userEmail);
+    const userEmailToReset = resetPasswordDto.email;
+    const resetMessage = `If user with email ${userEmailToReset} exists, a password reset link will be sent`;
+    const user = await this.usersService.findOneByEmail(userEmailToReset);
     // FUTURE FEATURE - save invalid emails to a table along with timestamps and ip address\
     if (!user) {
       return {
@@ -127,8 +127,21 @@ export class AuthService {
       ...payload,
       expiresIn: new Date(Date.now() + 60000 * 5),
     });
+    const salt = bcrypt.genSaltSync(parseInt(process.env.SALT_ROUNDS));
+    const encryptedPasswordResetToken = await bcrypt.hash(
+      passwordResetToken,
+      salt,
+    );
+    await this.usersService.update(
+      user.userId,
+      {
+        passwordResetToken: encryptedPasswordResetToken,
+      },
+      true,
+    );
+
+    console.log(passwordResetToken);
     debugger;
-    // 2 - Generate and sign jwt - 5 minute expiration
     //     - Save the token in the database
     // 3 - Generate password reset link
     // 4 - Email password reset link to user
