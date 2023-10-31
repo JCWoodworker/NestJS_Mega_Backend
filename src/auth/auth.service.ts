@@ -128,7 +128,7 @@ export class AuthService {
 
     console.log(passwordResetUrl);
 
-    return { message: message };
+    return { message: message, passwordResetUrl };
   };
 
   generatePasswordResetUrl = async (userEmailToReset: string) => {
@@ -167,7 +167,7 @@ export class AuthService {
       true,
     );
 
-    const passwordResetUrl = `http://localhost:3000/auth/reset-password/reset_password?token=${passwordResetJwt}&jwt=${passwordResetToken}`;
+    const passwordResetUrl = `http://localhost:3000/auth/reset_password/reset?jwt=${passwordResetJwt}&token=${passwordResetToken}`;
 
     return {
       passwordResetUrl: passwordResetUrl,

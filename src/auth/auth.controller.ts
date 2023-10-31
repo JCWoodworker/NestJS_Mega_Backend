@@ -115,18 +115,20 @@ export class AuthController {
   }
 
   @SkipAuth()
-  @Post('reset_password/reset')
-  async resetPassword(
-    @Res({ passthrough: true }) res,
-    @Query() query: any,
-    @Req() req,
-  ) {
-    // This will eventually handle the the submission of a password reset
-    debugger;
-    console.log(req, res, query);
+  @Get('reset_password/reset')
+  async resetPassword(@Res({ passthrough: true }) res, @Query() query: any) {
+    // The password reset link will hit this endpoint
+    // It will clear any current jwts in cookies and set a new access_token
+    // The user can then update their password by sending a valid POST request from the frontend
+    console.log(res, query);
     return {
-      message: `This will eventually accept a temp token and let the user reset their password`,
+      message: `This will eventually compare the token and JWT to allow a user to reset their password`,
     };
+  }
+
+  @Post('reset_password/reset')
+  async getPasswordResetAuthorization() {
+    return { message: 'Password reset authorization placeholder' };
   }
 
   @UseGuards(AuthGuard)

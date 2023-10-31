@@ -72,10 +72,27 @@ Multiple user endpoints have been set up at '/users':
 
 ### Password Reset
 
+* Currently being built out as of 10/31/23 and due to be finished by 11/5/23
 * This will be configured to use my Email JS account when I eventually build it
 * You can set up your own account at <https://www.emailjs.com>
 
-* Currently a passwordResetJwt and passwordResetToken are created, encrypted, then persisted to the user database under the specific email requesting the reset
-  * These tokens need to be in their own separate table with a one-to-one relationship set up with their user
-  * A request with body ```{ "email": "<useremail@whatever.com>"}``` must be sent to /auth/reset-password/request
-* A URL is generated in the form of `http://localhost:3000/auth/reset-password/reset_password?token=${passwordResetJwt}&jwt=${passwordResetToken}` and sent to the user
+ENDPOINTS:
+POST - ```auth/reset-password/request```
+GET - ```auth/reset-password/reset```
+POST - ```auth/reset-password/reset```
+
+* A passwordResetJwt and passwordResetToken are created, encrypted, then persisted to the user database under the specific email requesting the reset
+  * These tokens need to be separated to their own separate table with a one-to-one relationship to their user in the future
+* A request with body ```{ "email": "<useremail@whatever.com>"}``` must be sent to ```/auth/reset-password/request```
+* A URL is generated in the form of `http://localhost:3000/auth/reset_password/reset?token=${passwordResetJwt}&jwt=${passwordResetToken}` and sent to the user if that user exists
+  * The same message will always be returned `If user with email ${userEmail} exists, a password reset link will be sent` for security purposes
+* When the user clicks the url a GET request is initiated and the following takes place:
+  * token and jwt are extracted from the url
+  * they are compared with the encrypted token and jwt that was persisted to the users table
+  * further validation makes sure the user's email matches too
+  * a new access_token with a 3 minute expiry is set in http-only cookie
+  * the frontend should now rout them to a form to update their password
+* a POST request should be sent to ```auth/reset-password/reset``` with the user's updated password
+  * This will once again clear all token cookies and persist the new encrypted password to the users table
+
+* More info on the way as I continue to build this out!!
