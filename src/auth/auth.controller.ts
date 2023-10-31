@@ -127,8 +127,8 @@ export class AuthController {
   }
 
   @Post('reset_password/reset')
-  async getPasswordResetAuthorization() {
-    return { message: 'Password reset authorization placeholder' };
+  async updateUserPassword() {
+    return { message: 'Password reset update will eventually take place here' };
   }
 
   @UseGuards(AuthGuard)

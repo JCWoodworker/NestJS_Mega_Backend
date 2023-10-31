@@ -123,12 +123,11 @@ export class AuthService {
 
     // Write logic that sends this passwordResetUrl to the user's email address
     // Use your preferred email service (mine are either Email JS or Sendgrid)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const passwordResetUrl =
       await this.generatePasswordResetUrl(userEmailToReset);
 
-    console.log(passwordResetUrl);
-
-    return { message: message, passwordResetUrl };
+    return { message: message };
   };
 
   generatePasswordResetUrl = async (userEmailToReset: string) => {
