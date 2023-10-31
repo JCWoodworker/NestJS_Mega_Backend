@@ -15,6 +15,7 @@ import { AuthGuard } from './auth.guard';
 import { AuthService } from './auth.service';
 import { SkipAuth } from './decorators/skipAuth.decorator';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
+import { PasswordResetUpdateDto } from './dto/password-reset-update.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -117,18 +118,29 @@ export class AuthController {
   @SkipAuth()
   @Get('reset_password/reset')
   async resetPassword(@Res({ passthrough: true }) res, @Query() query: any) {
-    // The password reset link will hit this endpoint
-    // It will clear any current jwts in cookies and set a new access_token
-    // The user can then update their password by sending a valid POST request from the frontend
-    console.log(res, query);
-    return {
-      message: `This will eventually compare the token and JWT to allow a user to reset their password`,
-    };
+    if (!query.jwt && query.token) {
+      return { message: 'invalid url' };
+    }
+    return this.authService.acceptPasswordResetUrl(query.jwt, query.token);
   }
 
+  // REMOVE SKIPAUTH WHEN COMPLETED!!!
+  @SkipAuth()
   @Post('reset_password/reset')
-  async updateUserPassword() {
-    return { message: 'Password reset update will eventually take place here' };
+  async updateUserPassword(@Body() body: PasswordResetUpdateDto, @Res() res) {
+    const successfulUpdate = await this.authService.updateUserPassword(
+      body.newPassword,
+      body.newPasswordRepeated,
+    );
+    res.clearCookie('access_token').clearCookie('refresh_token');
+    debugger;
+    if (!successfulUpdate) {
+      return res.send({ status: `YOU FUCKED UP!!` });
+    } else {
+      res.send({
+        status: `Password successfully changed, Please log in again with your new password`,
+      });
+    }
   }
 
   @UseGuards(AuthGuard)

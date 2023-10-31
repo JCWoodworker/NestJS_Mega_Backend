@@ -3,6 +3,7 @@ import { UsersService } from 'src/users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
+// import { PasswordResetUpdateDto } from './dto/password-reset-update.dto';
 
 @Injectable()
 export class AuthService {
@@ -108,6 +109,14 @@ export class AuthService {
     return true;
   };
 
+  clearAllTokens = async (userId) => {
+    await this.usersService.update(
+      userId,
+      { refreshToken: null, passwordResetToken: null, passwordResetJwt: null },
+      true,
+    );
+  };
+
   sendPasswordResetUrl = async (
     passwordResetRequestDto: PasswordResetRequestDto,
   ) => {
@@ -127,7 +136,8 @@ export class AuthService {
     const passwordResetUrl =
       await this.generatePasswordResetUrl(userEmailToReset);
 
-    return { message: message };
+    // REMOVE passwordResetUrl after testing!!
+    return { message: message, passwordResetUrl };
   };
 
   generatePasswordResetUrl = async (userEmailToReset: string) => {
@@ -171,5 +181,39 @@ export class AuthService {
     return {
       passwordResetUrl: passwordResetUrl,
     };
+  };
+
+  acceptPasswordResetUrl = async (jwt: string, token: string) => {
+    const decodedJwt = await this.jwtService.verify(jwt);
+    const user = await this.usersService.findOneById(
+      decodedJwt.sub,
+      decodedJwt.userType,
+    );
+    const isValidJwt = await bcrypt.compare(jwt, user?.passwordResetJwt);
+    const isValidToken = await bcrypt.compare(token, user?.passwordResetToken);
+    let validationStatus = false;
+
+    if (isValidJwt && isValidToken) {
+      validationStatus = true;
+    }
+    const successfulUpdate = {
+      message: `This will eventually compare the token and JWT to allow a user to reset their password`,
+      submittedJwt: jwt,
+      submittedToken: token,
+      status: validationStatus,
+    };
+    return successfulUpdate;
+  };
+
+  updateUserPassword = async (
+    newPassword: string,
+    newPasswordRepeated: string,
+  ) => {
+    const responseBody = {
+      message: 'Password reset update will eventually take place here',
+      newPassword: newPassword,
+      newPasswordRepeated: newPasswordRepeated,
+    };
+    return responseBody;
   };
 }

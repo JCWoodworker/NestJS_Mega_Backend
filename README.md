@@ -96,3 +96,5 @@ POST - ```auth/reset-password/reset```
   * This will once again clear all token cookies and persist the new encrypted password to the users table
 
 * More info on the way as I continue to build this out!!
+
+### DOUBLE CHECK JWT ACCESS SECRETS ... MAKE SURE THEY'RE BEING USED IN YOUR CODE
