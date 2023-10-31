@@ -192,12 +192,15 @@ export class AuthService {
     const isValidJwt = await bcrypt.compare(jwt, user?.passwordResetJwt);
     const isValidToken = await bcrypt.compare(token, user?.passwordResetToken);
     let validationStatus = false;
+    let message =
+      'Something is wrong ... you messed up somehow, not us.  Good luck in life ...';
 
     if (isValidJwt && isValidToken) {
       validationStatus = true;
+      message = `Validated Successfully - You've got 3 minutes to reset your password.`;
     }
     const successfulUpdate = {
-      message: `This will eventually compare the token and JWT to allow a user to reset their password`,
+      message: message,
       submittedJwt: jwt,
       submittedToken: token,
       status: validationStatus,

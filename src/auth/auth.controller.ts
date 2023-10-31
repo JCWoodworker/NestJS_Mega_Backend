@@ -121,22 +121,29 @@ export class AuthController {
     if (!query.jwt && query.token) {
       return { message: 'invalid url' };
     }
+    res.clearCookie('access_token').clearCookie('refresh_token');
+    res.cookie('access_token', {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: false,
+      expires: new Date(Date.now() + 60000 * 3),
+    });
     return this.authService.acceptPasswordResetUrl(query.jwt, query.token);
   }
 
-  // REMOVE SKIPAUTH WHEN COMPLETED!!!
-  @SkipAuth()
   @Post('reset_password/reset')
   async updateUserPassword(@Body() body: PasswordResetUpdateDto, @Res() res) {
     const successfulUpdate = await this.authService.updateUserPassword(
       body.newPassword,
       body.newPasswordRepeated,
     );
-    res.clearCookie('access_token').clearCookie('refresh_token');
     debugger;
     if (!successfulUpdate) {
-      return res.send({ status: `YOU FUCKED UP!!` });
+      return res.send({
+        status: `Something didn't work ... are you trying to hack me???`,
+      });
     } else {
+      res.clearCookie('access_token').clearCookie('refresh_token');
       res.send({
         status: `Password successfully changed, Please log in again with your new password`,
       });
