@@ -199,19 +199,18 @@ export class AuthService {
       validationStatus = true;
       message = `Validated Successfully - You've got 3 minutes to reset your password.`;
     }
-    const successfulUpdate = {
+    const validationInformation = {
       message: message,
-      submittedJwt: jwt,
-      submittedToken: token,
       status: validationStatus,
     };
-    return successfulUpdate;
+    return validationInformation;
   };
 
   updateUserPassword = async (
     newPassword: string,
     newPasswordRepeated: string,
   ) => {
+    debugger;
     const responseBody = {
       message: 'Password reset update will eventually take place here',
       newPassword: newPassword,

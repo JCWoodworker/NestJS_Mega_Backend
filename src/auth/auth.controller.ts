@@ -122,13 +122,21 @@ export class AuthController {
       return { message: 'invalid url' };
     }
     res.clearCookie('access_token').clearCookie('refresh_token');
-    res.cookie('access_token', {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: false,
-      expires: new Date(Date.now() + 60000 * 3),
-    });
-    return this.authService.acceptPasswordResetUrl(query.jwt, query.token);
+
+    const successfulValidationInformation =
+      await this.authService.acceptPasswordResetUrl(query.jwt, query.token);
+
+    if (!successfulValidationInformation.status) {
+      return res.send(successfulValidationInformation.message);
+    } else {
+      res.cookie('access_token', {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: false,
+        expires: new Date(Date.now() + 60000 * 3),
+      });
+      res.send(successfulValidationInformation);
+    }
   }
 
   @Post('reset_password/reset')
@@ -143,7 +151,6 @@ export class AuthController {
         status: `Something didn't work ... are you trying to hack me???`,
       });
     } else {
-      res.clearCookie('access_token').clearCookie('refresh_token');
       res.send({
         status: `Password successfully changed, Please log in again with your new password`,
       });
