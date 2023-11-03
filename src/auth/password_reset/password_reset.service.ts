@@ -87,8 +87,8 @@ export class PasswordResetService {
 
   async verifyTokensAndRenderPasswordResetPage() {
     return {
-      endpointPurpose:
-        'Token and Jwt detected in url query ... render password reset page',
+      message:
+        'Token and Jwt detected in url query ... rendering password reset page',
     };
   }
 

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Render } from '@nestjs/common';
 import { PasswordResetService } from './password_reset.service';
 import { SkipAuth } from '../decorators/skipAuth.decorator';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
@@ -19,7 +19,7 @@ export class PasswordResetController {
 
   @SkipAuth()
   @Get('reset')
-  // Perhaps write a DTO for this query and handle validation in a better way
+  @Render('password-reset')
   async verifyTokensAndRenderPasswordResetPage(@Query() query: any) {
     if (!query?.jwt && !query?.token) {
       return { message: 'No token and/or jwt provided' };

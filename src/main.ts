@@ -1,10 +1,12 @@
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import * as cookieParser from 'cookie-parser';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -16,6 +18,11 @@ async function bootstrap() {
     }),
   );
   app.use(cookieParser());
+
+  // Set views engine with handlebars
+  app.useStaticAssets('src/public');
+  app.setBaseViewsDir('src/views');
+  app.setViewEngine('hbs');
 
   // Remember to ensure that only specific origins can communicate with your API!!!
   app.enableCors({
