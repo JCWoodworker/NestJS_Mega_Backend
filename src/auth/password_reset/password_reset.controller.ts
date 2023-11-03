@@ -2,7 +2,6 @@ import { Controller, Get, Post, Body } from '@nestjs/common';
 import { PasswordResetService } from './password_reset.service';
 import { SkipAuth } from '../decorators/skipAuth.decorator';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
-// import { PasswordResetUpdateDto } from './dto/password-reset-update.dto';
 
 @Controller('password-reset')
 export class PasswordResetController {
@@ -28,38 +27,6 @@ export class PasswordResetController {
   async updateUserWithNewPassword() {
     return await this.passwordResetService.updateUserWithNewPassword();
   }
-
-  // @SkipAuth()
-  // @Post('request')
-  // async handlePasswordResetRequest(
-  //   @Body() resetPasswordDto: PasswordResetRequestDto,
-  // ) {
-  //   return await this.passwordResetService.handlePasswordResetRequest();
-  // }
-
-  // @SkipAuth()
-  // @Get('reset')
-  // async resetPassword(@Res({ passthrough: true }) res, @Query() query: any) {
-  //   if (!query.jwt && query.token) {
-  //     return { message: 'invalid url' };
-  //   }
-  //   res.clearCookie('access_token').clearCookie('refresh_token');
-
-  //   const successfulValidationInformation =
-  //     await this.passwordResetService.acceptPasswordResetUrl(query.jwt, query.token);
-
-  //   if (!successfulValidationInformation.status) {
-  //     return res.send(successfulValidationInformation.message);
-  //   } else {
-  //     res.cookie('access_token', {
-  //       httpOnly: true,
-  //       sameSite: 'lax',
-  //       secure: false,
-  //       expires: new Date(Date.now() + 60000 * 3),
-  //     });
-  //     res.send(successfulValidationInformation);
-  //   }
-  // }
 
   // @Post('reset')
   // async updateUserPassword(@Body() body: PasswordResetUpdateDto, @Res() res) {

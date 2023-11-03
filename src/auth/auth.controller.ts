@@ -8,14 +8,11 @@ import {
   Post,
   HttpCode,
   HttpStatus,
-  Query,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { AuthGuard } from './auth.guard';
 import { AuthService } from './auth.service';
 import { SkipAuth } from './decorators/skipAuth.decorator';
-import { PasswordResetRequestDto } from './password_reset/dto/password-reset-request.dto';
-import { PasswordResetUpdateDto } from './password_reset/dto/password-reset-update.dto';
 
 @Controller('auth')
 export class AuthController {
