@@ -24,12 +24,17 @@ export class PasswordResetController {
     if (!query?.jwt && !query?.token) {
       return { message: 'No token and/or jwt provided' };
     }
-    return await this.passwordResetService.verifyTokensAndRenderPasswordResetPage();
+    return await this.passwordResetService.verifyTokensAndRenderPasswordResetPage(
+      query.jwt,
+      query.token,
+    );
   }
 
+  @SkipAuth()
   @Post('reset')
-  async updateUserWithNewPassword() {
-    return await this.passwordResetService.updateUserWithNewPassword();
+  @Render('successful-password-reset')
+  async updateUserWithNewPassword(@Body() body: any) {
+    return await this.passwordResetService.updateUserWithNewPassword(body);
   }
 
   // @Post('reset')

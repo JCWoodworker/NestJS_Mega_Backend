@@ -85,15 +85,15 @@ export class PasswordResetService {
     };
   };
 
-  async verifyTokensAndRenderPasswordResetPage() {
+  async verifyTokensAndRenderPasswordResetPage(jwt: string, token: string) {
     return {
-      message:
-        'Token and Jwt detected in url query ... rendering password reset page',
+      token: token,
+      jwt: jwt,
     };
   }
 
-  async updateUserWithNewPassword() {
-    return { endpointPurpose: 'update user with new password' };
+  async updateUserWithNewPassword(body: any) {
+    return { payload: body };
   }
 
   // acceptPasswordResetUrl = async (jwt: string, token: string) => {
