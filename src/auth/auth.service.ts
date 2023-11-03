@@ -6,8 +6,8 @@ import * as bcrypt from 'bcrypt';
 @Injectable()
 export class AuthService {
   constructor(
-    private usersService: UsersService,
     private jwtService: JwtService,
+    private usersService: UsersService,
   ) {}
 
   async signIn(
@@ -27,6 +27,7 @@ export class AuthService {
       userType: user.userType,
     };
 
+    // This needs to be it's own function
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync({
         ...payload,
@@ -106,5 +107,13 @@ export class AuthService {
       true,
     );
     return true;
+  };
+
+  clearAllTokens = async (userId) => {
+    await this.usersService.update(
+      userId,
+      { refreshToken: null, passwordResetToken: null, passwordResetJwt: null },
+      true,
+    );
   };
 }

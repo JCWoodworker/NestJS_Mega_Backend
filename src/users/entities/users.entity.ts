@@ -19,4 +19,13 @@ export class Users {
 
   @Column({ default: null })
   refreshToken: string;
+
+  // The following two columns need to really be in their own table
+  // with a one-to-one relationship per user
+
+  @Column({ default: null })
+  passwordResetToken: string;
+
+  @Column({ default: null })
+  passwordResetJwt: string;
 }
