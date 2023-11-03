@@ -42,3 +42,19 @@ p {
   max-width: 400px;
   gap: 0.5rem;
 }
+
+.reset-password-button {
+  cursor: pointer;
+  background-color: black;
+  color: white;
+}
+
+.reset-password-button:hover {
+  opacity: 0.8;
+  background-color: aquamarine;
+  color: black
+}
+
+.reset-password-button:active {
+  opacity: 0.6;
+}

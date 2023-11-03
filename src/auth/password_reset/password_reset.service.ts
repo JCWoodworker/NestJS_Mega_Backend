@@ -59,10 +59,12 @@ export class PasswordResetService {
     };
 
     const passwordResetToken = uuidv4();
+    debugger;
     const passwordResetJwt = await this.jwtService.signAsync({
       ...payload,
-      expiresIn: new Date(Date.now() + 60000 * 5),
+      expiresIn: new Date(Date.now() + 10000 * 1),
     });
+    debugger;
 
     const salt = bcrypt.genSaltSync(parseInt(process.env.SALT_ROUNDS));
     const encryptedPasswordResetToken = await bcrypt.hash(
@@ -89,6 +91,7 @@ export class PasswordResetService {
 
   async verifyPasswordResetTokenAndJwt(jwt: string, token: string) {
     const decodedJwt = await this.jwtService.verify(jwt);
+    debugger;
     const user = await this.usersService.findOneById(
       decodedJwt.sub,
       decodedJwt.userType,
