@@ -1,7 +1,16 @@
-import { Controller, Get, Post, Body, Query, Render } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  Render,
+  Res,
+} from '@nestjs/common';
 import { PasswordResetService } from './password_reset.service';
 import { SkipAuth } from '../decorators/skipAuth.decorator';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
+import { PasswordUpdateRequestDto } from './dto/password-update-request.dto';
 
 @Controller('password-reset')
 export class PasswordResetController {
@@ -24,34 +33,31 @@ export class PasswordResetController {
     if (!query?.jwt && !query?.token) {
       return { message: 'No token and/or jwt provided' };
     }
-    return await this.passwordResetService.verifyTokensAndRenderPasswordResetPage(
-      query.jwt,
-      query.token,
-    );
+    const isValid =
+      await this.passwordResetService.verifyPasswordResetTokenAndJwt(
+        query.jwt,
+        query.token,
+      );
+    if (!isValid) {
+      return { message: 'Invalid password reset token and/or jwt' };
+    }
+    return { jwt: query.jwt, token: query.token };
   }
 
   @SkipAuth()
   @Post('reset')
-  @Render('successful-password-reset')
-  async updateUserWithNewPassword(@Body() body: any) {
-    return await this.passwordResetService.updateUserWithNewPassword(body);
+  @Render('reset-status')
+  async updateUserWithNewPassword(
+    @Body() body: PasswordUpdateRequestDto,
+    @Res() res,
+  ) {
+    const passwordUpdate =
+      await this.passwordResetService.updateUserWithNewPassword(body);
+    debugger;
+    res.clearCookie('access_token').clearCookie('refresh_token');
+    debugger;
+    return {
+      message: passwordUpdate.message,
+    };
   }
-
-  // @Post('reset')
-  // async updateUserPassword(@Body() body: PasswordResetUpdateDto, @Res() res) {
-  //   const successfulUpdate = await this.passwordResetService.updateUserPassword(
-  //     body.newPassword,
-  //     body.newPasswordRepeated,
-  //   );
-  //   debugger;
-  //   if (!successfulUpdate) {
-  //     return res.send({
-  //       status: `Something didn't work ... are you trying to hack me???`,
-  //     });
-  //   } else {
-  //     res.send({
-  //       status: `Password successfully changed, Please log in again with your new password`,
-  //     });
-  //   }
-  // }
 }

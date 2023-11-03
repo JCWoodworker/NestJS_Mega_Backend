@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { UsersService } from 'src/users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
+import { PasswordUpdateRequestDto } from './dto/password-update-request.dto';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -29,14 +30,15 @@ export class PasswordResetService {
 
     // Write logic that sends this passwordResetUrl to the user's email address
     // Use your preferred email service (mine are either Email JS or Sendgrid)
-    // Remove the password reset url from the return after setting up the email service!!
     const passwordResetUrl = await this.generatePasswordResetUrl(
       userEmailRequestingToResetPassword,
     );
 
+    // Remove this console.log in production!!
+    console.log(passwordResetUrl);
+
     return {
       message: message,
-      passwordResetUrl: passwordResetUrl,
     };
   }
 
@@ -85,50 +87,68 @@ export class PasswordResetService {
     };
   };
 
-  async verifyTokensAndRenderPasswordResetPage(jwt: string, token: string) {
+  async verifyPasswordResetTokenAndJwt(jwt: string, token: string) {
+    const decodedJwt = await this.jwtService.verify(jwt);
+    const user = await this.usersService.findOneById(
+      decodedJwt.sub,
+      decodedJwt.userType,
+    );
+    if (!user.passwordResetToken || !user.passwordResetJwt) {
+      throw new Error(
+        'User does not have a password reset token and/or jwt stored',
+      );
+    }
+    const isValidJwt = await bcrypt.compare(jwt, user?.passwordResetJwt);
+    const isValidToken = await bcrypt.compare(token, user?.passwordResetToken);
+    if (!isValidJwt && !isValidToken) {
+      return { status: false };
+    }
+    return { status: true, user };
+  }
+
+  async updateUserWithNewPassword(body: PasswordUpdateRequestDto) {
+    const { token, jwt, newPassword, confirmPassword } = body;
+
+    // This is NOT very clean or DRY, and is open to security vulnerabilities
+    // TODO: Move this to its own class
+
+    let statusMessage: string = '';
+
+    const tokenVerification = await this.verifyPasswordResetTokenAndJwt(
+      jwt,
+      token,
+    );
+    if (!tokenVerification.status) {
+      statusMessage = 'Invalid password reset token and/or jwt';
+      throw new Error('Invalid password reset token and/or jwt');
+    }
+    if (newPassword !== confirmPassword) {
+      statusMessage = 'Passwords do not match';
+      throw new Error('Passwords do not match');
+    }
+    tokenVerification.status
+      ? (statusMessage = 'Tokens have been verified')
+      : (statusMessage = 'An Unexpected Error Occurred');
+
+    const salt = bcrypt.genSaltSync(parseInt(process.env.SALT_ROUNDS));
+    const encryptedPassword = await bcrypt.hash(newPassword, salt);
+
+    await this.usersService.update(
+      tokenVerification.user.userId,
+      {
+        password: encryptedPassword,
+        refreshToken: null,
+        passwordResetToken: null,
+        passwordResetJwt: null,
+      },
+      true,
+    );
+
+    statusMessage = 'Password Reset Successful';
+
     return {
-      token: token,
-      jwt: jwt,
+      status: true,
+      message: statusMessage,
     };
   }
-
-  async updateUserWithNewPassword(body: any) {
-    return { payload: body };
-  }
-
-  // acceptPasswordResetUrl = async (jwt: string, token: string) => {
-  //   const decodedJwt = await this.jwtService.verify(jwt);
-  //   const user = await this.usersService.findOneById(
-  //     decodedJwt.sub,
-  //     decodedJwt.userType,
-  //   );
-  //   const isValidJwt = await bcrypt.compare(jwt, user?.passwordResetJwt);
-  //   const isValidToken = await bcrypt.compare(token, user?.passwordResetToken);
-  //   let validationStatus = false;
-  //   let message =
-  //     'Something is wrong ... you messed up somehow, not us.  Good luck in life ...';
-
-  //   if (isValidJwt && isValidToken) {
-  //     validationStatus = true;
-  //     message = `Validated Successfully - You've got 3 minutes to reset your password.`;
-  //   }
-  //   const validationInformation = {
-  //     message: message,
-  //     status: validationStatus,
-  //   };
-  //   return validationInformation;
-  // };
-
-  // updateUserPassword = async (
-  //   newPassword: string,
-  //   newPasswordRepeated: string,
-  // ) => {
-  //   debugger;
-  //   const responseBody = {
-  //     message: 'Password reset update will eventually take place here',
-  //     newPassword: newPassword,
-  //     newPasswordRepeated: newPasswordRepeated,
-  //   };
-  //   return responseBody;
-  // };
 }
