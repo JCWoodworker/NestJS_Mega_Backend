@@ -3,6 +3,7 @@ import { UsersService } from 'src/users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
 import * as bcrypt from 'bcrypt';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class PasswordResetService {
@@ -53,11 +54,13 @@ export class PasswordResetService {
       username: user.username,
       userType: user.userType,
     };
-    const passwordResetToken = 'asdflkjasdklfjhasdlkfjhasdflkjhasdf';
+
+    const passwordResetToken = uuidv4();
     const passwordResetJwt = await this.jwtService.signAsync({
       ...payload,
       expiresIn: new Date(Date.now() + 60000 * 5),
     });
+
     const salt = bcrypt.genSaltSync(parseInt(process.env.SALT_ROUNDS));
     const encryptedPasswordResetJwt = await bcrypt.hash(passwordResetJwt, salt);
     const encryptedPasswordResetToken = await bcrypt.hash(
