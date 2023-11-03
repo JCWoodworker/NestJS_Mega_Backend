@@ -53,9 +53,7 @@ export class PasswordResetController {
   ) {
     const passwordUpdate =
       await this.passwordResetService.updateUserWithNewPassword(body);
-    debugger;
     res.clearCookie('access_token').clearCookie('refresh_token');
-    debugger;
     return {
       message: passwordUpdate.message,
     };
