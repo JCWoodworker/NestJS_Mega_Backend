@@ -29,13 +29,14 @@ export class PasswordResetService {
 
     // Write logic that sends this passwordResetUrl to the user's email address
     // Use your preferred email service (mine are either Email JS or Sendgrid)
+    // Remove the password reset url from the return after setting up the email service!!
     const passwordResetUrl = await this.generatePasswordResetUrl(
       userEmailRequestingToResetPassword,
     );
-    console.log(passwordResetUrl);
 
     return {
       message: message,
+      passwordResetUrl: passwordResetUrl,
     };
   }
 
@@ -62,11 +63,11 @@ export class PasswordResetService {
     });
 
     const salt = bcrypt.genSaltSync(parseInt(process.env.SALT_ROUNDS));
-    const encryptedPasswordResetJwt = await bcrypt.hash(passwordResetJwt, salt);
     const encryptedPasswordResetToken = await bcrypt.hash(
       passwordResetToken,
       salt,
     );
+    const encryptedPasswordResetJwt = await bcrypt.hash(passwordResetJwt, salt);
 
     await this.usersService.update(
       user.userId,
@@ -77,7 +78,7 @@ export class PasswordResetService {
       true,
     );
 
-    const passwordResetUrl = `http://localhost:3000/auth/reset_password/reset?jwt=${passwordResetJwt}&token=${passwordResetToken}`;
+    const passwordResetUrl = `http://localhost:3000/password-reset/reset?jwt=${passwordResetJwt}&token=${passwordResetToken}`;
 
     return {
       passwordResetUrl: passwordResetUrl,
@@ -85,7 +86,10 @@ export class PasswordResetService {
   };
 
   async verifyTokensAndRenderPasswordResetPage() {
-    return { endpointPurpose: 'verify tokens and render password reset page' };
+    return {
+      endpointPurpose:
+        'Token and Jwt detected in url query ... render password reset page',
+    };
   }
 
   async updateUserWithNewPassword() {
