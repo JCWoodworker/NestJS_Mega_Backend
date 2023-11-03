@@ -14,8 +14,8 @@ export class PasswordResetService {
     passwordResetRequestDto: PasswordResetRequestDto,
   ) {
     return {
-      endpointPurpose: 'handle password reset request',
       passwordResetRequestDto,
+      resetUrl: 'http://localhost:3000/password-reset/reset?token=xxx&jwt=yyy',
     };
   }
 
