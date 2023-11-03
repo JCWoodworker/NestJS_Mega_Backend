@@ -14,8 +14,8 @@ import { Response } from 'express';
 import { AuthGuard } from './auth.guard';
 import { AuthService } from './auth.service';
 import { SkipAuth } from './decorators/skipAuth.decorator';
-import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
-import { PasswordResetUpdateDto } from './dto/password-reset-update.dto';
+import { PasswordResetRequestDto } from './password_reset/dto/password-reset-request.dto';
+import { PasswordResetUpdateDto } from './password_reset/dto/password-reset-update.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -105,56 +105,6 @@ export class AuthController {
       .send({
         status: `User ${req.user.username} logged out successfully`,
       });
-  }
-
-  @SkipAuth()
-  @Post('reset_password/request')
-  async sendPasswordResetUrl(
-    @Body() resetPasswordDto: PasswordResetRequestDto,
-  ) {
-    return await this.authService.sendPasswordResetUrl(resetPasswordDto);
-  }
-
-  @SkipAuth()
-  @Get('reset_password/reset')
-  async resetPassword(@Res({ passthrough: true }) res, @Query() query: any) {
-    if (!query.jwt && query.token) {
-      return { message: 'invalid url' };
-    }
-    res.clearCookie('access_token').clearCookie('refresh_token');
-
-    const successfulValidationInformation =
-      await this.authService.acceptPasswordResetUrl(query.jwt, query.token);
-
-    if (!successfulValidationInformation.status) {
-      return res.send(successfulValidationInformation.message);
-    } else {
-      res.cookie('access_token', {
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: false,
-        expires: new Date(Date.now() + 60000 * 3),
-      });
-      res.send(successfulValidationInformation);
-    }
-  }
-
-  @Post('reset_password/reset')
-  async updateUserPassword(@Body() body: PasswordResetUpdateDto, @Res() res) {
-    const successfulUpdate = await this.authService.updateUserPassword(
-      body.newPassword,
-      body.newPasswordRepeated,
-    );
-    debugger;
-    if (!successfulUpdate) {
-      return res.send({
-        status: `Something didn't work ... are you trying to hack me???`,
-      });
-    } else {
-      res.send({
-        status: `Password successfully changed, Please log in again with your new password`,
-      });
-    }
   }
 
   @UseGuards(AuthGuard)
