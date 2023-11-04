@@ -5,7 +5,7 @@ import { Users } from './entities/users.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
-import 'dotenv/config';
+// import 'dotenv/config';
 
 @Injectable()
 export class UsersService {
