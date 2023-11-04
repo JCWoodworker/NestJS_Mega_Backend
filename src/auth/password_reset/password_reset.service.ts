@@ -4,8 +4,8 @@ import { JwtService } from '@nestjs/jwt';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
 import { PasswordUpdateRequestDto } from './dto/password-update-request.dto';
 import { jwtConstants } from 'src/auth/constants';
-import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class PasswordResetService {
@@ -63,7 +63,7 @@ export class PasswordResetService {
     const passwordResetJwt = await this.jwtService.signAsync({
       ...payload,
       secret: jwtConstants.passwordResetSecret,
-      expiresIn: new Date(Date.now() + 1000 * 10),
+      expiresIn: new Date(Date.now() + 1000 * 60 * 3),
     });
 
     const salt = bcrypt.genSaltSync(parseInt(process.env.SALT_ROUNDS));
@@ -90,9 +90,9 @@ export class PasswordResetService {
   }
 
   async verifyPasswordResetTokenAndJwt(jwt: string, token: string) {
-    const decodedJwt = await this.jwtService.verify(jwt, {
-      secret: jwtConstants.passwordResetSecret,
-    });
+    debugger;
+    const decodedJwt = await this.jwtService.verifyAsync(jwt);
+    debugger;
     const user = await this.usersService.findOneById(
       decodedJwt.sub,
       decodedJwt.userType,
