@@ -5,7 +5,6 @@ import { Users } from './entities/users.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
-// import 'dotenv/config';
 
 @Injectable()
 export class UsersService {
@@ -47,7 +46,7 @@ export class UsersService {
 
   async create(createUserDto: CreateUserDto) {
     const user = this.usersRepository.create(createUserDto);
-    const salt = bcrypt.genSaltSync(parseInt(process.env.SALT_ROUNDS));
+    const salt = bcrypt.genSaltSync(10);
     user.password = await bcrypt.hash(user.password, salt);
     return this.usersRepository.save(user);
   }

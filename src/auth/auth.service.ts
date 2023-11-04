@@ -39,7 +39,7 @@ export class AuthService {
       }),
     ]);
 
-    const salt = bcrypt.genSaltSync(parseInt(process.env.SALT_ROUNDS));
+    const salt = bcrypt.genSaltSync(10);
     const encryptedRefreshToken = await bcrypt.hash(refreshToken, salt);
     await this.usersService.update(
       user.userId,
@@ -84,7 +84,7 @@ export class AuthService {
         expiresIn: refreshTokenExpiration,
       }),
     ]);
-    const salt = bcrypt.genSaltSync(parseInt(process.env.SALT_ROUNDS));
+    const salt = bcrypt.genSaltSync(10);
     const encryptedRefreshToken = await bcrypt.hash(newRefreshToken, salt);
     await this.usersService.update(
       user.userId,

@@ -1,7 +1,8 @@
-// import 'dotenv/config';
-
 export const jwtConstants = {
-  accessSecret: process.env.JWT_ACCESS_SECRET,
-  refreshSecret: process.env.JWT_REFRESH_SECRET,
-  passwordResetSecret: process.env.JWT_PASSWORD_RESET_SECRET,
+  accessSecret:
+    '6jxYVFjwq6VEWngJHJP1Qui1TE6x6xrIj/tYIUFC/1TXpvcaHWTAUXV0HTM9ZiHt0w/ptGw97X7XH5Mogga4eB3uPQ7G/tGKCScexZ30aiu4X5H3ivEY6yeMnHCTZv8oRz7jTDLAZlIpFDmjEpgogA5fqE+mEPJEPFHzAawEmkzwVFwCiPF2fTthgxgrSrpQxt5U6Z4FLLY+MXVqfDN8ctqyofMB5nX/VYTxJkt6NfDDX0qDBudRfcDEQAVLJpFULcVPFoqvjEO2K49V3sg5p8vaV0GfADvq/OyQNXNTBHkyKMSO1zKW+WqkHMWKR2mT3gLIWNZ4uK0Q+Iu+HGGS+A',
+  refreshSecret:
+    '75tkevCRqB5WPBd8U52+7HqzOtBO7wDy5T8zxDc1YKJI5+szpgrhk7x8ungYmCmthWWy53V8Ru53PXE72sJ4dyKvX/Se+IsNZEUOPh7r/RKaNlCMszXqNe3hlsU8qxx3k8xp1Y2y/FulOb8ARmisNkKrqOZ+9JdkTYL+faUVsQ1crwPyYTzQJzQ3SLAVZbgnIltuUFafXhu16I/IJ5AMAqm1uheyeuaZEyOcChbOl/8uipkOBiVnw33zXLR4LEu2ztyAErtLrD80px2Gcg0Lyq9prSA1rUXrOXUwS3m7boCtSRI2IJUMrYtkhmGO7FgLPBpEZbvp6GR2DtD35+ImIw',
+  passwordResetSecret:
+    '2b10K8CRinjLN9pYih0VbA1PBiYKfTWucnmTnM4/a1g/JPv19zoIw72IUFC/1TXpvcaHWTAUXV0HTM9pgrhk7x8ungYmCmthWWy53VLIWNZ4uK0Q+Iu+HGGS+Ay2WTOx+jEEZ2wVuhzz2zOxgoF9iqfCVxxYJ',
 };
