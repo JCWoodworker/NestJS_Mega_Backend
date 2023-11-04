@@ -42,7 +42,7 @@ export class PasswordResetService {
     };
   }
 
-  generatePasswordResetUrl = async (userEmailToReset: string) => {
+  async generatePasswordResetUrl(userEmailToReset: string) {
     const resetMessage = `If user with email ${userEmailToReset} exists, a password reset link will be sent`;
 
     const user = await this.usersService.findOneByEmail(userEmailToReset);
@@ -85,11 +85,10 @@ export class PasswordResetService {
     return {
       passwordResetUrl: passwordResetUrl,
     };
-  };
+  }
 
   async verifyPasswordResetTokenAndJwt(jwt: string, token: string) {
     const decodedJwt = await this.jwtService.verify(jwt);
-    debugger;
     const user = await this.usersService.findOneById(
       decodedJwt.sub,
       decodedJwt.userType,
@@ -109,9 +108,6 @@ export class PasswordResetService {
 
   async updateUserWithNewPassword(body: PasswordUpdateRequestDto) {
     const { token, jwt, newPassword, confirmPassword } = body;
-
-    // This is NOT very clean or DRY, and is open to security vulnerabilities
-    // TODO: Move this to its own class
 
     let statusMessage: string = '';
 
