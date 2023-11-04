@@ -93,16 +93,20 @@ export class PasswordResetService {
       decodedJwt.sub,
       decodedJwt.userType,
     );
+
     if (!user.passwordResetToken || !user.passwordResetJwt) {
       throw new Error(
         'User does not have a password reset token and/or jwt stored',
       );
     }
+
     const isValidJwt = await bcrypt.compare(jwt, user?.passwordResetJwt);
     const isValidToken = await bcrypt.compare(token, user?.passwordResetToken);
+
     if (!isValidJwt && !isValidToken) {
       return { status: false };
     }
+
     return { status: true, user };
   }
 
