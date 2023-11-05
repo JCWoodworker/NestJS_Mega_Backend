@@ -14,7 +14,6 @@ import * as Joi from '@hapi/joi';
     UsersModule,
     AuthModule,
     ConfigModule.forRoot({
-      // isGlobal: true,
       validationSchema: Joi.object({
         DATABASE_HOST: Joi.string().required(),
         DATABASE_PORT: Joi.number().required().default(5432),
