@@ -14,13 +14,18 @@ import * as Joi from '@hapi/joi';
     UsersModule,
     AuthModule,
     ConfigModule.forRoot({
+      isGlobal: true,
       validationSchema: Joi.object({
         DATABASE_HOST: Joi.string().required(),
         DATABASE_PORT: Joi.number().required().default(5432),
         DATABASE_USERNAME: Joi.string().required(),
         DATABASE_PASSWORD: Joi.string().required(),
         DATABASE_NAME: Joi.string().required(),
-        SALT_ROUNDS: Joi.number().required(),
+        SALT_ROUNDS: Joi.number().required().default(10),
+        SKIP_AUTH_ACCESS_SECRET: Joi.string().required(),
+        JWT_ACCESS_SECRET: Joi.string().required(),
+        JWT_REFRESH_SECRET: Joi.string().required(),
+        JWT_PASSWORD_RESET_SECRET: Joi.string().required(),
       }),
     }),
     TypeOrmModule.forRoot({

@@ -65,6 +65,15 @@ Multiple user endpoints have been set up at '/users':
 
 ## Configurations
 
+```yarn add @nestjs/config @hapi/joi @Types Hapi__joi (dev)```
+
+**QUICK NOTE ABOUT .ENV FILE AND JOI VALIDATION SCHEMA:**
+
+* When running in dev or debug mode the wathcher will not update when saving the .env file.  You'll need to update a ts file to trigger the refresh
+
+* Hapi/Joi is for config validation
+
+
 ### CORS
 
 * Remember to update ```app.enableCors()``` in main.ts
