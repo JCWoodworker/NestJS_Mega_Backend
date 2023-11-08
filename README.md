@@ -78,9 +78,11 @@ When running in dev or debug mode the wathcher will not update when saving the .
 
 * Hapi/Joi is for config validation
 
-* I am circumventing the usual NestJS configService by using dotenv
-```import * as dotenv from 'dotenv';```
-```dotenv.config();```
+* I am circumventing the usual NestJS configService by using dotenv in the following:
+  * /src/auth/decorators/skipAuth.decorator.ts
+  
+  ```import * as dotenv from 'dotenv';```
+  ```dotenv.config();```
 
 --
 
