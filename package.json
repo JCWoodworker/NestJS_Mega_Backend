@@ -19,7 +19,8 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "migrate:run": "typeorm migration:run -d dist/typeorm-cli.config",
-    "migrate:revert": "typeorm migration:revert -d dist/typeorm-cli.config"
+    "migrate:revert": "typeorm migration:revert -d dist/typeorm-cli.config",
+    "seed:users": "ts-node ./src/seeders/users.seed.ts"
   },
   "dependencies": {
     "@hapi/joi": "^17.1.1",
@@ -30,6 +31,7 @@
     "@nestjs/mapped-types": "*",
     "@nestjs/platform-express": "^10.0.0",
     "@nestjs/typeorm": "^10.0.0",
+    "axios": "^1.6.0",
     "bcrypt": "^5.1.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.0",
