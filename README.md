@@ -28,6 +28,8 @@
   * ```npx typeorm migrate:revert -d dist/typeorm-cli.config```
     * package.json shortcut: ```yarn migrate:revert```
 
+--
+
 ## Auth
 
 * Send POST request in the following JSON format:
@@ -48,6 +50,8 @@
 * When writing a new endpoint that requires auth, use @Req to get req.user
   * The JWT will have all user information including userType!
 
+--
+
 ## Pre-built endpoints
 
 Multiple user endpoints have been set up at '/users':
@@ -63,16 +67,18 @@ Multiple user endpoints have been set up at '/users':
 
 * NEST.JS VALIDATION - <https://docs.nestjs.com/techniques/validation>
 
+--
+
 ## Configurations
 
 ```yarn add @nestjs/config @hapi/joi @Types Hapi__joi (dev)```
 
 **QUICK NOTE ABOUT .ENV FILE AND JOI VALIDATION SCHEMA:**
-
-* When running in dev or debug mode the wathcher will not update when saving the .env file.  You'll need to update a ts file to trigger the refresh
+When running in dev or debug mode the wathcher will not update when saving the .env file.  You'll need to update a ts file to trigger the refresh
 
 * Hapi/Joi is for config validation
 
+--
 
 ### CORS
 
@@ -105,5 +111,7 @@ POST - ```auth/reset-password/reset```
   * This will once again clear all token cookies and persist the new encrypted password to the users table
 
 * More info on the way as I continue to build this out!!
+
+--
 
 ### DOUBLE CHECK JWT ACCESS SECRETS ... MAKE SURE THEY'RE BEING USED IN YOUR CODE
