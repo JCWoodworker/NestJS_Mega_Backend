@@ -20,6 +20,7 @@ import * as Joi from '@hapi/joi';
         DATABASE_USERNAME: Joi.string().required(),
         DATABASE_PASSWORD: Joi.string().required(),
         DATABASE_NAME: Joi.string().required(),
+        SALT_ROUNDS: Joi.number().required(),
       }),
     }),
     TypeOrmModule.forRoot({
