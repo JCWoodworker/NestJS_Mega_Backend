@@ -13,10 +13,17 @@ import { Response } from 'express';
 import { AuthGuard } from './auth.guard';
 import { AuthService } from './auth.service';
 import { SkipAuth } from './decorators/skipAuth.decorator';
+import authConfig from '../config/auth.config';
+import { ConfigType } from '@nestjs/config';
+import { Inject } from '@nestjs/common';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    @Inject(authConfig.KEY)
+    private readonly authConfiguration: ConfigType<typeof authConfig>,
+  ) {}
 
   @SkipAuth()
   @HttpCode(HttpStatus.OK)
