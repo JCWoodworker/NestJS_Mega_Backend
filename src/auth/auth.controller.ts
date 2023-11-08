@@ -35,12 +35,14 @@ export class AuthController {
       .cookie('access_token', accessToken, {
         httpOnly: true,
         sameSite: 'lax',
+        // configure "secure" to be true in production
         secure: false,
         expires: new Date(Date.now() + 60000 * 60 * 24),
       })
       .cookie('refresh_token', refreshToken, {
         httpOnly: true,
         sameSite: 'lax',
+        // configure "secure" to be true in production
         secure: false,
         expires: new Date(Date.now() + 60000 * 60 * 24 * 7),
       })
@@ -74,12 +76,14 @@ export class AuthController {
       .cookie('access_token', newAccessToken, {
         httpOnly: true,
         sameSite: 'lax',
+        // configure "secure" to be true in production
         secure: false,
         expires: new Date(Date.now() + 60000 * 60 * 24),
       })
       .cookie('refresh_token', newRefreshToken, {
         httpOnly: true,
         sameSite: 'lax',
+        // configure "secure" to be true in production
         secure: false,
         expires: new Date(Date.now() + 60000 * 60 * 24 * 7),
       })

@@ -5,9 +5,12 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { jwtConstants } from './constants';
 import { PasswordResetModule } from './password_reset/password_reset.module';
+import { ConfigModule } from '@nestjs/config';
+import authConfig from 'src/config/auth.config';
 
 @Module({
   imports: [
+    ConfigModule.forFeature(authConfig),
     UsersModule,
     JwtModule.register({
       global: true,
