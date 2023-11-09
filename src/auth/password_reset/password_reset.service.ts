@@ -1,17 +1,24 @@
-import { Injectable } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
+import { Injectable, Inject } from '@nestjs/common';
 import { UsersService } from 'src/users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
 import { PasswordUpdateRequestDto } from './dto/password-update-request.dto';
 import { jwtConstants } from 'src/auth/constants';
 import { v4 as uuidv4 } from 'uuid';
-import * as bcrypt from 'bcrypt';
+import { ConfigType } from '@nestjs/config';
+import authConfig from '../../config/auth.config';
+import appConfig from 'src/config/app.config';
 
 @Injectable()
 export class PasswordResetService {
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
+    @Inject(authConfig.KEY)
+    private readonly authConfiguration: ConfigType<typeof authConfig>,
+    @Inject(appConfig.KEY)
+    private readonly appConfiguration: ConfigType<typeof appConfig>,
   ) {}
 
   async handlePasswordResetRequest(
@@ -35,8 +42,9 @@ export class PasswordResetService {
       userEmailRequestingToResetPassword,
     );
 
-    // Remove this console.log in production!!
-    console.log(passwordResetUrl);
+    if (this.appConfiguration.environment === 'development') {
+      console.log(passwordResetUrl);
+    }
 
     return {
       message: message,
@@ -90,9 +98,7 @@ export class PasswordResetService {
   }
 
   async verifyPasswordResetTokenAndJwt(jwt: string, token: string) {
-    debugger;
     const decodedJwt = await this.jwtService.verifyAsync(jwt);
-    debugger;
     const user = await this.usersService.findOneById(
       decodedJwt.sub,
       decodedJwt.userType,

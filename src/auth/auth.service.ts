@@ -12,9 +12,7 @@ export class AuthService {
     private usersService: UsersService,
     @Inject(authConfig.KEY)
     private readonly authConfiguration: ConfigType<typeof authConfig>,
-  ) {
-    console.log(`authConfig ${authConfiguration.jwtAccessSecret}`);
-  }
+  ) {}
 
   async signIn(
     username: string,

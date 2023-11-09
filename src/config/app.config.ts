@@ -1,5 +1,7 @@
-export default () => ({
-  environment: process.env.NODE_ENV || 'development',
+import { registerAs } from '@nestjs/config';
+
+export default registerAs('app', () => ({
+  environment: process.env.ENVIRONMENT,
   database: {
     type: 'postgres',
     host: process.env.DATABASE_HOST,
@@ -9,4 +11,4 @@ export default () => ({
     database: process.env.DATABASE_NAME,
     autoLoadEntities: true,
   },
-});
+}));

@@ -16,6 +16,7 @@ import appConfig from './config/app.config';
       isGlobal: true,
       load: [appConfig],
       validationSchema: Joi.object({
+        ENVIRONMENT: Joi.string().required(),
         DATABASE_HOST: Joi.string().required(),
         DATABASE_PORT: Joi.number().required().default(5432),
         DATABASE_USERNAME: Joi.string().required(),
