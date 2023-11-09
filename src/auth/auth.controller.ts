@@ -25,7 +25,8 @@ export class AuthController {
     private readonly authConfiguration: ConfigType<typeof authConfig>,
   ) {}
 
-  secureCookie = this.authConfiguration.secureCookie === 'true' ? true : false;
+  secureCookie =
+    this.authConfiguration.others.secureCookie === 'true' ? true : false;
 
   @SkipAuth()
   @HttpCode(HttpStatus.OK)
@@ -37,8 +38,8 @@ export class AuthController {
     const [accessToken, refreshToken] = await this.authService.signIn(
       signInDto.username,
       signInDto.password,
-      this.authConfiguration.jwtAccessExpiration,
-      this.authConfiguration.jwtRefreshExpiration,
+      this.authConfiguration.expirations.jwtAccess,
+      this.authConfiguration.expirations.jwtRefresh,
     );
 
     res
@@ -47,7 +48,7 @@ export class AuthController {
         sameSite: 'lax',
         secure: this.secureCookie,
         expires: new Date(
-          Date.now() + parseInt(this.authConfiguration.authCookieExpiration),
+          Date.now() + this.authConfiguration.expirations.authCookie,
         ),
       })
       .cookie('refresh_token', refreshToken, {
@@ -55,7 +56,7 @@ export class AuthController {
         sameSite: 'lax',
         secure: this.secureCookie,
         expires: new Date(
-          Date.now() + parseInt(this.authConfiguration.refreshCookieExpiration),
+          Date.now() + this.authConfiguration.expirations.refreshCookie,
         ),
       })
       .send({
@@ -89,7 +90,7 @@ export class AuthController {
         sameSite: 'lax',
         secure: this.secureCookie,
         expires: new Date(
-          Date.now() + parseInt(this.authConfiguration.authCookieExpiration),
+          Date.now() + this.authConfiguration.expirations.authCookie,
         ),
       })
       .cookie('refresh_token', newRefreshToken, {
@@ -97,7 +98,7 @@ export class AuthController {
         sameSite: 'lax',
         secure: this.secureCookie,
         expires: new Date(
-          Date.now() + parseInt(this.authConfiguration.refreshCookieExpiration),
+          Date.now() + this.authConfiguration.expirations.refreshCookie,
         ),
       })
       .send({

@@ -21,7 +21,7 @@ export class PasswordResetService {
     private readonly appConfiguration: ConfigType<typeof appConfig>,
   ) {}
 
-  saltConfig = this.authConfiguration.saltRounds;
+  saltConfig = this.authConfiguration.others.saltRounds;
 
   async handlePasswordResetRequest(
     passwordResetRequestDto: PasswordResetRequestDto,
@@ -44,7 +44,10 @@ export class PasswordResetService {
       userEmailRequestingToResetPassword,
     );
 
-    if (this.appConfiguration.environment === 'development') {
+    if (
+      this.appConfiguration.environment === 'development' ||
+      this.appConfiguration.environment === 'preprod'
+    ) {
       console.log(passwordResetUrl);
     }
 

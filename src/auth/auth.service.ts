@@ -14,7 +14,7 @@ export class AuthService {
     private readonly authConfiguration: ConfigType<typeof authConfig>,
   ) {}
 
-  saltConfig = this.authConfiguration.saltRounds;
+  saltConfig = this.authConfiguration.others.saltRounds;
   async signIn(
     username: string,
     pass: string,

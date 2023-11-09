@@ -17,7 +17,7 @@ export class UsersService {
     private readonly authConfiguration: ConfigType<typeof authConfig>,
   ) {}
 
-  saltConfig = this.authConfiguration.saltRounds;
+  saltConfig = this.authConfiguration.others.saltRounds;
 
   async findAll(): Promise<any> {
     const users = await this.usersRepository.find();
