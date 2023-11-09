@@ -1,9 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Users } from './entities/users.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { ConfigType } from '@nestjs/config';
+import authConfig from '../config/auth.config';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -11,7 +13,12 @@ export class UsersService {
   constructor(
     @InjectRepository(Users)
     private readonly usersRepository: Repository<Users>,
+    @Inject(authConfig.KEY)
+    private readonly authConfiguration: ConfigType<typeof authConfig>,
   ) {}
+
+  saltConfig = this.authConfiguration.saltRounds;
+
   async findAll(): Promise<any> {
     const users = await this.usersRepository.find();
     return users.map((user) => {
@@ -46,7 +53,7 @@ export class UsersService {
 
   async create(createUserDto: CreateUserDto) {
     const user = this.usersRepository.create(createUserDto);
-    const salt = bcrypt.genSaltSync(10);
+    const salt = bcrypt.genSaltSync(this.saltConfig);
     user.password = await bcrypt.hash(user.password, salt);
     return this.usersRepository.save(user);
   }
