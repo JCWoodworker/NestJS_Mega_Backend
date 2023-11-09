@@ -31,12 +31,10 @@ export class UsersService {
     });
   }
 
-  async findOneById(userId: number, userType: string) {
-    if (userType === 'admin') {
-      return await this.usersRepository.findOne({
-        where: { userId: userId },
-      });
-    }
+  async findOneById(userId: number) {
+    return await this.usersRepository.findOne({
+      where: { userId: userId },
+    });
     throw new Error('Unauthorized - user must be admin to perform this action');
   }
   async findOneByUsername(username: string) {
@@ -78,8 +76,8 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
-  async remove(userId: number, userType: string) {
-    const user = await this.findOneById(userId, userType);
+  async remove(userId: number) {
+    const user = await this.findOneById(userId);
     return this.usersRepository.remove(user);
   }
 }
