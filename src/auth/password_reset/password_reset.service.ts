@@ -22,6 +22,7 @@ export class PasswordResetService {
   ) {}
 
   saltConfig = this.authConfiguration.others.saltRounds;
+  environment = this.appConfiguration.environment;
 
   async handlePasswordResetRequest(
     passwordResetRequestDto: PasswordResetRequestDto,
@@ -44,11 +45,13 @@ export class PasswordResetService {
       userEmailRequestingToResetPassword,
     );
 
-    if (
-      this.appConfiguration.environment === 'development' ||
-      this.appConfiguration.environment === 'preprod'
-    ) {
+    if (this.environment === 'development' || this.environment === 'preprod') {
       console.log(passwordResetUrl);
+      return {
+        userMessage: message,
+        developerMessage: `Environment = ${this.environment}`,
+        passwordResetUrl: passwordResetUrl,
+      };
     }
 
     return {
