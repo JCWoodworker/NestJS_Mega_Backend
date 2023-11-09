@@ -21,6 +21,8 @@ export class PasswordResetService {
     private readonly appConfiguration: ConfigType<typeof appConfig>,
   ) {}
 
+  saltConfig = this.authConfiguration.saltRounds;
+
   async handlePasswordResetRequest(
     passwordResetRequestDto: PasswordResetRequestDto,
   ) {
@@ -74,7 +76,7 @@ export class PasswordResetService {
       expiresIn: new Date(Date.now() + 1000 * 60 * 3),
     });
 
-    const salt = bcrypt.genSaltSync(10);
+    const salt = bcrypt.genSaltSync(this.saltConfig);
     const encryptedPasswordResetToken = await bcrypt.hash(
       passwordResetToken,
       salt,
@@ -141,7 +143,7 @@ export class PasswordResetService {
       ? (statusMessage = 'Tokens have been verified')
       : (statusMessage = 'An Unexpected Error Occurred');
 
-    const salt = bcrypt.genSaltSync(10);
+    const salt = bcrypt.genSaltSync(this.saltConfig);
     const encryptedPassword = await bcrypt.hash(newPassword, salt);
 
     await this.usersService.update(
