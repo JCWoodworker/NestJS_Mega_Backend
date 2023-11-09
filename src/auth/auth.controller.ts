@@ -25,6 +25,8 @@ export class AuthController {
     private readonly authConfiguration: ConfigType<typeof authConfig>,
   ) {}
 
+  secureCookie = this.authConfiguration.secureCookie === 'true' ? true : false;
+
   @SkipAuth()
   @HttpCode(HttpStatus.OK)
   @Post('login')
@@ -35,23 +37,26 @@ export class AuthController {
     const [accessToken, refreshToken] = await this.authService.signIn(
       signInDto.username,
       signInDto.password,
-      '15m',
-      '7d',
+      this.authConfiguration.jwtAccessExpiration,
+      this.authConfiguration.jwtRefreshExpiration,
     );
+
     res
       .cookie('access_token', accessToken, {
         httpOnly: true,
         sameSite: 'lax',
-        // configure "secure" to be true in production
-        secure: false,
-        expires: new Date(Date.now() + 60000 * 60 * 24),
+        secure: this.secureCookie,
+        expires: new Date(
+          Date.now() + parseInt(this.authConfiguration.authCookieExpiration),
+        ),
       })
       .cookie('refresh_token', refreshToken, {
         httpOnly: true,
         sameSite: 'lax',
-        // configure "secure" to be true in production
-        secure: false,
-        expires: new Date(Date.now() + 60000 * 60 * 24 * 7),
+        secure: this.secureCookie,
+        expires: new Date(
+          Date.now() + parseInt(this.authConfiguration.refreshCookieExpiration),
+        ),
       })
       .send({
         status: 'Login successful',
@@ -78,21 +83,22 @@ export class AuthController {
         req.user.sub,
         req.user.userType,
       );
-    // SET { secure: true } in production for the below cookies
     res
       .cookie('access_token', newAccessToken, {
         httpOnly: true,
         sameSite: 'lax',
-        // configure "secure" to be true in production
-        secure: false,
-        expires: new Date(Date.now() + 60000 * 60 * 24),
+        secure: this.secureCookie,
+        expires: new Date(
+          Date.now() + parseInt(this.authConfiguration.authCookieExpiration),
+        ),
       })
       .cookie('refresh_token', newRefreshToken, {
         httpOnly: true,
         sameSite: 'lax',
-        // configure "secure" to be true in production
-        secure: false,
-        expires: new Date(Date.now() + 60000 * 60 * 24 * 7),
+        secure: this.secureCookie,
+        expires: new Date(
+          Date.now() + parseInt(this.authConfiguration.refreshCookieExpiration),
+        ),
       })
       .send({
         status: `Token refresh successful - Woooooo!`,

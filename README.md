@@ -49,7 +49,11 @@
     * Use the custom SkipAuth() decorator to make any of your endpoints public
 * When writing a new endpoint that requires auth, use @Req to get req.user
   * The JWT will have all user information including userType!
-
+  * The JWT secret should be set in your .env file, and the settings on AuthModule automatically pass your secret key to the jwt whenever signing or verifying:
+  ```JwtModule.register({```
+    ```global: true,```
+    ```secret: jwtConstants.accessSecret,```
+  ```}),```
 --
 
 ## Pre-built endpoints
