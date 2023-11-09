@@ -14,6 +14,7 @@ export class AuthService {
     private readonly authConfiguration: ConfigType<typeof authConfig>,
   ) {}
 
+  saltConfig = this.authConfiguration.saltRounds;
   async signIn(
     username: string,
     pass: string,
@@ -43,7 +44,7 @@ export class AuthService {
       }),
     ]);
 
-    const salt = bcrypt.genSaltSync(10);
+    const salt = bcrypt.genSaltSync(this.saltConfig);
     const encryptedRefreshToken = await bcrypt.hash(refreshToken, salt);
     await this.usersService.update(
       user.userId,
@@ -88,7 +89,7 @@ export class AuthService {
         expiresIn: refreshTokenExpiration,
       }),
     ]);
-    const salt = bcrypt.genSaltSync(10);
+    const salt = bcrypt.genSaltSync(this.saltConfig);
     const encryptedRefreshToken = await bcrypt.hash(newRefreshToken, salt);
     await this.usersService.update(
       user.userId,
