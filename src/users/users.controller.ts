@@ -28,7 +28,7 @@ export class UserController {
     @Param('id') id: number,
     @Req() req,
   ): Promise<SerializedUserDto> {
-    const user = await this.userService.findOneById(id, req.user.userType);
+    const user = await this.userService.findOneById(id);
     return {
       username: user.username,
       email: user.email,
@@ -63,7 +63,7 @@ export class UserController {
 
   @Delete(':id')
   async remove(@Param('id') id: number, @Req() req) {
-    const user = await this.userService.remove(id, req.user.userType);
+    const user = await this.userService.remove(id);
     return { message: `User ${user.username} has been deleted` };
   }
 }
