@@ -1,6 +1,7 @@
 import * as bcrypt from 'bcrypt';
 import { Injectable, Inject } from '@nestjs/common';
 import { UsersService } from 'src/users/users.service';
+import { Users } from 'src/users/entities/users.entity';
 import { JwtService } from '@nestjs/jwt';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
 import { PasswordUpdateRequestDto } from './dto/password-update-request.dto';
@@ -51,6 +52,12 @@ export class PasswordResetService {
         passwordResetUrl: passwordResetUrl,
       };
     }
+
+    // No logic has been written in this function yet
+    const sendPasswordResetEmailStatus =
+      await this.sendPasswordResetEmail(user);
+
+    console.log(sendPasswordResetEmailStatus);
 
     return {
       message: message,
@@ -162,5 +169,11 @@ export class PasswordResetService {
       status: true,
       message: statusMessage,
     };
+  }
+
+  async sendPasswordResetEmail(user: Users) {
+    // Write logic to send email using your preferred service here
+    console.log(`No logic written to send an email to ${user.email} yet`);
+    return false;
   }
 }
