@@ -6,7 +6,6 @@ import {
   Patch,
   Param,
   Delete,
-  Req,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { SkipAuth } from 'src/auth/decorators/skipAuth.decorator';
@@ -24,10 +23,7 @@ export class UserController {
   }
 
   @Get(':id')
-  async findOneById(
-    @Param('id') id: number,
-    @Req() req,
-  ): Promise<SerializedUserDto> {
+  async findOneById(@Param('id') id: number): Promise<SerializedUserDto> {
     const user = await this.userService.findOneById(id);
     return {
       username: user.username,
@@ -62,7 +58,7 @@ export class UserController {
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: number, @Req() req) {
+  async remove(@Param('id') id: number) {
     const user = await this.userService.remove(id);
     return { message: `User ${user.username} has been deleted` };
   }
