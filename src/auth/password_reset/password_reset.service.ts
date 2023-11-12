@@ -44,6 +44,9 @@ export class PasswordResetService {
       userEmailRequestingToResetPassword,
     );
 
+    // You will need to use the return value of this function to send an email
+    // from the frontend if using EmailJS.
+
     if (this.environment === 'development' || this.environment === 'preprod') {
       console.log(passwordResetUrl);
       return {
@@ -52,16 +55,6 @@ export class PasswordResetService {
         passwordResetUrl: passwordResetUrl,
       };
     }
-
-    // No logic has been written in this function yet
-    const sendPasswordResetEmailStatus =
-      await this.sendPasswordResetEmail(user);
-
-    console.log(sendPasswordResetEmailStatus);
-
-    return {
-      message: message,
-    };
   }
 
   async generatePasswordResetUrl(userEmailToReset: string) {

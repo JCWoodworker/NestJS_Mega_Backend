@@ -7,6 +7,9 @@ import * as cookieParser from 'cookie-parser';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
+  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
+  console.log(`Allowed origins: ${allowedOrigins}`);
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -27,7 +30,9 @@ async function bootstrap() {
   // Remember to ensure that only specific origins can communicate with your API!!!
   app.enableCors({
     allowedHeaders: 'Content-Type, Accept',
-    origin: ['http://localhost:3000', 'http://localhost:5173'],
+    origin: '*',
+    // Use the following in production:
+    // origin: allowedOrigins
     methods: 'GET,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
