@@ -10,6 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { ConfigType } from '@nestjs/config';
 import authConfig from '../../config/auth.config';
 import appConfig from 'src/config/app.config';
+import * as sgMail from '@sendgrid/mail';
 
 @Injectable()
 export class PasswordResetService {
@@ -44,8 +45,8 @@ export class PasswordResetService {
       userEmailRequestingToResetPassword,
     );
 
-    // You will need to use the return value of this function to send an email
-    // from the frontend if using EmailJS.
+    const emailSentStatus = await this.sendEmail();
+    emailSentStatus ? console.log('Email sent') : console.log('Email not sent');
 
     if (this.environment === 'development' || this.environment === 'preprod') {
       console.log(passwordResetUrl);
@@ -168,5 +169,27 @@ export class PasswordResetService {
     // Write logic to send email using your preferred service here
     console.log(`No logic written to send an email to ${user.email} yet`);
     return false;
+  }
+
+  async sendEmail() {
+    const msg = {
+      to: 'development.testing.jc@gmail.com',
+      from: 'development.testing.jc@gmail.com',
+      subject: 'Sending with SendGrid is Fun',
+      text: 'and easy to do anywhere, even with Node.js',
+      html: '<strong>and easy to do anywhere, even with Node.js</strong>',
+    };
+    debugger;
+
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+    try {
+      await sgMail.send(msg);
+      console.log('Email sent');
+      return true;
+    } catch (error) {
+      console.error('Error sending email:', error);
+      return false;
+    }
   }
 }
