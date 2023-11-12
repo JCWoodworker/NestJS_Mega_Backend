@@ -100,9 +100,7 @@ export class PasswordResetService {
 
     const passwordResetUrl = `http://localhost:3000/password-reset/reset?jwt=${passwordResetJwt}&token=${passwordResetToken}`;
 
-    return {
-      passwordResetUrl: passwordResetUrl,
-    };
+    return passwordResetUrl;
   }
 
   async verifyPasswordResetTokenAndJwt(jwt: string, token: string) {
