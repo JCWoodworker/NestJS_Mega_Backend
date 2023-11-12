@@ -39,8 +39,6 @@ export class PasswordResetService {
       };
     }
 
-    // Write logic that sends this passwordResetUrl to the user's email address
-    // Use your preferred email service (mine are either Email JS or Sendgrid)
     const passwordResetUrl = await this.generatePasswordResetUrl(
       userEmailRequestingToResetPassword,
     );
