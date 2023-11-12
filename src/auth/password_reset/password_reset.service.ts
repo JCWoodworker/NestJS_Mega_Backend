@@ -107,10 +107,7 @@ export class PasswordResetService {
 
   async verifyPasswordResetTokenAndJwt(jwt: string, token: string) {
     const decodedJwt = await this.jwtService.verifyAsync(jwt);
-    const user = await this.usersService.findOneById(
-      decodedJwt.sub,
-      decodedJwt.userType,
-    );
+    const user = await this.usersService.findOneById(decodedJwt.sub);
 
     if (!user.passwordResetToken || !user.passwordResetJwt) {
       throw new Error(

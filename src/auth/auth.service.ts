@@ -65,7 +65,7 @@ export class AuthService {
     accessTokenexpiration: string = '15m',
     refreshTokenExpiration: string = '7d',
   ) {
-    const user = await this.usersService.findOneById(userId, userType);
+    const user = await this.usersService.findOneById(userId);
     const isMatch = await bcrypt.compare(
       currentRefreshToken,
       user.refreshToken,
