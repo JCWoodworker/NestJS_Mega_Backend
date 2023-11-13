@@ -45,8 +45,9 @@ export class PasswordResetService {
       userEmailRequestingToResetPassword,
     );
 
-    const emailSentStatus = await this.sendEmail();
-    emailSentStatus ? console.log('Email sent') : console.log('Email not sent');
+    // CONTACT SENDGRID SUPPORT - EMAILS ARE PROCESSING BUT NOT SENDING - 11/13/2023
+    // const emailSentStatus = await this.sendEmail();
+    // emailSentStatus ? console.log('Email sent') : console.log('Email not sent');
 
     if (this.environment === 'development' || this.environment === 'preprod') {
       console.log(passwordResetUrl);
@@ -163,12 +164,6 @@ export class PasswordResetService {
       status: true,
       message: statusMessage,
     };
-  }
-
-  async sendPasswordResetEmail(user: Users) {
-    // Write logic to send email using your preferred service here
-    console.log(`No logic written to send an email to ${user.email} yet`);
-    return false;
   }
 
   async sendEmail() {
