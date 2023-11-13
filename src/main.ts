@@ -7,8 +7,7 @@ import * as cookieParser from 'cookie-parser';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
-  console.log(`Allowed origins: ${allowedOrigins}`);
+  // const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -31,7 +30,7 @@ async function bootstrap() {
   app.enableCors({
     allowedHeaders: 'Content-Type, Accept',
     origin: '*',
-    // Use the following in production:
+    // Use the following in production (see variable declaration on line 10 above):
     // origin: allowedOrigins
     methods: 'GET,PUT,PATCH,POST,DELETE',
     credentials: true,

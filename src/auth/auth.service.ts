@@ -30,7 +30,6 @@ export class AuthService {
       sub: user.userId,
       username: user.username,
       userType: user.userType,
-      cat: 'meow',
     };
 
     // This needs to be it's own function
