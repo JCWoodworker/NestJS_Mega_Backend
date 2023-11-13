@@ -1,7 +1,6 @@
 import * as bcrypt from 'bcrypt';
 import { Injectable, Inject } from '@nestjs/common';
 import { UsersService } from 'src/users/users.service';
-import { Users } from 'src/users/entities/users.entity';
 import { JwtService } from '@nestjs/jwt';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
 import { PasswordUpdateRequestDto } from './dto/password-update-request.dto';
