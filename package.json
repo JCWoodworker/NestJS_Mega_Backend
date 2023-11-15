@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "engines": {
     "node": "18.x",
-    "yarn": "1.x"
+    "yarn": "4.x"
   },
   "scripts": {
     "build": "nest build",
@@ -94,5 +94,6 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
-  }
+  },
+  "packageManager": "yarn@4.0.2"
 }
