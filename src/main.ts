@@ -12,8 +12,10 @@ async function bootstrap() {
   const allowedOrigins =
     process.env.ENVIRONMENT === 'development'
       ? '*'
-      : process.env.ENVIRONMENT === 'DEVELOPMENT' &&
-        process.env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim());
+      : process.env.ENVIRONMENT === 'preproduction' ||
+          process.env.ENVIRONMENT === 'production'
+        ? process.env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim())
+        : [];
 
   app.useGlobalPipes(
     new ValidationPipe({
