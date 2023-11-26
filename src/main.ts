@@ -12,8 +12,8 @@ async function bootstrap() {
   const allowedOrigins =
     process.env.ENVIRONMENT === 'development'
       ? '*'
-      : process.env.ENVIRONMENT === 'preproduction' ||
-          process.env.ENVIRONMENT === 'production'
+      : process.env.ENVIRONMENT === 'preprod' ||
+          process.env.ENVIRONMENT === 'prod'
         ? process.env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim())
         : [];
 
