@@ -9,7 +9,11 @@ const PORT = process.env.PORT || 3000;
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
+  const allowedOrigins =
+    process.env.ENVIRONMENT === 'development'
+      ? '*'
+      : process.env.ENVIRONMENT === 'DEVELOPMENT' &&
+        process.env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim());
 
   app.useGlobalPipes(
     new ValidationPipe({
