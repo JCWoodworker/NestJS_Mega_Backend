@@ -60,7 +60,7 @@ export class AuthController {
         ),
       })
       .send({
-        status: 'Login successful',
+        statusMessage: 'Login successful',
       });
   }
 
