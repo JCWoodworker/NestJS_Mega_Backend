@@ -41,11 +41,10 @@ export class AuthController {
       this.authConfiguration.expirations.jwtAccess,
       this.authConfiguration.expirations.jwtRefresh,
     );
-
     res
       .cookie('access_token', accessToken, {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'none',
         secure: this.secureCookie,
         expires: new Date(
           Date.now() + this.authConfiguration.expirations.authCookie,
@@ -53,7 +52,7 @@ export class AuthController {
       })
       .cookie('refresh_token', refreshToken, {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'none',
         secure: this.secureCookie,
         expires: new Date(
           Date.now() + this.authConfiguration.expirations.refreshCookie,
@@ -64,6 +63,7 @@ export class AuthController {
       });
   }
 
+  @SkipAuth()
   @Post('refresh')
   async refreshToken(@Req() req, @Res({ passthrough: true }) res) {
     if (!req.cookies.refresh_token) {
@@ -87,7 +87,7 @@ export class AuthController {
     res
       .cookie('access_token', newAccessToken, {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'none',
         secure: this.secureCookie,
         expires: new Date(
           Date.now() + this.authConfiguration.expirations.authCookie,
@@ -95,7 +95,7 @@ export class AuthController {
       })
       .cookie('refresh_token', newRefreshToken, {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'none',
         secure: this.secureCookie,
         expires: new Date(
           Date.now() + this.authConfiguration.expirations.refreshCookie,
