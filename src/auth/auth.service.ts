@@ -22,6 +22,9 @@ export class AuthService {
     refreshTokenExpiration: string,
   ) {
     const user = await this.usersService.findOneByUsername(username);
+    if (!user) {
+      throw new UnauthorizedException();
+    }
     const isMatch = await bcrypt.compare(pass, user.password);
     if (!isMatch) {
       throw new UnauthorizedException();
