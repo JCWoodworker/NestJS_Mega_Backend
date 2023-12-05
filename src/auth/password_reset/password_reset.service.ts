@@ -101,10 +101,10 @@ export class PasswordResetService {
     this.environment === 'development'
       ? (passwordResetUrl = `http://localhost:3000/password-reset/reset?jwt=${passwordResetJwt}&token=${passwordResetToken}`)
       : this.environment === 'preprod'
-      ? (passwordResetUrl = `${process.env.PREPROD_DOMAIN}/password-reset/reset?jwt=${passwordResetJwt}&token=${passwordResetToken}`)
-      : this.environment === 'prod'
-      ? (passwordResetUrl = `${process.env.PROD_DOMAIN}/password-reset/reset?jwt=${passwordResetJwt}&token=${passwordResetToken}`)
-      : null;
+        ? (passwordResetUrl = `${process.env.PREPROD_DOMAIN}/password-reset/reset?jwt=${passwordResetJwt}&token=${passwordResetToken}`)
+        : this.environment === 'prod'
+          ? (passwordResetUrl = `${process.env.PROD_DOMAIN}/password-reset/reset?jwt=${passwordResetJwt}&token=${passwordResetToken}`)
+          : null;
 
     return passwordResetUrl;
   }
