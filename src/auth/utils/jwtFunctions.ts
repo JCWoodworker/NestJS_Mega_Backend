@@ -1,3 +1,5 @@
+// Lets be honest here ... big thanks to Chat GPT for these functions
+
 export function calculateIsJwtWithinExpiry(decodedJwt) {
   const { expiresIn, iat } = decodedJwt;
   // Convert expiresIn duration to milliseconds

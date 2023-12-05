@@ -9,7 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { ConfigType } from '@nestjs/config';
 import authConfig from '../../config/auth.config';
 import appConfig from 'src/config/app.config';
-import * as sgMail from '@sendgrid/mail';
+// import * as sgMail from '@sendgrid/mail';
 import { calculateIsJwtWithinExpiry } from '../utils/jwtFunctions';
 
 @Injectable()
@@ -45,9 +45,27 @@ export class PasswordResetService {
       userEmailRequestingToResetPassword,
     );
 
-    // CONTACT SENDGRID SUPPORT - EMAILS ARE PROCESSING BUT NOT SENDING - 11/13/2023
+    // The following code works if you've got a valid sendgrid account
+    // AND you've added the appropriate API key to your env variables
+
+    //////////////////////////////////////////////////
     // const emailSentStatus = await this.sendEmail();
     // emailSentStatus ? console.log('Email sent') : console.log('Email not sent');
+    //////////////////////////////////////////////////
+
+    // If you set your ENVIRONMENT to 'development' or 'preprod' the URL will be displayed in
+    // the console AND returned in the response from the API.
+
+    // You'll need to figure out what email service works best for you if you want to send
+    // the url in an email.
+    // Fun facts - EmailJS will not let you send emails from an API.
+    // They must be sent from a web app.
+    // Sendgrid works, but they just randomly decide to close your account if they think
+    // you are doing something shady ... apparently.  WTF :-(
+
+    // Perhaps you can send the url as a text via Twilio instead??
+    // They're the same company as Sendgrid, but I've had less issues using
+    // Twilio for whatever I want, be it web apps, APIs, or even Python scripts!
 
     if (this.environment === 'development' || this.environment === 'preprod') {
       console.log(passwordResetUrl);
@@ -183,24 +201,27 @@ export class PasswordResetService {
     };
   }
 
-  async sendEmail() {
-    const msg = {
-      to: 'development.testing.jc@gmail.com',
-      from: 'development.testing.jc@gmail.com',
-      subject: 'Sending with SendGrid is Fun',
-      text: 'and easy to do anywhere, even with Node.js',
-      html: '<strong>and easy to do anywhere, even with Node.js</strong>',
-    };
+  // GO BACK UP TO THE NOTES/COMMENTS FROM LINE 48 ...
+  // you'll understand why the function below is commented out once you read them
 
-    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  // async sendEmail() {
+  //   const msg = {
+  //     to: 'development.testing.jc@gmail.com',
+  //     from: 'development.testing.jc@gmail.com',
+  //     subject: 'Sending with SendGrid is Fun',
+  //     text: 'and easy to do anywhere, even with Node.js',
+  //     html: '<strong>and easy to do anywhere, even with Node.js</strong>',
+  //   };
 
-    try {
-      await sgMail.send(msg);
-      console.log('Email sent');
-      return true;
-    } catch (error) {
-      console.error('Error sending email:', error);
-      return false;
-    }
-  }
+  //   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+  //   try {
+  //     await sgMail.send(msg);
+  //     console.log('Email sent');
+  //     return true;
+  //   } catch (error) {
+  //     console.error('Error sending email:', error);
+  //     return false;
+  //   }
+  // }
 }
