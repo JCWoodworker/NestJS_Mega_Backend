@@ -72,17 +72,10 @@ export class AuthController {
       };
     }
 
-    if (!req.user) {
-      return {
-        message: 'User not found',
-      };
-    }
-
     const [newAccessToken, newRefreshToken] =
       await this.authService.refreshToken(
         req.cookies.refresh_token,
-        req.user.sub,
-        req.user.userType,
+        req.body.email,
       );
     res
       .cookie('access_token', newAccessToken, {

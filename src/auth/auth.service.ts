@@ -62,11 +62,11 @@ export class AuthService {
 
   async refreshToken(
     currentRefreshToken: string,
-    userId: number,
-    userType: string,
     accessTokenexpiration: string = '15m',
     refreshTokenExpiration: string = '7d',
   ) {
+    const decodedJwt = await this.jwtService.verifyAsync(currentRefreshToken);
+    const userId = decodedJwt.sub;
     const user = await this.usersService.findOneById(userId);
     const isMatch = await bcrypt.compare(
       currentRefreshToken,
