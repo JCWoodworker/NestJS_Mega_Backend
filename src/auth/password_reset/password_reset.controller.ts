@@ -38,10 +38,8 @@ export class PasswordResetController {
         query.jwt,
         query.token,
       );
-    if (!isValid) {
-      return { message: 'Invalid password reset token and/or jwt' };
-    }
-    return { jwt: query.jwt, token: query.token };
+
+    return { isValid: isValid, jwt: query.jwt, token: query.token };
   }
 
   @SkipAuth()
@@ -56,6 +54,7 @@ export class PasswordResetController {
     res.clearCookie('access_token').clearCookie('refresh_token');
     return {
       message: passwordUpdate.message,
+      status: passwordUpdate.status,
     };
   }
 }

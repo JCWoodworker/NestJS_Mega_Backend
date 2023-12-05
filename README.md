@@ -1,3 +1,9 @@
+# FOR JAMES FROM JAMES --- TOP PRIORITY --- All others please just disregard this :-)
+
+* We fixed the issues with the reset link and token expiration
+* NOW we need to make sure that we re-factor other areas of the API with token expirations
+  * Wrote new functions to handle returning a boolean for whether or not a token is expired
+
 # JC's Nest.JS boilerplate
 
 * Current features include:
@@ -7,8 +13,9 @@
   * Auth via JWT in http-only cookies
     * Auth is enabled globally
       * Use the ```@SkipAuth``` custom decorator to change any endpoints to public
-    * Password reset functionality is coming in the first week of November, 2023
-      * I'll be utilizing Email.JS so send reset emails
+    * Password reset functionality
+      * I utilized Email.JS so send reset emails but need to rethink that direction.
+      * For now the code to run sending emails is commented out, and instead the url is returned in the response. --- dev and preprod only, though ---
 
 --
 

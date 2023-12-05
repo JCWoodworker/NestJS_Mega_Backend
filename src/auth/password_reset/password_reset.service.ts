@@ -10,6 +10,7 @@ import { ConfigType } from '@nestjs/config';
 import authConfig from '../../config/auth.config';
 import appConfig from 'src/config/app.config';
 import * as sgMail from '@sendgrid/mail';
+import { calculateIsJwtWithinExpiry } from '../utils/jwtFunctions';
 
 @Injectable()
 export class PasswordResetService {
@@ -73,12 +74,14 @@ export class PasswordResetService {
       username: user.username,
       userType: user.userType,
     };
+    // REMOVE THIS AFTER TESTING!!
+    console.log(this.authConfiguration.expirations.jwtPasswordReset);
 
     const passwordResetToken = uuidv4();
     const passwordResetJwt = await this.jwtService.signAsync({
       ...payload,
       secret: jwtConstants.passwordResetSecret,
-      expiresIn: new Date(Date.now() + 1000 * 60 * 3),
+      expiresIn: this.authConfiguration.expirations.jwtPasswordReset,
     });
 
     const salt = bcrypt.genSaltSync(this.saltConfig);
@@ -111,6 +114,12 @@ export class PasswordResetService {
 
   async verifyPasswordResetTokenAndJwt(jwt: string, token: string) {
     const decodedJwt = await this.jwtService.verifyAsync(jwt);
+
+    const isTokenWithinExpiry = calculateIsJwtWithinExpiry(decodedJwt);
+    if (!isTokenWithinExpiry) {
+      return { status: false };
+    }
+
     const user = await this.usersService.findOneById(decodedJwt.sub);
 
     if (!user.passwordResetToken || !user.passwordResetJwt) {
@@ -133,6 +142,7 @@ export class PasswordResetService {
     const { token, jwt, newPassword, confirmPassword } = body;
 
     let statusMessage: string = '';
+    let passwordUpdateStatus = false;
 
     const tokenVerification = await this.verifyPasswordResetTokenAndJwt(
       jwt,
@@ -165,9 +175,10 @@ export class PasswordResetService {
     );
 
     statusMessage = 'Password Reset Successful';
+    passwordUpdateStatus = true;
 
     return {
-      status: true,
+      status: passwordUpdateStatus,
       message: statusMessage,
     };
   }
@@ -180,7 +191,6 @@ export class PasswordResetService {
       text: 'and easy to do anywhere, even with Node.js',
       html: '<strong>and easy to do anywhere, even with Node.js</strong>',
     };
-    debugger;
 
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 

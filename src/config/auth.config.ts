@@ -8,9 +8,9 @@ export default registerAs('auth', () => ({
     skipAuth: process.env.SKIP_AUTH_SECRET,
   },
   expirations: {
-    jwtAccess: process.env.JWT_ACCESS_EXPIRATION || '15m',
-    jwtRefresh: process.env.JWT_REFRESH_EXPIRATION || '7d',
-    jwtPasswordReset: process.env.JWT_PASSWORD_RESET_EXPIRATION || '5m',
+    jwtAccess: process.env.JWT_ACCESS_TOKEN_EXPIRATION || '15m',
+    jwtRefresh: process.env.JWT_REFRESH_TOKEN_EXPIRATION || '7d',
+    jwtPasswordReset: process.env.JWT_PASSWORD_RESET_TOKEN_EXPIRATION || '5m',
     authCookie: +process.env.AUTH_COOKIE_EXPIRATION,
     refreshCookie: +process.env.REFRESH_COOKIE_EXPIRATION,
   },
