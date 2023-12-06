@@ -21,7 +21,9 @@ export class AuthService {
     accessTokenexpiration: string,
     refreshTokenExpiration: string,
   ) {
-    const user = await this.usersService.findOneByUsername(username);
+    const user = await this.usersService.findOneByUsername(
+      username.toLowerCase(),
+    );
     if (!user) {
       throw new UnauthorizedException();
     }
