@@ -12,6 +12,8 @@ export class CreateUserDto {
   @IsString()
   readonly userType: string;
 
+  readonly cellphone: string;
+
   readonly refreshToken: string;
 
   readonly passwordResetToken: string;
