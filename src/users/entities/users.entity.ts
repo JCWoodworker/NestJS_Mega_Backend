@@ -20,6 +20,9 @@ export class Users {
   @Column({ default: null })
   refreshToken: string;
 
+  @Column({ default: null })
+  cellphone: string;
+
   // The following two columns need to really be in their own table
   // with a one-to-one relationship per user
 
