@@ -1,4 +1,19 @@
-import { IsString, IsStrongPassword, IsEmail } from 'class-validator';
+import {
+  IsString,
+  IsStrongPassword,
+  IsEmail,
+  IsPhoneNumber,
+  IsOptional,
+  IsJWT,
+  IsUUID,
+  IsEnum,
+} from 'class-validator';
+
+enum UserType {
+  Admin = 'admin',
+  Basic = 'basic',
+}
+
 export class CreateUserDto {
   @IsString()
   readonly username: string;
@@ -9,14 +24,25 @@ export class CreateUserDto {
   @IsEmail()
   readonly email: string;
 
-  @IsString()
-  readonly userType: string;
+  @IsEnum(UserType)
+  readonly userType: UserType = UserType.Basic;
 
+  @IsPhoneNumber('US', {
+    message:
+      'Phone number must be a valid, 10-digit US phone number with no prefix or dashes',
+  })
+  @IsOptional()
   readonly cellphone: string;
 
+  @IsJWT()
+  @IsOptional()
   readonly refreshToken: string;
 
+  @IsUUID()
+  @IsOptional()
   readonly passwordResetToken: string;
 
+  @IsJWT()
+  @IsOptional()
   readonly passwordResetJwt: string;
 }
