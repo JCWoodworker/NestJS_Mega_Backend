@@ -35,12 +35,13 @@ export class AuthController {
     @Body() signInDto: Record<string, any>,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const [accessToken, refreshToken] = await this.authService.signIn(
-      signInDto.username,
-      signInDto.password,
-      this.authConfiguration.expirations.jwtAccess,
-      this.authConfiguration.expirations.jwtRefresh,
-    );
+    const [accessToken, refreshToken, userIngestion] =
+      await this.authService.signIn(
+        signInDto.username,
+        signInDto.password,
+        this.authConfiguration.expirations.jwtAccess,
+        this.authConfiguration.expirations.jwtRefresh,
+      );
     res
       .cookie('access_token', accessToken, {
         httpOnly: true,
@@ -59,7 +60,7 @@ export class AuthController {
         ),
       })
       .send({
-        statusMessage: 'Login successful',
+        userIngestion,
       });
   }
 

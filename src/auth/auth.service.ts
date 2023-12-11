@@ -36,8 +36,6 @@ export class AuthService {
       username: user.username,
       userType: user.userType,
     };
-
-    // This needs to be it's own function
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync({
         ...payload,
@@ -58,8 +56,12 @@ export class AuthService {
       },
       true,
     );
+    const userIngestion = {
+      userId: user.userId,
+      username: user.username,
+    };
 
-    return [accessToken, refreshToken];
+    return [accessToken, refreshToken, userIngestion];
   }
 
   async refreshToken(
