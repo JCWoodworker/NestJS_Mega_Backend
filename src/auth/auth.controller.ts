@@ -28,6 +28,7 @@ export class AuthController {
   secureCookie =
     this.authConfiguration.others.secureCookie === 'true' ? true : false;
 
+  // still too many issues with cookies not being set correctly
   @SkipAuth()
   @HttpCode(HttpStatus.OK)
   @Post('login')
