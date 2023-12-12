@@ -45,7 +45,7 @@ export class AuthController {
     res
       .cookie('access_token', accessToken, {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'none',
         secure: this.secureCookie,
         expires: new Date(
           Date.now() + this.authConfiguration.expirations.authCookie,
@@ -53,7 +53,7 @@ export class AuthController {
       })
       .cookie('refresh_token', refreshToken, {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'none',
         secure: this.secureCookie,
         expires: new Date(
           Date.now() + this.authConfiguration.expirations.refreshCookie,
@@ -83,7 +83,7 @@ export class AuthController {
     res
       .cookie('access_token', newAccessToken, {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'none',
         secure: this.secureCookie,
         expires: new Date(
           Date.now() + this.authConfiguration.expirations.authCookie,
@@ -91,7 +91,7 @@ export class AuthController {
       })
       .cookie('refresh_token', newRefreshToken, {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'none',
         secure: this.secureCookie,
         expires: new Date(
           Date.now() + this.authConfiguration.expirations.refreshCookie,
