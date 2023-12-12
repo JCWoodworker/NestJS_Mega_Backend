@@ -28,6 +28,7 @@ export class AuthController {
   secureCookie =
     this.authConfiguration.others.secureCookie === 'true' ? true : false;
 
+  // still too many issues with cookies not being set correctly
   @SkipAuth()
   @HttpCode(HttpStatus.OK)
   @Post('login')
@@ -35,16 +36,17 @@ export class AuthController {
     @Body() signInDto: Record<string, any>,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const [accessToken, refreshToken] = await this.authService.signIn(
-      signInDto.username,
-      signInDto.password,
-      this.authConfiguration.expirations.jwtAccess,
-      this.authConfiguration.expirations.jwtRefresh,
-    );
+    const [accessToken, refreshToken, userIngestion] =
+      await this.authService.signIn(
+        signInDto.username,
+        signInDto.password,
+        this.authConfiguration.expirations.jwtAccess,
+        this.authConfiguration.expirations.jwtRefresh,
+      );
     res
       .cookie('access_token', accessToken, {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'none',
         secure: this.secureCookie,
         expires: new Date(
           Date.now() + this.authConfiguration.expirations.authCookie,
@@ -52,14 +54,14 @@ export class AuthController {
       })
       .cookie('refresh_token', refreshToken, {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'none',
         secure: this.secureCookie,
         expires: new Date(
           Date.now() + this.authConfiguration.expirations.refreshCookie,
         ),
       })
       .send({
-        statusMessage: 'Login successful',
+        userIngestion,
       });
   }
 
@@ -67,6 +69,7 @@ export class AuthController {
   @Post('refresh')
   async refreshToken(@Req() req, @Res({ passthrough: true }) res) {
     if (!req.cookies.refresh_token) {
+      // Remove this!!
       return {
         message: 'Refresh token not found',
       };
@@ -77,10 +80,11 @@ export class AuthController {
         req.cookies.refresh_token,
         req.body.email,
       );
+    // Remove this!!
     res
       .cookie('access_token', newAccessToken, {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'none',
         secure: this.secureCookie,
         expires: new Date(
           Date.now() + this.authConfiguration.expirations.authCookie,
@@ -88,7 +92,7 @@ export class AuthController {
       })
       .cookie('refresh_token', newRefreshToken, {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'none',
         secure: this.secureCookie,
         expires: new Date(
           Date.now() + this.authConfiguration.expirations.refreshCookie,

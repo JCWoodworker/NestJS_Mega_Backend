@@ -37,10 +37,12 @@ async function bootstrap() {
   // Remember to ensure that only specific origins can communicate with your API!!!
   // Use comma separated origins with the ALLOWED_ORIGINS environment variable
   app.enableCors({
-    allowedHeaders: 'Content-Type, Accept',
+    allowedHeaders:
+      'Content-Type, Accept, Authorization, X-Requested-With, X-HTTP-Method-Override, Set-Cookie',
     origin: allowedOrigins,
     methods: 'GET,PUT,PATCH,POST,DELETE',
     credentials: true,
+    exposedHeaders: 'Set-Cookie',
   });
 
   await app.listen(PORT);
