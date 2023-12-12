@@ -38,7 +38,7 @@ async function bootstrap() {
   // Use comma separated origins with the ALLOWED_ORIGINS environment variable
   app.enableCors({
     allowedHeaders:
-      'Content-Type, Accept, Access-Control-Allow-Origin, Authorization',
+      'Content-Type, Accept, Access-Control-Allow-Origin, Authorization, X-Requested-With, X-HTTP-Method-Override, Set-Cookie',
     origin: allowedOrigins,
     methods: 'GET,PUT,PATCH,POST,DELETE',
     credentials: true,
