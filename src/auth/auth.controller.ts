@@ -80,7 +80,7 @@ export class AuthController {
         req.cookies.refresh_token,
         req.body.email,
       );
-      // Remove this!!
+    // Remove this!!
     console.log(
       `newAccessToken: ${newAccessToken} - newRefreshToken: ${newRefreshToken}`,
     );
