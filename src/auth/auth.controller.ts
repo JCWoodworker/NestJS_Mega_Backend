@@ -31,10 +31,7 @@ export class AuthController {
   @SkipAuth()
   @HttpCode(HttpStatus.OK)
   @Post('login')
-  async signIn(
-    @Body() signInDto: Record<string, any>,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async signIn(@Body() signInDto: Record<string, any>, @Res() res: Response) {
     const [accessToken, refreshToken, userIngestion] =
       await this.authService.signIn(
         signInDto.username,
