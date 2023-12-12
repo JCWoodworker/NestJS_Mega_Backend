@@ -42,6 +42,10 @@ export class AuthController {
         this.authConfiguration.expirations.jwtAccess,
         this.authConfiguration.expirations.jwtRefresh,
       );
+    // Remove this!!
+    console.log(
+      `Access token: ${accessToken}, Refresh token: ${refreshToken}, secureCookie: ${this.secureCookie}`,
+    );
     res
       .cookie('access_token', accessToken, {
         httpOnly: true,
