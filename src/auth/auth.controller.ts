@@ -68,6 +68,7 @@ export class AuthController {
   @Post('refresh')
   async refreshToken(@Req() req, @Res({ passthrough: true }) res) {
     if (!req.cookies.refresh_token) {
+      console.log(`Refresh token not found`);
       return {
         message: 'Refresh token not found',
       };
@@ -78,6 +79,9 @@ export class AuthController {
         req.cookies.refresh_token,
         req.body.email,
       );
+    console.log(
+      `newAccessToken: ${newAccessToken} - newRefreshToken: ${newRefreshToken}`,
+    );
     res
       .cookie('access_token', newAccessToken, {
         httpOnly: true,
