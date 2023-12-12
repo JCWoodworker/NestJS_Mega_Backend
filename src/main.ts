@@ -42,7 +42,7 @@ async function bootstrap() {
     origin: allowedOrigins,
     methods: 'GET,PUT,PATCH,POST,DELETE',
     credentials: true,
-    exposedHeaders: 'Authorization, Access-Control-Allow-Origin, Set-Cookie',
+    exposedHeaders: 'Set-Cookie',
   });
 
   await app.listen(PORT);
