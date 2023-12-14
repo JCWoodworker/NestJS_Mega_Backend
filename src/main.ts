@@ -11,7 +11,7 @@ async function bootstrap() {
 
   const allowedOrigins =
     process.env.ENVIRONMENT === 'development'
-      ? '*'
+      ? process.env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim())
       : process.env.ENVIRONMENT === 'preprod' ||
           process.env.ENVIRONMENT === 'prod'
         ? process.env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim())
@@ -47,4 +47,5 @@ async function bootstrap() {
 
   await app.listen(PORT);
 }
+
 bootstrap();
