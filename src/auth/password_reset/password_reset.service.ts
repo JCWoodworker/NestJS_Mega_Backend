@@ -9,7 +9,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { ConfigType } from '@nestjs/config';
 import authConfig from '../../config/auth.config';
 import appConfig from 'src/config/app.config';
-// import * as sgMail from '@sendgrid/mail';
 import { calculateIsJwtWithinExpiry } from '../utils/jwtFunctions';
 
 @Injectable()
