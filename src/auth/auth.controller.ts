@@ -70,9 +70,10 @@ export class AuthController {
   async refreshToken(@Req() req, @Res({ passthrough: true }) res) {
     if (!req.cookies.refresh_token) {
       // Remove this!!
-      return {
-        message: 'Refresh token not found',
-      };
+      return res.send({
+        status: 'failed',
+        message: 'No refresh token found',
+      });
     }
 
     const [newAccessToken, newRefreshToken] =
