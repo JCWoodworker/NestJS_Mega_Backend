@@ -50,7 +50,7 @@ export class UsersService {
   }
 
   async create(createUserDto: CreateUserDto) {
-    const user = this.usersRepository.create(createUserDto);
+    const user = await this.usersRepository.create(createUserDto);
     const salt = bcrypt.genSaltSync(this.saltConfig);
     user.password = await bcrypt.hash(user.password, salt);
     user.username = user.username.toLowerCase();
