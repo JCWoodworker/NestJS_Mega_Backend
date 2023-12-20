@@ -18,17 +18,5 @@ export class Users {
   userType: string;
 
   @Column({ default: null })
-  refreshToken: string;
-
-  @Column({ default: null })
   cellphone: string;
-
-  // The following two columns need to really be in their own table
-  // with a one-to-one relationship per user
-
-  @Column({ default: null })
-  passwordResetToken: string;
-
-  @Column({ default: null })
-  passwordResetJwt: string;
 }

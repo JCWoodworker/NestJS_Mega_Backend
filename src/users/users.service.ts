@@ -17,7 +17,7 @@ export class UsersService {
     private readonly authConfiguration: ConfigType<typeof authConfig>,
   ) {}
 
-  saltConfig = this.authConfiguration.others.saltRounds;
+  saltConfig = this.authConfiguration.saltRounds;
 
   async findAll(): Promise<any> {
     const users = await this.usersRepository.find();
@@ -57,16 +57,7 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
-  async update(
-    id: number,
-    updateUserDto: UpdateUserDto,
-    authorizationToChangeRefreshToken = false,
-  ) {
-    if (!authorizationToChangeRefreshToken && updateUserDto.refreshToken) {
-      throw new Error(
-        'Unauthorized - cannot manually change your refresh token',
-      );
-    }
+  async update(id: number, updateUserDto: UpdateUserDto) {
     const user = await this.usersRepository.preload({
       userId: +id,
       ...updateUserDto,

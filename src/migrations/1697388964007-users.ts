@@ -9,10 +9,7 @@ export class Users1697386288899 implements MigrationInterface {
         "password" character varying NOT NULL,
         "email" character varying NOT NULL UNIQUE,
         "cellphone" character varying(10) DEFAULT NULL,
-        "userType" character varying NOT NULL DEFAULT 'user',
-        "refreshToken" character varying DEFAULT NULL,
-        "passwordResetToken" character varying DEFAULT NULL,
-        "passwordResetJwt" character varying DEFAULT NULL)`,
+        "userType" character varying NOT NULL DEFAULT 'user')`,
     );
   }
 

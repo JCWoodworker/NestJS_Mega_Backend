@@ -4,8 +4,6 @@ import {
   IsEmail,
   IsPhoneNumber,
   IsOptional,
-  IsJWT,
-  IsUUID,
   IsEnum,
 } from 'class-validator';
 
@@ -33,16 +31,4 @@ export class CreateUserDto {
   })
   @IsOptional()
   readonly cellphone: string;
-
-  @IsJWT()
-  @IsOptional()
-  readonly refreshToken: string;
-
-  @IsUUID()
-  @IsOptional()
-  readonly passwordResetToken: string;
-
-  @IsJWT()
-  @IsOptional()
-  readonly passwordResetJwt: string;
 }
