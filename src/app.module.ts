@@ -7,6 +7,7 @@ import { AuthGuard } from './auth/auth.guard';
 import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
+import { IamModule } from './iam/iam.module';
 import * as Joi from '@hapi/joi';
 import appConfig from './config/app.config';
 import authConfig from './config/auth.config';
@@ -36,6 +37,7 @@ import authConfig from './config/auth.config';
     }),
     UsersModule,
     AuthModule,
+    IamModule,
   ],
   controllers: [AppController],
   providers: [
