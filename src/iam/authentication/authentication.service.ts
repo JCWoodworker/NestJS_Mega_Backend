@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -9,6 +10,9 @@ import { Users } from 'src/users/entities/users.entity';
 import { HashingService } from '../hashing/hashing.service';
 import { SignUpDto } from './dto/sign-up.dto';
 import { SignInDto } from './dto/sign-in.dto';
+import { JwtService } from '@nestjs/jwt';
+import jwtConfig from '../config/jwt.config';
+import { ConfigType } from '@nestjs/config';
 
 @Injectable()
 export class AuthenticationService {
@@ -16,6 +20,9 @@ export class AuthenticationService {
     @InjectRepository(Users)
     private readonly usersRepository: Repository<Users>,
     private readonly hashingService: HashingService,
+    private readonly jwtService: JwtService,
+    @Inject(jwtConfig.KEY)
+    private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
   ) {}
 
   async signUp(signUpDto: SignUpDto) {
@@ -39,7 +46,7 @@ export class AuthenticationService {
       email: signInDto.email,
     });
     if (!user) {
-      throw new UnauthorizedException('User does not exist');
+      throw new UnauthorizedException('User does not exists');
     }
     const isEqual = await this.hashingService.compare(
       signInDto.password,
@@ -48,15 +55,21 @@ export class AuthenticationService {
     if (!isEqual) {
       throw new UnauthorizedException('Password does not match');
     }
-    //
-    //
-    // THIS GAP TO BE ADDED IN NEXT LESSON\
-    //
-    //
-    const responseData = {
-      userId: user.userId,
-      email: user.email,
+    const accessToken = await this.jwtService.signAsync(
+      // 👈
+      {
+        sub: user.id,
+        email: user.email,
+      },
+      {
+        audience: this.jwtConfiguration.audience,
+        issuer: this.jwtConfiguration.issuer,
+        secret: this.jwtConfiguration.secret,
+        expiresIn: this.jwtConfiguration.accessTokenTtl,
+      },
+    );
+    return {
+      accessToken,
     };
-    return responseData;
   }
 }

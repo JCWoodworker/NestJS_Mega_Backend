@@ -14,15 +14,15 @@ export class UsersService {
     const users = await this.usersRepository.find();
     return users.map((user) => {
       return {
-        id: user.userId,
+        id: user.id,
         email: user.email,
       };
     });
   }
 
-  async findOneById(userId: number) {
+  async findOneById(id: number) {
     return await this.usersRepository.findOne({
-      where: { userId: userId },
+      where: { id: id },
     });
     throw new Error('Unauthorized - user must be admin to perform this action');
   }

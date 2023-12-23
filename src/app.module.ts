@@ -17,7 +17,6 @@ import authConfig from './config/auth.config';
       validationSchema: Joi.object({
         ENVIRONMENT: Joi.string().required(),
         DATABASE_URL: Joi.string().required(),
-        SALT_ROUNDS: Joi.number().required().default(10),
       }),
     }),
     TypeOrmModule.forRootAsync({
