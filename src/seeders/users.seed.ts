@@ -31,7 +31,7 @@ const fakeUserList: FakeUser[] = [
 export const seedUsers = async () => {
   for (const user of fakeUserList) {
     try {
-      await axios.post('http://localhost:3000/authentiation/sign-up', user);
+      await axios.post('http://localhost:3000/authentication/sign-up', user);
       console.log();
     } catch (err) {}
   }
