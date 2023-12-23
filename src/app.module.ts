@@ -25,10 +25,6 @@ import authConfig from './config/auth.config';
         // DATABASE_PASSWORD: Joi.string().required(),
         // DATABASE_NAME: Joi.string().required(),
         SALT_ROUNDS: Joi.number().required().default(10),
-        SKIP_AUTH_SECRET: Joi.string().required(),
-        JWT_ACCESS_SECRET: Joi.string().required(),
-        JWT_REFRESH_SECRET: Joi.string().required(),
-        JWT_PASSWORD_RESET_SECRET: Joi.string().required(),
       }),
     }),
     TypeOrmModule.forRootAsync({

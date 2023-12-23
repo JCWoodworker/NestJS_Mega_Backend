@@ -14,13 +14,9 @@ export class AuthService {
     private readonly authConfiguration: ConfigType<typeof authConfig>,
   ) {}
 
-  saltConfig = this.authConfiguration.others.saltRounds;
-  async signIn(
-    username: string,
-    pass: string,
-    accessTokenexpiration: string,
-    refreshTokenExpiration: string,
-  ) {
+  saltConfig = this.authConfiguration.saltRounds;
+
+  async signIn(username: string, pass: string) {
     const user = await this.usersService.findOneByUsername(
       username.toLowerCase(),
     );
@@ -31,100 +27,6 @@ export class AuthService {
     if (!isMatch) {
       throw new UnauthorizedException();
     }
-    const payload = {
-      sub: user.userId,
-      username: user.username,
-      userType: user.userType,
-    };
-    const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync({
-        ...payload,
-        expiresIn: accessTokenexpiration,
-      }),
-      this.jwtService.signAsync({
-        ...payload,
-        expiresIn: refreshTokenExpiration,
-      }),
-    ]);
-
-    const salt = bcrypt.genSaltSync(this.saltConfig);
-    const encryptedRefreshToken = await bcrypt.hash(refreshToken, salt);
-    await this.usersService.update(
-      user.userId,
-      {
-        refreshToken: encryptedRefreshToken,
-      },
-      true,
-    );
-    const userIngestion = {
-      userId: user.userId,
-      username: user.username,
-    };
-
-    return [accessToken, refreshToken, userIngestion];
+    return user;
   }
-
-  async refreshToken(
-    currentRefreshToken: string,
-    accessTokenexpiration: string = '15m',
-    refreshTokenExpiration: string = '7d',
-  ) {
-    const decodedJwt = await this.jwtService.verifyAsync(currentRefreshToken);
-    const userId = decodedJwt.sub;
-    const user = await this.usersService.findOneById(userId);
-    const isMatch = await bcrypt.compare(
-      currentRefreshToken,
-      user.refreshToken,
-    );
-    if (!isMatch) {
-      throw new UnauthorizedException(
-        'Access Denied --> Please try your login again',
-      );
-    }
-    const payload = {
-      sub: user.userId,
-      username: user.username,
-      userType: user.userType,
-    };
-    const [newAccessToken, newRefreshToken] = await Promise.all([
-      this.jwtService.signAsync({
-        ...payload,
-        expiresIn: accessTokenexpiration,
-      }),
-      this.jwtService.signAsync({
-        ...payload,
-        expiresIn: refreshTokenExpiration,
-      }),
-    ]);
-    const salt = bcrypt.genSaltSync(this.saltConfig);
-    const encryptedRefreshToken = await bcrypt.hash(newRefreshToken, salt);
-    await this.usersService.update(
-      user.userId,
-      {
-        refreshToken: encryptedRefreshToken,
-      },
-      true,
-    );
-
-    return [newAccessToken, newRefreshToken];
-  }
-
-  clearRefreshToken = async (userId) => {
-    await this.usersService.update(
-      userId,
-      {
-        refreshToken: null,
-      },
-      true,
-    );
-    return true;
-  };
-
-  clearAllTokens = async (userId) => {
-    await this.usersService.update(
-      userId,
-      { refreshToken: null, passwordResetToken: null, passwordResetJwt: null },
-      true,
-    );
-  };
 }
