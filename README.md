@@ -77,3 +77,5 @@ When running in dev or debug mode the wathcher will not update when saving the .
 
 * Remember to update ```app.enableCors()``` in main.ts
   * You'll want to specify the exact origins that are allowed to communicate with your api
+
+...
