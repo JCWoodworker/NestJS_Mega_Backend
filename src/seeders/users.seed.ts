@@ -8,10 +8,6 @@ type FakeUser = {
 const fakeUserList: FakeUser[] = [
   {
     password: 'Password1!',
-    email: 'james99@test.com',
-  },
-  {
-    password: 'Password1!',
     email: 'tester1@test.com',
   },
   {
