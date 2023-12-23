@@ -4,7 +4,7 @@ import { BcryptService } from './hashing/bcrypt.service';
 import { AuthenticationController } from './authentication/authentication.controller';
 import { AuthenticationService } from './authentication/authentication.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { User } from 'src/users/entities/users.entity';
+import { Users } from 'src/users/entities/users.entity';
 
 @Module({
   providers: [
@@ -14,7 +14,7 @@ import { User } from 'src/users/entities/users.entity';
     },
     AuthenticationService,
   ],
-  imports: [TypeOrmModule.forFeature([User])],
+  imports: [TypeOrmModule.forFeature([Users])],
   exports: [],
   controllers: [AuthenticationController],
 })

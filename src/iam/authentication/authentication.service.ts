@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from 'src/users/entities/users.entity';
+import { Users } from 'src/users/entities/users.entity';
 import { HashingService } from '../hashing/hashing.service';
 import { SignUpDto } from './dto/sign-up.dto';
 import { SignInDto } from './dto/sign-in.dto';
@@ -13,18 +13,18 @@ import { SignInDto } from './dto/sign-in.dto';
 @Injectable()
 export class AuthenticationService {
   constructor(
-    @InjectRepository(User)
-    private readonly usersRepository: Repository<User>,
+    @InjectRepository(Users)
+    private readonly usersRepository: Repository<Users>,
     private readonly hashingService: HashingService,
   ) {}
 
   async signUp(signUpDto: SignUpDto) {
     try {
-      const user = new User();
+      const user = new Users();
       user.email = signUpDto.email;
       user.password = await this.hashingService.hash(signUpDto.password);
-
       await this.usersRepository.save(user);
+      return `User ${signUpDto.email} created successfully`;
     } catch (err) {
       const pgUniqueViolationErrorCode = '23505';
       if (err.code === pgUniqueViolationErrorCode) {
@@ -48,7 +48,11 @@ export class AuthenticationService {
     if (!isEqual) {
       throw new UnauthorizedException('Password does not match');
     }
-    // THIS GAP TO BE ADDED IN NEXT LESSON
+    //
+    //
+    // THIS GAP TO BE ADDED IN NEXT LESSON\
+    //
+    //
     return user;
   }
 }
