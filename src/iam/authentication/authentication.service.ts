@@ -53,6 +53,10 @@ export class AuthenticationService {
     // THIS GAP TO BE ADDED IN NEXT LESSON\
     //
     //
-    return user;
+    const responseData = {
+      userId: user.userId,
+      email: user.email,
+    };
+    return responseData;
   }
 }
