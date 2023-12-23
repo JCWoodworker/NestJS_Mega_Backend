@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Users } from 'src/users/entities/users.entity';
+import { User } from 'src/users/entities/users.entity';
 import { HashingService } from '../hashing/hashing.service';
 import { SignUpDto } from './dto/sign-up.dto';
 import { SignInDto } from './dto/sign-in.dto';
@@ -13,14 +13,14 @@ import { SignInDto } from './dto/sign-in.dto';
 @Injectable()
 export class AuthenticationService {
   constructor(
-    @InjectRepository(Users)
-    private readonly usersRepository: Repository<Users>,
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
     private readonly hashingService: HashingService,
   ) {}
 
   async signUp(signUpDto: SignUpDto) {
     try {
-      const user = new Users();
+      const user = new User();
       user.email = signUpDto.email;
       user.password = await this.hashingService.hash(signUpDto.password);
 
