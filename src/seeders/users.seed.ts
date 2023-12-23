@@ -1,11 +1,11 @@
 import axios from 'axios';
 
-interface FakeUser {
+type FakeUser = {
   username: string;
   password: string;
   email: string;
   userType: string;
-}
+};
 
 const fakeUserList: FakeUser[] = [
   {
