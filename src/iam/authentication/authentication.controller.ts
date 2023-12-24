@@ -12,16 +12,12 @@ import { SignInDto } from './dto/sign-in.dto';
 import { Auth } from '../decorators/auth.decorator';
 import { AuthType } from '../enums/auth-type.enum';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { RefreshTokensService } from './refresh-token-ids/refresh-tokens.service';
 // import { Response } from 'express';
 
 @Auth(AuthType.None)
 @Controller('authentication')
 export class AuthenticationController {
-  constructor(
-    private readonly authService: AuthenticationService,
-    private readonly refreshTokensService: RefreshTokensService,
-  ) {}
+  constructor(private readonly authService: AuthenticationService) {}
 
   @Post('sign-up')
   async signUp(@Body() signUpDto: SignUpDto) {
@@ -38,11 +34,6 @@ export class AuthenticationController {
   @Post('refresh-tokens')
   async refreshTokens(@Body() refreshTokenDto: RefreshTokenDto) {
     return this.authService.refreshTokens(refreshTokenDto);
-  }
-
-  @Post('refresh-testing/add')
-  async addRefreshToken(@Body() userId: number, tokenId: string) {
-    return this.refreshTokensService.insert(userId, tokenId);
   }
 
   // This code can be used for http only cookies
