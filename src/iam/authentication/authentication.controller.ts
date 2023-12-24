@@ -11,6 +11,7 @@ import { SignUpDto } from './dto/sign-up.dto';
 import { SignInDto } from './dto/sign-in.dto';
 import { Auth } from '../decorators/auth.decorator';
 import { AuthType } from '../enums/auth-type.enum';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 // import { Response } from 'express';
 
 @Auth(AuthType.None)
@@ -27,6 +28,12 @@ export class AuthenticationController {
   @Post('sign-in')
   async signIn(@Body() signInDto: SignInDto) {
     return this.authService.signIn(signInDto);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('refresh-tokens')
+  async refreshTokens(@Body() refreshTokenDto: RefreshTokenDto) {
+    return this.authService.refreshTokens(refreshTokenDto);
   }
 
   // This code can be used for http only cookies
