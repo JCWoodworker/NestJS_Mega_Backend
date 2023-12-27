@@ -15,7 +15,7 @@ export class UserController {
     return this.userService.findAll();
   }
 
-  @Roles(Role.Admin, Role.Basic)
+  @Roles(Role.Basic)
   @Get('user-profile')
   findOne(@ActiveUser() user: ActiveUserData): Promise<any> {
     return this.userService.findOneById(user.sub);
