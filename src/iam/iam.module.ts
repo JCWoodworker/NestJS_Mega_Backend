@@ -5,13 +5,13 @@ import { AuthenticationController } from './authentication/authentication.contro
 import { AuthenticationService } from './authentication/authentication.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Users } from 'src/users/entities/users.entity';
+import { RefreshTokens } from './authentication/refresh-tokens/refresh-tokens.entity';
 import { JwtModule } from '@nestjs/jwt';
 import jwtConfig from './config/jwt.config';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { AccessTokenGuard } from './authentication/guards/access-token/access-token.guard';
 import { AuthenticationGuard } from './authentication/guards/authentication/authentication.guard';
-import { RefreshTokensModule } from './authentication/refresh-tokens/refresh-tokens.module';
 
 @Module({
   providers: [
@@ -27,10 +27,9 @@ import { RefreshTokensModule } from './authentication/refresh-tokens/refresh-tok
     AuthenticationService,
   ],
   imports: [
-    TypeOrmModule.forFeature([Users]),
+    TypeOrmModule.forFeature([Users, RefreshTokens]),
     JwtModule.registerAsync(jwtConfig.asProvider()),
     ConfigModule.forFeature(jwtConfig),
-    RefreshTokensModule,
   ],
   exports: [],
   controllers: [AuthenticationController],
