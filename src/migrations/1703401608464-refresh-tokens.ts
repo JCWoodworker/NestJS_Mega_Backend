@@ -6,7 +6,7 @@ export class RefreshTokens1703401608464 implements MigrationInterface {
       `CREATE TABLE "refresh_tokens" (
                 "id" SERIAL NOT NULL PRIMARY KEY,
                 "userId" integer NOT NULL UNIQUE,
-                "tokenId" character varying NOT NULL UNIQUE)`,
+                "tokenId" character varying NOT NULL)`,
     );
   }
 

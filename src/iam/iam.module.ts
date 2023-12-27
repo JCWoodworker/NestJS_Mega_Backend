@@ -12,6 +12,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { AccessTokenGuard } from './authentication/guards/access-token/access-token.guard';
 import { AuthenticationGuard } from './authentication/guards/authentication/authentication.guard';
 import { RefreshTokensModule } from './authentication/refresh-token-storage/refresh-token-storage.module';
+import { RefreshTokensService } from './authentication/refresh-token-storage/refresh-token-storage.service';
+import { RefreshTokens } from './authentication/refresh-token-storage/refresh-token-storage.entity';
 
 @Module({
   providers: [
@@ -25,9 +27,10 @@ import { RefreshTokensModule } from './authentication/refresh-token-storage/refr
     },
     AccessTokenGuard,
     AuthenticationService,
+    RefreshTokensService,
   ],
   imports: [
-    TypeOrmModule.forFeature([Users]),
+    TypeOrmModule.forFeature([Users, RefreshTokens]),
     JwtModule.registerAsync(jwtConfig.asProvider()),
     ConfigModule.forFeature(jwtConfig),
     RefreshTokensModule,

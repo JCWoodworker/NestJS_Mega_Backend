@@ -8,6 +8,6 @@ export class RefreshTokens {
   @Column({ unique: true })
   userId: number;
 
-  @Column({ unique: true })
+  @Column()
   tokenId: string;
 }

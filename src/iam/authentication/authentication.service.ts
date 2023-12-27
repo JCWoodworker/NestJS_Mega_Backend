@@ -15,12 +15,16 @@ import jwtConfig from '../config/jwt.config';
 import { ConfigType } from '@nestjs/config';
 import { ActiveUserData } from '../interfaces/active-user-data.interface';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { RefreshTokensService } from './refresh-token-storage/refresh-token-storage.service';
+import { randomUUID } from 'crypto';
+import { InvalidateRefreshTokenError } from './refresh-token-storage/invalidate-refresh-token-error';
 
 @Injectable()
 export class AuthenticationService {
   constructor(
     @InjectRepository(Users)
     private readonly usersRepository: Repository<Users>,
+    private readonly refreshTokenStorageService: RefreshTokensService,
     private readonly hashingService: HashingService,
     private readonly jwtService: JwtService,
     @Inject(jwtConfig.KEY)
@@ -61,6 +65,7 @@ export class AuthenticationService {
   }
 
   async generateTokens(user: Users) {
+    const refreshTokenId = randomUUID();
     const [accessToken, refreshToken] = await Promise.all([
       this.signToken<Partial<ActiveUserData>>(
         user.id,
@@ -70,8 +75,15 @@ export class AuthenticationService {
       this.signToken<Partial<ActiveUserData>>(
         user.id,
         this.jwtConfiguration.refreshTokenTtl,
+        {
+          refreshTokenId,
+        },
       ),
     ]);
+    await this.refreshTokenStorageService.insertRefreshToken(
+      user.id,
+      refreshTokenId,
+    );
     return {
       accessToken,
       refreshToken,
@@ -95,16 +107,29 @@ export class AuthenticationService {
 
   async refreshTokens(refreshTokenDto: RefreshTokenDto) {
     try {
-      const { sub } = await this.jwtService.verifyAsync<
-        Pick<ActiveUserData, 'sub'>
+      const { sub, refreshTokenId } = await this.jwtService.verifyAsync<
+        Pick<ActiveUserData, 'sub'> & { refreshTokenId: string }
       >(refreshTokenDto.refreshToken, {
         secret: this.jwtConfiguration.secret,
         issuer: this.jwtConfiguration.issuer,
         audience: this.jwtConfiguration.audience,
       });
       const user = await this.usersRepository.findOneByOrFail({ id: sub });
+      const isValid =
+        await this.refreshTokenStorageService.validateRefreshToken(
+          user.id,
+          refreshTokenId,
+        );
+      if (isValid) {
+        await this.refreshTokenStorageService.invalidateRefreshToken(user.id);
+      } else {
+        throw new Error('Invalid refresh token');
+      }
       return await this.generateTokens(user);
     } catch (err) {
+      if (err instanceof InvalidateRefreshTokenError) {
+        throw new UnauthorizedException('Access denied');
+      }
       throw new UnauthorizedException();
     }
   }
