@@ -1,17 +1,13 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
-import { Role } from '../enums/role.enum';
 
 @Entity()
-export class Users {
+export class RefreshTokens {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column({ unique: true })
-  email: string;
+  userId: number;
 
   @Column()
-  password: string;
-
-  @Column({ enum: Role, default: Role.Basic })
-  role: Role;
+  tokenId: string;
 }
