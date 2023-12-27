@@ -4,12 +4,22 @@
   * PostgreSQL integration
     * TypeORM
     * Migrations
-  * Auth via JWT in http-only cookies
-    * Auth is enabled globally
-      * Use the ```@SkipAuth``` custom decorator to change any endpoints to public
-    * Password reset functionality
-      * I utilized Email.JS so send reset emails but need to rethink that direction.
-      * For now the code to run sending emails is commented out, and instead the url is returned in the response. --- dev and preprod only, though ---
+  * Authentication and Authorization
+    * Sign up with email and password
+    * Sign-in (successful) creates JWT access and refresh tokens
+      * Currently returns in the following format:
+        {
+          "access_token": "SomeLongAssAccessToken",
+          "refresh_token": "SomeLongAssRefreshToken"
+        }
+      * Refresh ID is stored in the database
+    * Refresh endpoint checks DB for matching refresh ID and returns new access and refresh tokens
+  * Pre-built endpoints for CRUD operations on Users
+    * Get all users
+    * Get current active user
+  * All endpoints globally set to require bearer authentication
+    * Guard set up to open any endpoint or an entire controller to public access
+  * User role guard lets you set any endpoint or controller to Admin or Basic user access
 
 --
 
@@ -28,6 +38,9 @@
     * package.json shortcut: ```yarn migrate:run```
   * ```npx typeorm migrate:revert -d dist/typeorm-cli.config```
     * package.json shortcut: ```yarn migrate:revert```
+
+* You NEED to run ```yarn build``` before running ```run``` or ```revert```
+  * They need to run as JS files so they need to be built first
 
 --
 
@@ -75,7 +88,7 @@ When running in dev or debug mode the wathcher will not update when saving the .
 
 ### CORS
 
-* Remember to update ```app.enableCors()``` in main.ts
-  * You'll want to specify the exact origins that are allowed to communicate with your api
+* CORS is enabled by in main.ts and looks for an array of allowed origins
+  * Store your allowed orgins in .env under ALLOWED_ORIGINS
 
 ...
