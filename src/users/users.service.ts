@@ -21,10 +21,13 @@ export class UsersService {
   }
 
   async findOneById(id: number) {
-    return await this.usersRepository.findOne({
+    const user = await this.usersRepository.findOne({
       where: { id: id },
     });
-    throw new Error('Unauthorized - user must be admin to perform this action');
+    return {
+      id: user.id,
+      email: user.email,
+    };
   }
 
   async findOneByEmail(email: string) {

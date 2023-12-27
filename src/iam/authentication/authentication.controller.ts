@@ -36,12 +36,6 @@ export class AuthenticationController {
     return this.authService.refreshTokens(refreshTokenDto);
   }
 
-  @HttpCode(HttpStatus.OK)
-  @Post('insert-refresh-token')
-  async insertRefreshToken(@Body() { userId, tokenId }) {
-    return this.authService.insertRefreshToken(userId, tokenId);
-  }
-
   // This code can be used for http only cookies
   // @HttpCode(HttpStatus.OK)
   // @Post('sign-in')

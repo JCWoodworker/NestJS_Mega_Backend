@@ -7,7 +7,6 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Users } from 'src/users/entities/users.entity';
-import { RefreshTokens } from './refresh-tokens/refresh-tokens.entity';
 import { HashingService } from '../hashing/hashing.service';
 import { SignUpDto } from './dto/sign-up.dto';
 import { SignInDto } from './dto/sign-in.dto';
@@ -22,8 +21,6 @@ export class AuthenticationService {
   constructor(
     @InjectRepository(Users)
     private readonly usersRepository: Repository<Users>,
-    @InjectRepository(RefreshTokens)
-    private readonly refreshTokensRepository: Repository<RefreshTokens>,
     private readonly hashingService: HashingService,
     private readonly jwtService: JwtService,
     @Inject(jwtConfig.KEY)
@@ -110,16 +107,5 @@ export class AuthenticationService {
     } catch (err) {
       throw new UnauthorizedException();
     }
-  }
-
-  async insertRefreshToken(userId: number, tokenId: string) {
-    const payload = {
-      userId,
-      tokenId,
-    };
-    debugger;
-    const newToken = await this.refreshTokensRepository.save(payload);
-    debugger;
-    return newToken;
   }
 }
