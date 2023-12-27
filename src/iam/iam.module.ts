@@ -27,7 +27,8 @@ import { AuthenticationGuard } from './authentication/guards/authentication/auth
     AuthenticationService,
   ],
   imports: [
-    TypeOrmModule.forFeature([Users, RefreshTokens]),
+    TypeOrmModule.forFeature([Users]),
+    TypeOrmModule.forFeature([RefreshTokens]),
     JwtModule.registerAsync(jwtConfig.asProvider()),
     ConfigModule.forFeature(jwtConfig),
   ],
