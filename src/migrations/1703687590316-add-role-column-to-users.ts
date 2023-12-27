@@ -9,6 +9,7 @@ export class AddRoleColumnToUsers1703687590316 implements MigrationInterface {
         name: 'role',
         type: 'varchar',
         isNullable: true,
+        default: `'basic'`,
       }),
     );
   }

@@ -8,6 +8,12 @@ import { IamModule } from './iam/iam.module';
 import * as Joi from '@hapi/joi';
 import appConfig from './config/app.config';
 import authConfig from './config/auth.config';
+import { APP_GUARD } from '@nestjs/core';
+import { RolesGuard } from './iam/authorization/guards/roles.guard';
+import { AuthenticationGuard } from './iam/authentication/guards/authentication/authentication.guard';
+import { AccessTokenGuard } from './iam/authentication/guards/access-token/access-token.guard';
+import { JwtModule } from '@nestjs/jwt';
+import jwtConfig from './iam/config/jwt.config';
 
 @Module({
   imports: [
@@ -19,6 +25,7 @@ import authConfig from './config/auth.config';
         DATABASE_URL: Joi.string().required(),
       }),
     }),
+    ConfigModule.forFeature(jwtConfig),
     TypeOrmModule.forRootAsync({
       useFactory: () => ({
         type: 'postgres',
@@ -26,10 +33,22 @@ import authConfig from './config/auth.config';
         autoLoadEntities: true,
       }),
     }),
+    JwtModule.registerAsync(jwtConfig.asProvider()),
     UsersModule,
     IamModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: AuthenticationGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
+    },
+    AccessTokenGuard,
+  ],
 })
 export class AppModule {}

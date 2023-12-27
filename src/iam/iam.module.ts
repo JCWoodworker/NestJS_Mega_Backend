@@ -8,27 +8,16 @@ import { Users } from 'src/users/entities/users.entity';
 import { JwtModule } from '@nestjs/jwt';
 import jwtConfig from './config/jwt.config';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
 import { AccessTokenGuard } from './authentication/guards/access-token/access-token.guard';
-import { AuthenticationGuard } from './authentication/guards/authentication/authentication.guard';
 import { RefreshTokensModule } from './authentication/refresh-token-storage/refresh-token-storage.module';
 import { RefreshTokensService } from './authentication/refresh-token-storage/refresh-token-storage.service';
 import { RefreshTokens } from './authentication/refresh-token-storage/refresh-token-storage.entity';
-import { RolesGuard } from './authorization/guards/roles.guard';
 
 @Module({
   providers: [
     {
       provide: HashingService,
       useClass: BcryptService,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: AuthenticationGuard,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: RolesGuard,
     },
     AccessTokenGuard,
     AuthenticationService,
