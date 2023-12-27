@@ -66,7 +66,6 @@ export class AuthenticationService {
 
   async generateTokens(user: Users) {
     const refreshTokenId = randomUUID();
-    debugger;
     const [accessToken, refreshToken] = await Promise.all([
       this.signToken<Partial<ActiveUserData>>(
         user.id,
