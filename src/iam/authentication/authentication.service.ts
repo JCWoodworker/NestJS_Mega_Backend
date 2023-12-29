@@ -34,7 +34,7 @@ export class AuthenticationService {
   async signUp(signUpDto: SignUpDto) {
     try {
       const user = new Users();
-      user.email = signUpDto.email;
+      user.email = signUpDto.email.toLowerCase();
       user.password = await this.hashingService.hash(signUpDto.password);
       await this.usersRepository.save(user);
       return `User ${signUpDto.email} created successfully`;
@@ -48,8 +48,9 @@ export class AuthenticationService {
   }
 
   async signIn(signInDto: SignInDto) {
+    const userEmail = signInDto.email.toLowerCase();
     const user = await this.usersRepository.findOneBy({
-      email: signInDto.email,
+      email: userEmail,
     });
     if (!user) {
       throw new UnauthorizedException('User does not exists');
