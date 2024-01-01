@@ -12,6 +12,8 @@ import { AccessTokenGuard } from './authentication/guards/access-token/access-to
 import { RefreshTokensModule } from './authentication/refresh-token-storage/refresh-token-storage.module';
 import { RefreshTokensService } from './authentication/refresh-token-storage/refresh-token-storage.service';
 import { RefreshTokens } from './authentication/refresh-token-storage/refresh-token-storage.entity';
+import { GoogleAuthenticationService } from './authentication/social/google-authentication.service';
+import { GoogleAuthenticationController } from './authentication/social/google-authentication.controller';
 
 @Module({
   providers: [
@@ -22,6 +24,7 @@ import { RefreshTokens } from './authentication/refresh-token-storage/refresh-to
     AccessTokenGuard,
     AuthenticationService,
     RefreshTokensService,
+    GoogleAuthenticationService,
   ],
   imports: [
     TypeOrmModule.forFeature([Users, RefreshTokens]),
@@ -30,6 +33,6 @@ import { RefreshTokens } from './authentication/refresh-token-storage/refresh-to
     RefreshTokensModule,
   ],
   exports: [],
-  controllers: [AuthenticationController],
+  controllers: [AuthenticationController, GoogleAuthenticationController],
 })
 export class IamModule {}
