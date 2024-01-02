@@ -92,7 +92,7 @@ When running in dev or debug mode the wathcher will not update when saving the .
 ### You will need to set the following variables
 
 * Create a .env file for local development
-* Add these to your env list with whatever host you are using
+* Add these to your env list with whatever hosting service you are using
 
 ENVIRONMENT=development (other options are "preprod" and "prod")
 
