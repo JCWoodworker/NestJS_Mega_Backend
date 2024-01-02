@@ -1,31 +1,29 @@
 # JC's Nest.JS boilerplate
 
+## This README is a work in progress, and is more of a notebook for me while I build this API
+
+* Please be patient while I construct a proper readme
+
 * Current features include:
   * PostgreSQL integration
     * TypeORM
     * Migrations
   * Authentication and Authorization
-    * Sign up with email and password
-    * Sign-in (successful) creates JWT access and refresh tokens
+    * Sign up with email and password OR use Google
+    * Successful sign in creates JWT access and refresh tokens
       * Currently returns in the following format:
         {
           "access_token": "SomeLongAssAccessToken",
           "refresh_token": "SomeLongAssRefreshToken"
         }
-      * Refresh ID is stored in the database
+      * Refresh ID is stored in the database to check against the refresh token
     * Refresh endpoint checks DB for matching refresh ID and returns new access and refresh tokens
   * Pre-built endpoints for CRUD operations on Users
     * Get all users
     * Get current active user
   * All endpoints globally set to require bearer authentication
     * Guard set up to open any endpoint or an entire controller to public access
-  * User role guard lets you set any endpoint or controller to Admin or Basic user access
-
---
-
-## This README is a work in progress, and is more of a notebook for me while I build this API
-
-* Please be patient while I construct a proper readme
+  * User role guard lets you set any endpoint or controller to "Admin" or "Basic" user access
 
 --
 
