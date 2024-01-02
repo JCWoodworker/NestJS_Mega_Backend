@@ -56,12 +56,12 @@ Multiple user endpoints have been set up at '/users':
 
 * GET:
   * /getallusers --> returns an array of all users (id, username, email)
-  * /:id --> returns one specific user by id
-  * /:username --> returns one specific user by username
+  <!-- * /:id returns one specific user by id -->
+  <!-- * /:username --> returns one specific user by username --> -->
 * POST
   * / --> creates a new user if username and/or email doesn't already exist
 * PATCH, DELETE
-  * /:id --> updates or deletes a user by id
+  <!-- * /:id --> updates or deletes a user by id -->
 
 * NEST.JS VALIDATION - <https://docs.nestjs.com/techniques/validation>
 
@@ -72,7 +72,7 @@ Multiple user endpoints have been set up at '/users':
 ```yarn add @nestjs/config @hapi/joi @Types Hapi__joi (dev)```
 
 **QUICK NOTE ABOUT .ENV FILE AND JOI VALIDATION SCHEMA:**
-When running in dev or debug mode the wathcher will not update when saving the .env file.  You'll need to update a ts file to trigger the refresh
+When running in dev or debug mode the wathcher will not update when saving the .env file.  You'll need to update a ts file to trigger a refresh
 
 * Hapi/Joi is for config validation
 
@@ -86,7 +86,37 @@ When running in dev or debug mode the wathcher will not update when saving the .
 
 ### CORS
 
-* CORS is enabled by in main.ts and looks for an array of allowed origins
+* CORS is enabled in main.ts and looks for an array of allowed origins
   * Store your allowed orgins in .env under ALLOWED_ORIGINS
 
-...
+### You will need to set the following variables
+
+* Create a .env file for local development
+* Add these to your env list with whatever host you are using
+
+ENVIRONMENT=development (other options are "preprod" and "prod")
+
+DEVELOPMENT_DOMAIN=<http://localhost:3000>
+PREPROD_DOMAIN=your-preprod-domain
+PROD_DOMAIN=your-prod-domain
+
+JWT_SECRET=your-jwt-secret
+JWT_TOKEN_AUDIENCE=localhost:3000
+JWT_TOKEN_ISSUER=localhost:3000
+JWT_ACCESS_TOKEN_TTL=this-should-be-a-number-in-seconds
+JWT_REFRESH_TOKEN_TTL=this-should-be-a-number-in-seconds
+
+* Set up your project with Google OAuth - <https://console.cloud.google.com/apis/credentials>
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+
+DATABASE_HOST
+DATABASE_PORT
+DATABASE_USERNAME
+DATABASE_PASSWORD
+DATABASE_NAME
+
+* URL Structure: postgres://{username}:{password}@{host}:{port}/{database name}
+DATABASE_URL
+
+ALLOWED_ORIGINS=origin1,origin2,origin3
