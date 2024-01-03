@@ -62,7 +62,8 @@ export class AuthenticationService {
     if (!isEqual) {
       throw new UnauthorizedException('Password does not match');
     }
-    return await this.generateTokens(user);
+    const tokens = await this.generateTokens(user);
+    return { tokens, user: { id: user.id, email: user.email } };
   }
 
   async generateTokens(user: Users) {
