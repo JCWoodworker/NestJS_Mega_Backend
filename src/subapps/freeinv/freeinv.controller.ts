@@ -1,42 +1,32 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Patch,
-  Param,
-  Delete,
-} from '@nestjs/common';
-import { FreeinvService } from './freeinv.service';
-import { CreateFreeinvDto } from './dto/create-freeinv.dto';
-import { UpdateFreeinvDto } from './dto/update-freeinv.dto';
+import { Controller, Get } from '@nestjs/common';
+
+import { LocationsService } from './resources/locations.service';
+import { RoomsService } from './resources/rooms.service';
+import { ItemsService } from './resources/items.service';
 
 @Controller('freeinv')
 export class FreeinvController {
-  constructor(private readonly freeinvService: FreeinvService) {}
+  constructor(
+    private readonly itemsService: ItemsService,
+    private readonly locationsService: LocationsService,
+    private readonly roomsService: RoomsService,
+  ) {}
 
-  @Post()
-  create(@Body() createFreeinvDto: CreateFreeinvDto) {
-    return this.freeinvService.create(createFreeinvDto);
+  @Get('locations')
+  findAllLocations() {
+    return 'This action returns all locations';
+    // return this.locationsService.findAll();
   }
 
-  @Get()
-  findAll() {
-    return this.freeinvService.findAll();
+  @Get('rooms')
+  findAllRooms() {
+    return 'This action returns all rooms';
+    // return this.roomsService.findAll();
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.freeinvService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateFreeinvDto: UpdateFreeinvDto) {
-    return this.freeinvService.update(+id, updateFreeinvDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.freeinvService.remove(+id);
+  @Get('items')
+  findAllItems() {
+    return 'This action returns all items';
+    // return this.itemsService.findAll();
   }
 }
