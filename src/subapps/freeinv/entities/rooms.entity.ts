@@ -2,8 +2,8 @@ import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
 @Entity()
 export class Rooms {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryGeneratedColumn()
+  id: number;
 
   @Column()
   name: string;
@@ -12,7 +12,7 @@ export class Rooms {
   description: string;
 
   @Column()
-  parentId: string;
+  parentId: number;
 
   @Column()
   type: string;

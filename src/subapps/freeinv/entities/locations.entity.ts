@@ -12,7 +12,7 @@ export class Locations {
   description: string;
 
   @Column()
-  parentId: string;
+  parentId: number;
 
   @Column()
   type: string;
