@@ -25,7 +25,6 @@ export class FreeinvController {
     return this.locationsService.create(body);
   }
 
-
   @Get('rooms')
   findAllRooms() {
     return this.roomsService.findAll();
@@ -43,5 +42,4 @@ export class FreeinvController {
   createItem(@Body() body: any) {
     return this.itemsService.create(body);
   }
-
 }
