@@ -42,4 +42,9 @@ export class FreeinvController {
   createItem(@Body() body: any) {
     return this.itemsService.create(body);
   }
+
+  @Get('complete-location')
+  getAllLocationsWithRoomsAndItems() {
+    return this.locationsService.getAllLocationsWithRoomsAndItems();
+  }
 }

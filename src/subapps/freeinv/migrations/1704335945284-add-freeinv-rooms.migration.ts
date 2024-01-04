@@ -7,11 +7,11 @@ export class AddFreeinvRooms1704335945284 implements MigrationInterface {
         "id" SERIAL NOT NULL PRIMARY KEY,
         "name" character varying NOT NULL,
         "description" character varying,
-        "parentId" character varying,
         "type" character varying NOT NULL DEFAULT 'location',
-        "parentType" character varying NOT NULL DEFAULT 'room',
+        "locationId" integer,
         "created_at" TIMESTAMP NOT NULL DEFAULT now(),
-        "updated_at" TIMESTAMP NOT NULL DEFAULT now()
+        "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
+        CONSTRAINT "FK_ROOMS_LOCATION" FOREIGN KEY ("locationId") REFERENCES "locations" ("id")
       )`,
     );
   }

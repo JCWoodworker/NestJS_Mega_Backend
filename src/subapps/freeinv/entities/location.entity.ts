@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import { Rooms } from './room.entity';
 
 @Entity()
 export class Locations {
@@ -12,13 +13,10 @@ export class Locations {
   description: string;
 
   @Column()
-  parentId: number;
-
-  @Column()
   type: string;
 
-  @Column()
-  parentType: string;
+  @OneToMany(() => Rooms, (rooms) => rooms.location)
+  rooms: Rooms[];
 
   @Column()
   created_at: Date;

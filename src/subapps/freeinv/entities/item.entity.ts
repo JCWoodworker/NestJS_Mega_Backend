@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
+import { Rooms } from './room.entity';
 
 @Entity()
 export class Items {
@@ -12,13 +13,13 @@ export class Items {
   description: string;
 
   @Column()
-  parentId: number;
-
-  @Column()
   type: string;
 
   @Column()
-  parentType: string;
+  roomId: number;
+
+  @ManyToOne(() => Rooms, (room) => room.items)
+  room: Rooms;
 
   @Column()
   created_at: Date;

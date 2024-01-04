@@ -12,6 +12,13 @@ export class ItemsService {
   findAll() {
     return `This action returns all items`;
   }
+
+  findAllByRoomId(id: number) {
+    return this.itemsRepository.find({
+      where: { roomId: id },
+    });
+  }
+
   create(body: any) {
     const location = body;
     return this.itemsRepository.save(location);

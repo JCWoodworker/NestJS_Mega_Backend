@@ -12,6 +12,13 @@ export class RoomsService {
   findAll() {
     return `This action returns all rooms`;
   }
+
+  findAllByLocationId(id: number) {
+    return this.locationsRepository.find({
+      where: { locationId: id },
+    });
+  }
+
   create(body: any) {
     const location = body;
     return this.locationsRepository.save(location);
