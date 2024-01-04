@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Post, Body } from '@nestjs/common';
 
 import { LocationsService } from './resources/locations.service';
 import { RoomsService } from './resources/rooms.service';
@@ -20,14 +20,28 @@ export class FreeinvController {
   findAllLocations() {
     return this.locationsService.findAll();
   }
+  @Post('locations')
+  createLocation(@Body() body: any) {
+    return this.locationsService.create(body);
+  }
+
 
   @Get('rooms')
   findAllRooms() {
     return this.roomsService.findAll();
+  }
+  @Post('rooms')
+  createRoom(@Body() body: any) {
+    return this.roomsService.create(body);
   }
 
   @Get('items')
   findAllItems() {
     return this.itemsService.findAll();
   }
+  @Post('items')
+  createItem(@Body() body: any) {
+    return this.itemsService.create(body);
+  }
+
 }

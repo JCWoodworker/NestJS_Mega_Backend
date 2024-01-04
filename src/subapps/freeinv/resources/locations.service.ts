@@ -13,4 +13,9 @@ export class LocationsService {
     const locationList = this.locationsRepository.find();
     return locationList;
   }
+
+  create(body: any) {
+    const location = body;
+    return this.locationsRepository.save(location);
+  }
 }
