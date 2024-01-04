@@ -4,6 +4,10 @@ import { LocationsService } from './resources/locations.service';
 import { RoomsService } from './resources/rooms.service';
 import { ItemsService } from './resources/items.service';
 
+import { Auth } from 'src/iam/decorators/auth.decorator';
+import { AuthType } from 'src/iam/enums/auth-type.enum';
+
+@Auth(AuthType.None)
 @Controller('freeinv')
 export class FreeinvController {
   constructor(
@@ -14,19 +18,16 @@ export class FreeinvController {
 
   @Get('locations')
   findAllLocations() {
-    return 'This action returns all locations';
-    // return this.locationsService.findAll();
+    return this.locationsService.findAll();
   }
 
   @Get('rooms')
   findAllRooms() {
-    return 'This action returns all rooms';
-    // return this.roomsService.findAll();
+    return this.roomsService.findAll();
   }
 
   @Get('items')
   findAllItems() {
-    return 'This action returns all items';
-    // return this.itemsService.findAll();
+    return this.itemsService.findAll();
   }
 }

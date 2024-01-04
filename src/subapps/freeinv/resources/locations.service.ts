@@ -1,8 +1,16 @@
 import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Locations } from '../entities/location.entity';
 
 @Injectable()
 export class LocationsService {
+  constructor(
+    @InjectRepository(Locations)
+    private readonly locationsRepository: Repository<Locations>,
+  ) {}
   findAll() {
-    return `This action returns all locations`;
+    const locationList = this.locationsRepository.find();
+    return locationList;
   }
 }
