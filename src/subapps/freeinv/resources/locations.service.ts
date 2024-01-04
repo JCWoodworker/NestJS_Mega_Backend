@@ -14,6 +14,14 @@ export class LocationsService {
     return locationList;
   }
 
+  async getAllLocationsWithRoomsAndItems() {
+    const locations = await this.locationsRepository.find({
+      relations: ['rooms.items'], // Eager load rooms and items
+    });
+
+    return locations;
+  }
+
   create(body: any) {
     const location = body;
     return this.locationsRepository.save(location);
