@@ -9,6 +9,7 @@ export class AddFreeinvItems1704335945706 implements MigrationInterface {
         "description" character varying,
         "roomId" integer, 
         "type" character varying NOT NULL DEFAULT 'location',
+        "userId" character varying NOT NULL,
         "created_at" TIMESTAMP NOT NULL DEFAULT now(),
         "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
         CONSTRAINT "FK_Items_Room" FOREIGN KEY ("roomId") REFERENCES "rooms"("id")

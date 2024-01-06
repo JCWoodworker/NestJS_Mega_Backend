@@ -22,6 +22,9 @@ export class Items {
   room: Rooms;
 
   @Column()
+  userId: string;
+
+  @Column()
   created_at: Date;
 
   @Column()

@@ -1,13 +1,13 @@
-import { Controller, Get, Post, Body } from '@nestjs/common';
+import { Controller, Get, Post, Body, Req } from '@nestjs/common';
 
 import { LocationsService } from './resources/locations.service';
 import { RoomsService } from './resources/rooms.service';
 import { ItemsService } from './resources/items.service';
 
-import { Auth } from 'src/iam/decorators/auth.decorator';
-import { AuthType } from 'src/iam/enums/auth-type.enum';
+import { Role } from 'src/users/enums/role.enum';
+import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
 
-@Auth(AuthType.None)
+@Roles(Role.Admin, Role.Basic)
 @Controller('freeinv')
 export class FreeinvController {
   constructor(
@@ -16,35 +16,46 @@ export class FreeinvController {
     private readonly roomsService: RoomsService,
   ) {}
 
+  // LOCATIONS
   @Get('locations')
-  findAllLocations() {
-    return this.locationsService.findAll();
+  findAllLocationsByUserId(@Req() request) {
+    const userId = request.user.sub;
+    return this.locationsService.findAllLocationsByUserId(userId);
   }
   @Post('locations')
-  createLocation(@Body() body: any) {
-    return this.locationsService.create(body);
+  createLocation(@Body() body: any, @Req() request) {
+    const userId = request.user.sub;
+    return this.locationsService.create(body, userId);
   }
 
+  // ROOMS
   @Get('rooms')
-  findAllRooms() {
-    return this.roomsService.findAll();
+  async findAllRoomsByUserId(@Req() request) {
+    const userId = request.user.sub;
+    return this.roomsService.findAllRoomsByUserId(userId);
   }
   @Post('rooms')
-  createRoom(@Body() body: any) {
-    return this.roomsService.create(body);
+  async createRoom(@Body() body: any, @Req() request) {
+    const userId = request.user.sub;
+    return this.roomsService.create(body, userId);
   }
 
+  // ITEMS
   @Get('items')
-  findAllItems() {
-    return this.itemsService.findAll();
+  async findAllItemsByUserid(@Req() request) {
+    const userId = request.user.sub;
+    return this.itemsService.findAllItemsByUserid(userId);
   }
   @Post('items')
-  createItem(@Body() body: any) {
-    return this.itemsService.create(body);
+  async createItem(@Body() body: any, @Req() request) {
+    const userId = request.user.sub;
+    return this.itemsService.create(body, userId);
   }
 
+  // ALL USER DATA
   @Get('complete-location')
-  getAllLocationsWithRoomsAndItems() {
-    return this.locationsService.getAllLocationsWithRoomsAndItems();
+  async getAllLocationsWithRoomsAndItems(@Req() request) {
+    const userId = request.user.sub;
+    return this.locationsService.getAllLocationsWithRoomsAndItems(userId);
   }
 }

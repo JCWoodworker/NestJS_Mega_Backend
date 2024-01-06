@@ -9,19 +9,20 @@ export class LocationsService {
     @InjectRepository(Locations)
     private readonly locationsRepository: Repository<Locations>,
   ) {}
-  findAll() {
-    const locationList = this.locationsRepository.find();
+  async findAllLocationsByUserId(userId: string) {
+    const locationList = this.locationsRepository.find({ where: { userId } });
     return locationList;
   }
 
-  async getAllLocationsWithRoomsAndItems() {
+  async getAllLocationsWithRoomsAndItems(userId: string) {
     return await this.locationsRepository.find({
       relations: ['rooms.items'],
+      where: { userId: userId },
     });
   }
 
-  create(body: any) {
-    const location = body;
+  async create(body: any, userId: string) {
+    const location = { ...body, userId };
     return this.locationsRepository.save(location);
   }
 }

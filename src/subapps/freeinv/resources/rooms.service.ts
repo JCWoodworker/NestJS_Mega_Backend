@@ -9,18 +9,21 @@ export class RoomsService {
     @InjectRepository(Rooms)
     private readonly locationsRepository: Repository<Rooms>,
   ) {}
-  findAll() {
-    return `This action returns all rooms`;
+
+  async findAllRoomsByUserId(userId: string) {
+    return this.locationsRepository.find({
+      where: { userId: userId },
+    });
   }
 
-  findAllByLocationId(id: number) {
+  async findAllRoomsByLocationId(id: number) {
     return this.locationsRepository.find({
       where: { locationId: id },
     });
   }
 
-  create(body: any) {
-    const location = body;
-    return this.locationsRepository.save(location);
+  async create(body: any, userId: string) {
+    const room = { ...body, userId };
+    return this.locationsRepository.save(room);
   }
 }

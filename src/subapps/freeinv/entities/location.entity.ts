@@ -19,6 +19,9 @@ export class Locations {
   rooms: Rooms[];
 
   @Column()
+  userId: string;
+
+  @Column()
   created_at: Date;
 
   @Column()
