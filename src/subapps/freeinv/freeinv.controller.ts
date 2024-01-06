@@ -4,8 +4,6 @@ import { LocationsService } from './resources/locations.service';
 import { RoomsService } from './resources/rooms.service';
 import { ItemsService } from './resources/items.service';
 
-// import { Auth } from 'src/iam/decorators/auth.decorator';
-// import { AuthType } from 'src/iam/enums/auth-type.enum';
 import { Role } from 'src/users/enums/role.enum';
 import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
 
@@ -18,38 +16,44 @@ export class FreeinvController {
     private readonly roomsService: RoomsService,
   ) {}
 
-  // TODO: add validator function that checks the request's userId against the userId of the location being edited
-
+  // LOCATIONS
   @Get('locations')
-  findAllLocations() {
-    return this.locationsService.findAll();
+  findAllLocationsByUserId(@Req() request) {
+    const userId = request.user.sub;
+    return this.locationsService.findAllLocationsByUserId(userId);
   }
   @Post('locations')
   createLocation(@Body() body: any, @Req() request) {
     const userId = request.user.sub;
     return this.locationsService.create(body, userId);
   }
+
+  // ROOMS
   @Get('rooms')
-  findAllRooms() {
-    return this.roomsService.findAll();
+  async findAllRoomsByUserId(@Req() request) {
+    const userId = request.user.sub;
+    return this.roomsService.findAllRoomsByUserId(userId);
   }
   @Post('rooms')
-  createRoom(@Body() body: any) {
+  async createRoom(@Body() body: any) {
     return this.roomsService.create(body);
   }
+
+  // ITEMS
   @Get('items')
-  findAllItems() {
-    return this.itemsService.findAll();
+  async findAllItemsByUserid(@Req() request) {
+    const userId = request.user.sub;
+    return this.itemsService.findAllItemsByUserid(userId);
   }
   @Post('items')
-  createItem(@Body() body: any) {
+  async createItem(@Body() body: any) {
     return this.itemsService.create(body);
   }
 
+  // ALL USER DATA
   @Roles(Role.Admin, Role.Basic)
   @Get('complete-location')
-  getAllLocationsWithRoomsAndItems(@Req() request) {
-    debugger;
+  async getAllLocationsWithRoomsAndItems(@Req() request) {
     const userId = request.user.sub;
     return this.locationsService.getAllLocationsWithRoomsAndItems(userId);
   }

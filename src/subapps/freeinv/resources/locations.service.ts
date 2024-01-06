@@ -9,8 +9,8 @@ export class LocationsService {
     @InjectRepository(Locations)
     private readonly locationsRepository: Repository<Locations>,
   ) {}
-  findAll() {
-    const locationList = this.locationsRepository.find();
+  async findAllLocationsByUserId(userId: string) {
+    const locationList = this.locationsRepository.find({ where: { userId } });
     return locationList;
   }
 
@@ -21,7 +21,7 @@ export class LocationsService {
     });
   }
 
-  create(body: any, userId: string) {
+  async create(body: any, userId: string) {
     const location = { ...body, userId };
     return this.locationsRepository.save(location);
   }

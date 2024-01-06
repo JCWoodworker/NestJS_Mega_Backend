@@ -32,6 +32,9 @@ export class Rooms {
   items: Items[];
 
   @Column()
+  userId: string;
+
+  @Column()
   created_at: Date;
 
   @Column()

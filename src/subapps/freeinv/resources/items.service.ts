@@ -9,17 +9,17 @@ export class ItemsService {
     @InjectRepository(Items)
     private readonly itemsRepository: Repository<Items>,
   ) {}
-  findAll() {
-    return `This action returns all items`;
+  async findAllItemsByUserid(userId: string) {
+    return this.itemsRepository.find({ where: { userId: userId } });
   }
 
-  findAllByRoomId(id: number) {
+  async findAllByItemId(id: number) {
     return this.itemsRepository.find({
       where: { roomId: id },
     });
   }
 
-  create(body: any) {
+  async create(body: any) {
     const location = body;
     return this.itemsRepository.save(location);
   }
