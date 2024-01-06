@@ -10,7 +10,7 @@ export class RefreshTokensService {
     private readonly refreshTokensRepository: Repository<RefreshTokens>,
   ) {}
 
-  async insertRefreshToken(userId: number, tokenId: string) {
+  async insertRefreshToken(userId: string, tokenId: string) {
     try {
       const payload = {
         userId,
@@ -27,7 +27,7 @@ export class RefreshTokensService {
   }
 
   async validateRefreshToken(
-    userId: number,
+    userId: string,
     tokenId: string,
   ): Promise<boolean> {
     const storedId = (await this.refreshTokensRepository.findOneBy({ userId }))
@@ -39,7 +39,7 @@ export class RefreshTokensService {
     return true;
   }
 
-  async invalidateRefreshToken(userId: number): Promise<void> {
+  async invalidateRefreshToken(userId: string): Promise<void> {
     const result = await this.refreshTokensRepository.delete({ userId });
     if (result.affected === 0) {
       return;
