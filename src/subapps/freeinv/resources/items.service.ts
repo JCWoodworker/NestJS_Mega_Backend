@@ -19,8 +19,8 @@ export class ItemsService {
     });
   }
 
-  async create(body: any) {
-    const location = body;
-    return this.itemsRepository.save(location);
+  async create(body: any, userId: string) {
+    const item = { ...body, userId };
+    return this.itemsRepository.save(item);
   }
 }

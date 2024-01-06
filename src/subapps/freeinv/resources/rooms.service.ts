@@ -22,8 +22,8 @@ export class RoomsService {
     });
   }
 
-  async create(body: any) {
-    const location = body;
-    return this.locationsRepository.save(location);
+  async create(body: any, userId: string) {
+    const room = { ...body, userId };
+    return this.locationsRepository.save(room);
   }
 }

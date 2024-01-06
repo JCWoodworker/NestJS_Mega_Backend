@@ -35,8 +35,9 @@ export class FreeinvController {
     return this.roomsService.findAllRoomsByUserId(userId);
   }
   @Post('rooms')
-  async createRoom(@Body() body: any) {
-    return this.roomsService.create(body);
+  async createRoom(@Body() body: any, @Req() request) {
+    const userId = request.user.sub;
+    return this.roomsService.create(body, userId);
   }
 
   // ITEMS
@@ -46,8 +47,9 @@ export class FreeinvController {
     return this.itemsService.findAllItemsByUserid(userId);
   }
   @Post('items')
-  async createItem(@Body() body: any) {
-    return this.itemsService.create(body);
+  async createItem(@Body() body: any, @Req() request) {
+    const userId = request.user.sub;
+    return this.itemsService.create(body, userId);
   }
 
   // ALL USER DATA
