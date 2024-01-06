@@ -7,7 +7,7 @@ import { ItemsService } from './resources/items.service';
 import { Role } from 'src/users/enums/role.enum';
 import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
 
-@Roles(Role.Admin)
+@Roles(Role.Admin, Role.Basic)
 @Controller('freeinv')
 export class FreeinvController {
   constructor(
@@ -51,7 +51,6 @@ export class FreeinvController {
   }
 
   // ALL USER DATA
-  @Roles(Role.Admin, Role.Basic)
   @Get('complete-location')
   async getAllLocationsWithRoomsAndItems(@Req() request) {
     const userId = request.user.sub;
