@@ -1124,9 +1124,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@nestjs/testing@npm:^10.2.8":
-  version: 10.2.10
-  resolution: "@nestjs/testing@npm:10.2.10"
+"@nestjs/testing@npm:^10.3.0":
+  version: 10.3.0
+  resolution: "@nestjs/testing@npm:10.3.0"
   dependencies:
     tslib: "npm:2.6.2"
   peerDependencies:
@@ -1139,7 +1139,7 @@ __metadata:
       optional: true
     "@nestjs/platform-express":
       optional: true
-  checksum: 2221310546cbd0a17f0c6d51797a0c82ceea5252b98e3411daae00a569d333950169c99605303aa48e5a132c339c47455755c2e0c17cb37f627e085e9c985826
+  checksum: e99420dee55bd0184092d9076b6acd205632b012620b60448652ba6e156e3dc7c6255f2a45edadcd632f9682abf777e43d8b03c83bb8c9e8be6e7e0af728b0d5
   languageName: node
   linkType: hard
 
@@ -1485,7 +1485,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/jest@npm:^29.5.8":
+"@types/jest@npm:^29.5.11":
   version: 29.5.11
   resolution: "@types/jest@npm:29.5.11"
   dependencies:
@@ -6061,13 +6061,13 @@ __metadata:
     "@nestjs/mapped-types": "npm:^2.0.3"
     "@nestjs/platform-express": "npm:^10.2.8"
     "@nestjs/schematics": "npm:^10.0.3"
-    "@nestjs/testing": "npm:^10.2.8"
+    "@nestjs/testing": "npm:^10.3.0"
     "@nestjs/typeorm": "npm:^10.0.0"
     "@types/bcrypt": "npm:^5.0.2"
     "@types/cookie-parser": "npm:^1.4.6"
     "@types/express": "npm:^4.17.21"
     "@types/hapi__joi": "npm:^17.1.13"
-    "@types/jest": "npm:^29.5.8"
+    "@types/jest": "npm:^29.5.11"
     "@types/node": "npm:^20.9.0"
     "@types/supertest": "npm:^2.0.16"
     "@typescript-eslint/eslint-plugin": "npm:^6.11.0"
