@@ -1,15 +1,15 @@
-import { Controller, Get, Post, Body } from '@nestjs/common';
+import { Controller, Get, Post, Body, Req } from '@nestjs/common';
 
 import { LocationsService } from './resources/locations.service';
 import { RoomsService } from './resources/rooms.service';
 import { ItemsService } from './resources/items.service';
 
-import { Auth } from 'src/iam/decorators/auth.decorator';
-import { AuthType } from 'src/iam/enums/auth-type.enum';
-// import { Role } from 'src/users/enums/role.enum';
-// import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
+// import { Auth } from 'src/iam/decorators/auth.decorator';
+// import { AuthType } from 'src/iam/enums/auth-type.enum';
+import { Role } from 'src/users/enums/role.enum';
+import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
 
-@Auth(AuthType.Bearer)
+@Roles(Role.Admin)
 @Controller('freeinv')
 export class FreeinvController {
   constructor(
@@ -23,10 +23,10 @@ export class FreeinvController {
     return this.locationsService.findAll();
   }
   @Post('locations')
-  createLocation(@Body() body: any) {
-    return this.locationsService.create(body);
+  createLocation(@Body() body: any, @Req() request) {
+    const userId = request.user.sub;
+    return this.locationsService.create(body, userId);
   }
-
   @Get('rooms')
   findAllRooms() {
     return this.roomsService.findAll();
@@ -35,7 +35,6 @@ export class FreeinvController {
   createRoom(@Body() body: any) {
     return this.roomsService.create(body);
   }
-
   @Get('items')
   findAllItems() {
     return this.itemsService.findAll();
@@ -45,9 +44,11 @@ export class FreeinvController {
     return this.itemsService.create(body);
   }
 
-  @Auth(AuthType.None)
+  @Roles(Role.Admin, Role.Basic)
   @Get('complete-location')
-  getAllLocationsWithRoomsAndItems() {
-    return this.locationsService.getAllLocationsWithRoomsAndItems();
+  getAllLocationsWithRoomsAndItems(@Req() request) {
+    debugger;
+    const userId = request.user.sub;
+    return this.locationsService.getAllLocationsWithRoomsAndItems(userId);
   }
 }

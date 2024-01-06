@@ -14,14 +14,15 @@ export class LocationsService {
     return locationList;
   }
 
-  async getAllLocationsWithRoomsAndItems() {
+  async getAllLocationsWithRoomsAndItems(userId: string) {
     return await this.locationsRepository.find({
       relations: ['rooms.items'],
+      where: { userId: userId },
     });
   }
 
-  create(body: any) {
-    const location = body;
+  create(body: any, userId: string) {
+    const location = { ...body, userId };
     return this.locationsRepository.save(location);
   }
 }
