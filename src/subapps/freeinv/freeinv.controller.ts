@@ -18,6 +18,8 @@ export class FreeinvController {
     private readonly roomsService: RoomsService,
   ) {}
 
+  // TODO: add validator function that checks the request's userId against the userId of the location being edited
+
   @Get('locations')
   findAllLocations() {
     return this.locationsService.findAll();
