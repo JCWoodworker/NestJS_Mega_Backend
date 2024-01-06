@@ -4,9 +4,9 @@ export class RefreshTokens1703401608464 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     queryRunner.query(
       `CREATE TABLE "refresh_tokens" (
-                "id" SERIAL NOT NULL PRIMARY KEY,
-                "userId" uuid NOT NULL UNIQUE,
-                "tokenId" character varying NOT NULL)`,
+        "id" SERIAL NOT NULL PRIMARY KEY,
+        "userId" character varying NOT NULL UNIQUE,
+        "tokenId" character varying NOT NULL)`,
     );
   }
 
