@@ -6,8 +6,10 @@ import { ItemsService } from './resources/items.service';
 
 import { Auth } from 'src/iam/decorators/auth.decorator';
 import { AuthType } from 'src/iam/enums/auth-type.enum';
+// import { Role } from 'src/users/enums/role.enum';
+// import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
 
-@Auth(AuthType.None)
+@Auth(AuthType.Bearer)
 @Controller('freeinv')
 export class FreeinvController {
   constructor(
@@ -43,6 +45,7 @@ export class FreeinvController {
     return this.itemsService.create(body);
   }
 
+  @Auth(AuthType.None)
   @Get('complete-location')
   getAllLocationsWithRoomsAndItems() {
     return this.locationsService.getAllLocationsWithRoomsAndItems();
