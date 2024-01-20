@@ -17,7 +17,7 @@ export class LocationsService {
   async getAllLocationsWithRoomsAndItems(userId: string) {
     return await this.locationsRepository.find({
       relations: ['rooms.items'],
-      where: { userId: userId },
+      where: { userId },
     });
   }
 
