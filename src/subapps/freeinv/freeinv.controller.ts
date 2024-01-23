@@ -22,6 +22,7 @@ export class FreeinvController {
     const userId = request.user.sub;
     return this.locationsService.findAllLocationsByUserId(userId);
   }
+
   @Post('locations')
   createLocation(@Body() body: any, @Req() request) {
     const userId = request.user.sub;

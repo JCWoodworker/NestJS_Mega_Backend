@@ -4,26 +4,22 @@ export interface FakeUser {
 }
 
 export interface UserLocationData {
-  id: number;
   name: string;
   description: string;
-  type: 'location';
-  rooms: Room[];
+  locationId: number;
+  userId: string;
 }
 
 export interface Room {
-  id: number;
   name: string;
   description: string;
-  type: 'room';
   locationId: number;
-  items: Item[];
+  userId: string;
 }
 
 export interface Item {
-  id: number;
   name: string;
   description: string;
-  type: 'item';
   roomId: number;
+  userId: string;
 }
