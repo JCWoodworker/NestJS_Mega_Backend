@@ -21,6 +21,6 @@ export class ItemsService {
 
   async create(body: any, userId: string) {
     const item = { ...body, userId };
-    return this.itemsRepository.save(item);
+    return await this.itemsRepository.save(item);
   }
 }
