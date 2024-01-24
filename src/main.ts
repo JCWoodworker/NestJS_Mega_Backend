@@ -20,8 +20,6 @@ async function bootstrap() {
         ? process.env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim())
         : [];
 
-  console.log(`allowedOrigins: ${allowedOrigins}`);
-
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
