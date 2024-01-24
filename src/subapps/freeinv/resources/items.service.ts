@@ -27,6 +27,7 @@ export class ItemsService {
   }
 
   async imageUpload(file: Express.Multer.File, name: string) {
+    const s3Bucket = process.env.AWS_S3_BUCKET_NAME;
     const s3Client = new S3Client({
       credentials: {
         accessKeyId: process.env.AWS_ACCESS_KEY,
@@ -34,20 +35,18 @@ export class ItemsService {
       },
       region: process.env.AWS_REGION,
     });
-    debugger;
     try {
       const params = {
-        Bucket: process.env.AWS_S3_BUCKET,
+        Bucket: s3Bucket,
         Key: name,
         Body: file.buffer,
       };
-      debugger;
       const command = new PutObjectCommand(params);
-      const data = await s3Client.send(command);
-      debugger;
-      console.log(data);
+      await s3Client.send(command);
+
       return {
         message: 'Image uploaded successfully',
+        publicUrl: `https://${s3Bucket}.s3.amazonaws.com/${name}`,
       };
     } catch (error) {
       console.error(`Image upload error: ${error}`);

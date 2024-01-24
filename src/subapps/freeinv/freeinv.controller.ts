@@ -73,7 +73,6 @@ export class FreeinvController {
   @Post('image-upload')
   @UseInterceptors(FileInterceptor('file'))
   async imageUpload(@UploadedFile() file: Express.Multer.File, @Body() body) {
-    debugger;
     return await this.itemsService.imageUpload(file, body.name);
   }
 }
