@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import authConfig from 'src/config/auth.config';
-import { MulterModule } from '@nestjs/platform-express';
 
 import { ConfigModule } from '@nestjs/config';
 
@@ -20,7 +19,6 @@ import { Items } from './entities/item.entity';
   imports: [
     TypeOrmModule.forFeature([Locations, Rooms, Items]),
     ConfigModule.forFeature(authConfig),
-    MulterModule.register(),
   ],
   controllers: [FreeinvController],
   providers: [ItemsService, LocationsService, RoomsService],
