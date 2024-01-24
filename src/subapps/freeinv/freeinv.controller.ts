@@ -62,6 +62,6 @@ export class FreeinvController {
   // S3 BUCKET UPLOAD
   @Post('image-upload')
   async imageUpload(@Req() request) {
-    return await this.itemsService.imageUpload(request.body);
+    return await this.itemsService.imageUpload(request.body.file);
   }
 }
