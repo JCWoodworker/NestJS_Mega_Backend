@@ -40,7 +40,8 @@ export class GoogleAuthenticationService implements OnModuleInit {
         return { tokens };
       } else {
         const newUser = await this.usersRepository.save({ email, googleId });
-        return this.authService.generateTokens(newUser);
+        const tokens = await this.authService.generateTokens(newUser);
+        return { tokens };
       }
     } catch (err) {
       const pgUniqueViolationErrorCode = '23505';
