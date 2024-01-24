@@ -6,7 +6,6 @@ import { ItemsService } from './resources/items.service';
 
 import { Role } from 'src/users/enums/role.enum';
 import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
-
 @Roles(Role.Admin, Role.Basic)
 @Controller('freeinv')
 export class FreeinvController {
@@ -58,5 +57,11 @@ export class FreeinvController {
   async getAllLocationsWithRoomsAndItems(@Req() request) {
     const userId = request.user.sub;
     return this.locationsService.getAllLocationsWithRoomsAndItems(userId);
+  }
+
+  // S3 BUCKET UPLOAD
+  @Post('image-upload')
+  async imageUpload(@Req() request) {
+    return await this.itemsService.imageUpload(request.body);
   }
 }

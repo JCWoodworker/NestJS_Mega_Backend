@@ -23,4 +23,10 @@ export class ItemsService {
     const item = { ...body, userId };
     return await this.itemsRepository.save(item);
   }
+
+  async imageUpload(body: any) {
+    return {
+      message: `Image upload not yet implemented - ${body.image}`,
+    };
+  }
 }
