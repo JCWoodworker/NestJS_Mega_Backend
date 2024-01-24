@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Req, UploadedFile } from '@nestjs/common';
 
 import { LocationsService } from './resources/locations.service';
 import { RoomsService } from './resources/rooms.service';
@@ -6,6 +6,7 @@ import { ItemsService } from './resources/items.service';
 
 import { Role } from 'src/users/enums/role.enum';
 import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
+
 @Roles(Role.Admin, Role.Basic)
 @Controller('freeinv')
 export class FreeinvController {
@@ -61,7 +62,8 @@ export class FreeinvController {
 
   // S3 BUCKET UPLOAD
   @Post('image-upload')
-  async imageUpload(@Req() request) {
-    return await this.itemsService.imageUpload(request.body.file);
+  async imageUpload(@UploadedFile() file: Express.Multer.File, @Body() body) {
+    debugger;
+    return await this.itemsService.imageUpload(file, body.name);
   }
 }

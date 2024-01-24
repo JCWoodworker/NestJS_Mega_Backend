@@ -3,8 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Items } from '../entities/item.entity';
 
-import AWS from 'aws-sdk';
-import multer from 'multer';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 @Injectable()
 export class ItemsService {
@@ -27,15 +26,34 @@ export class ItemsService {
     return await this.itemsRepository.save(item);
   }
 
-  async imageUpload(file: File) {
-    const s3 = new AWS.S3({
-      accessKeyId: process.env.AWS_ACCESS_KEY,
-      secretAccessKey: process.env.AWS_SECRET_KEY,
+  async imageUpload(file: Express.Multer.File, name: string) {
+    const s3Client = new S3Client({
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY,
+        secretAccessKey: process.env.AWS_SECRET_KEY,
+      },
       region: process.env.AWS_REGION,
     });
     debugger;
-    return {
-      message: `Image upload not yet implemented - ${file}`,
-    };
+    try {
+      const params = {
+        Bucket: process.env.AWS_S3_BUCKET,
+        Key: name,
+        Body: file.buffer,
+      };
+      debugger;
+      const command = new PutObjectCommand(params);
+      const data = await s3Client.send(command);
+      debugger;
+      console.log(data);
+      return {
+        message: 'Image uploaded successfully',
+      };
+    } catch (error) {
+      console.error(`Image upload error: ${error}`);
+      return {
+        message: `Image upload error: ${error}`,
+      };
+    }
   }
 }
