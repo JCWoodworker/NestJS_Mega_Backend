@@ -8,7 +8,7 @@ export class AddFreeinvItems1704335945706 implements MigrationInterface {
         "name" character varying NOT NULL,
         "description" character varying,
         "roomId" integer, 
-        "type" character varying NOT NULL DEFAULT 'location',
+        "type" character varying NOT NULL DEFAULT 'item',
         "userId" character varying NOT NULL,
         "created_at" TIMESTAMP NOT NULL DEFAULT now(),
         "updated_at" TIMESTAMP NOT NULL DEFAULT now(),

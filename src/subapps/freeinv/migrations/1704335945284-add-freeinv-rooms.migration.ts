@@ -7,7 +7,7 @@ export class AddFreeinvRooms1704335945284 implements MigrationInterface {
         "id" SERIAL NOT NULL PRIMARY KEY,
         "name" character varying NOT NULL,
         "description" character varying,
-        "type" character varying NOT NULL DEFAULT 'location',
+        "type" character varying NOT NULL DEFAULT 'room',
         "locationId" integer,
         "userId" character varying NOT NULL,
         "created_at" TIMESTAMP NOT NULL DEFAULT now(),

@@ -20,6 +20,8 @@ async function bootstrap() {
         ? process.env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim())
         : [];
 
+  console.log(`allowedOrigins: ${allowedOrigins}`);
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -40,12 +42,10 @@ async function bootstrap() {
   // Remember to ensure that only specific origins can communicate with your API!!!
   // Use comma separated origins with the ALLOWED_ORIGINS environment variable
   app.enableCors({
-    allowedHeaders:
-      'Content-Type, Accept, Authorization, X-Requested-With, X-HTTP-Method-Override, Set-Cookie',
+    allowedHeaders: 'Content-Type, Accept, Authorization',
     origin: allowedOrigins,
     methods: 'GET,PUT,PATCH,POST,DELETE',
     credentials: true,
-    exposedHeaders: 'Set-Cookie',
   });
 
   await app.listen(PORT);
