@@ -71,8 +71,8 @@ export class FreeinvController {
 
   // S3 BUCKET UPLOAD
   @Post('image-upload')
-  @UseInterceptors(FileInterceptor('file'))
-  async imageUpload(@UploadedFile() file: Express.Multer.File, @Body() body) {
-    return await this.itemsService.imageUpload(file, body.name);
+  @UseInterceptors(FileInterceptor('image'))
+  async imageUpload(@UploadedFile() file: Express.Multer.File) {
+    return await this.itemsService.imageUpload(file);
   }
 }
