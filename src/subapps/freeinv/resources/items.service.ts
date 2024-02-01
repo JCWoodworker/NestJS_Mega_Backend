@@ -38,7 +38,7 @@ export class ItemsService {
   async imageUpload(file: Express.Multer.File, body: ImageSubmissionBody) {
     // Console logging the request body for now.
     // This eventually needs to be validated and used to update the row in the database
-    // that pertains to the specific location, room, or item image being uploaded
+    // that pertains to the specific location, room, or item's image being uploaded
     console.log(`Image Upload Request Body: ${JSON.stringify(body)}`);
 
     const s3Bucket = process.env.AWS_S3_BUCKET_NAME;
