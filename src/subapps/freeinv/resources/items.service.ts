@@ -5,6 +5,11 @@ import { Items } from '../entities/item.entity';
 
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
+interface ImageSubmissionBody {
+  inventoryId: string;
+  inventoryType: string;
+}
+
 @Injectable()
 export class ItemsService {
   constructor(
@@ -26,7 +31,8 @@ export class ItemsService {
     return await this.itemsRepository.save(item);
   }
 
-  async imageUpload(file: Express.Multer.File) {
+  async imageUpload(file: Express.Multer.File, body: ImageSubmissionBody) {
+    console.log(`Image Upload Request Body: ${JSON.stringify(body)}`);
     const s3Bucket = process.env.AWS_S3_BUCKET_NAME;
     const s3Client = new S3Client({
       credentials: {
