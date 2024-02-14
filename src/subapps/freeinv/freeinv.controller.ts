@@ -70,6 +70,7 @@ export class FreeinvController {
   }
 
   // S3 BUCKET UPLOAD
+  // This needs to be moved up to the general subapps controller/service
   @Post('image-upload')
   @UseInterceptors(FileInterceptor('image'))
   async imageUpload(@UploadedFile() file: Express.Multer.File, @Body() body) {
