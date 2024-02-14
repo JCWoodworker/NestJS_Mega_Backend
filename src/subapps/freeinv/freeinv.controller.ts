@@ -17,7 +17,7 @@ import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
 
 @Roles(Role.Admin, Role.Basic)
-@Controller('freeinv')
+@Controller('subapps/freeinv')
 export class FreeinvController {
   constructor(
     private readonly itemsService: ItemsService,
