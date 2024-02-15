@@ -1,6 +1,5 @@
 import {
   Controller,
-  Get,
   Post,
   Body,
   UseInterceptors,
@@ -16,11 +15,6 @@ import { FileInterceptor } from '@nestjs/platform-express';
 @Controller('subapps')
 export class SubappsController {
   constructor(private readonly subappsService: SubappsService) {}
-
-  @Get()
-  getMessage(): string {
-    return 'fuck you';
-  }
 
   // S3 BUCKET UPLOAD
   // This needs to be moved up to the general subapps controller/service
