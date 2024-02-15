@@ -8,12 +8,12 @@ import { UserSubappAccess } from './entities/userSubappAccess.entity';
 import authConfig from 'src/config/auth.config';
 
 @Module({
-  controllers: [SubappsController],
-  providers: [SubappsService],
   imports: [
     TypeOrmModule.forFeature([UserSubappAccess]),
     ConfigModule.forFeature(authConfig),
     FreeinvModule,
   ],
+  controllers: [SubappsController],
+  providers: [SubappsService],
 })
 export class SubappsModule {}
