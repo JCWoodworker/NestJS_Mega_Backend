@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { InjectRepository } from '@nestjs/typeorm';
+import { UserSubappAccess } from './entities/userSubappAccess.entity';
+import { Repository } from 'typeorm';
 
 interface ImageSubmissionBody {
   inventoryId: string;
@@ -8,6 +11,11 @@ interface ImageSubmissionBody {
 
 @Injectable()
 export class SubappsService {
+  constructor(
+    @InjectRepository(UserSubappAccess)
+    private readonly userSubappAccessRepository: Repository<UserSubappAccess>,
+  ) {}
+
   async imageUpload(file: Express.Multer.File, body: ImageSubmissionBody) {
     // Console logging the request body for now.
     // This eventually needs to be validated and used to update the row in the database
