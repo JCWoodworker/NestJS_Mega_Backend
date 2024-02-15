@@ -1,6 +1,6 @@
-import { LocationsService } from '../resources/locations.service';
-import { RoomsService } from '../resources/rooms.service';
-import { ItemsService } from '../resources/items.service';
+import { LocationsService } from '../services/locations.service';
+import { RoomsService } from '../services/rooms.service';
+import { ItemsService } from '../services/items.service';
 import { UsersService } from '../../../users/users.service';
 
 export class FreeInvSeeder {

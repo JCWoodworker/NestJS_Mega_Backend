@@ -1,20 +1,11 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Req,
-  UploadedFile,
-  UseInterceptors,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Req } from '@nestjs/common';
 
-import { LocationsService } from './resources/locations.service';
-import { RoomsService } from './resources/rooms.service';
-import { ItemsService } from './resources/items.service';
+import { LocationsService } from './services/locations.service';
+import { RoomsService } from './services/rooms.service';
+import { ItemsService } from './services/items.service';
 
 import { Role } from 'src/users/enums/role.enum';
 import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
-import { FileInterceptor } from '@nestjs/platform-express';
 
 @Roles(Role.Admin, Role.Basic)
 @Controller('subapps/freeinv')
@@ -62,18 +53,9 @@ export class FreeinvController {
     return this.itemsService.create(body, userId);
   }
 
-  // ALL USER DATA
-  @Get('complete-location')
+  @Get('all-user-data')
   async getAllLocationsWithRoomsAndItems(@Req() request) {
     const userId = request.user.sub;
     return this.locationsService.getAllLocationsWithRoomsAndItems(userId);
-  }
-
-  // S3 BUCKET UPLOAD
-  // This needs to be moved up to the general subapps controller/service
-  @Post('image-upload')
-  @UseInterceptors(FileInterceptor('image'))
-  async imageUpload(@UploadedFile() file: Express.Multer.File, @Body() body) {
-    return await this.itemsService.imageUpload(file, body);
   }
 }

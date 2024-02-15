@@ -7,9 +7,9 @@ import { ConfigModule } from '@nestjs/config';
 
 import { FreeinvController } from './freeinv.controller';
 
-import { LocationsService } from './resources/locations.service';
-import { RoomsService } from './resources/rooms.service';
-import { ItemsService } from './resources/items.service';
+import { LocationsService } from './services/locations.service';
+import { RoomsService } from './services/rooms.service';
+import { ItemsService } from './services/items.service';
 
 import { Locations } from './entities/location.entity';
 import { Rooms } from './entities/room.entity';
