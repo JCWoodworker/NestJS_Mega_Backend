@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddUserSubTierAndAccessTable1707955411994
-  implements MigrationInterface
-{
+export class AddUserSubappAccess1707955411994 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     queryRunner.query(
       `CREATE TABLE "userSubappAccess" (
