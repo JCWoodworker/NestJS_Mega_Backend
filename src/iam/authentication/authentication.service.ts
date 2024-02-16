@@ -18,6 +18,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RefreshTokensService } from './refresh-token-storage/refresh-token-storage.service';
 import { randomUUID } from 'crypto';
 import { InvalidateRefreshTokenError } from './refresh-token-storage/invalidate-refresh-token-error';
+import { SubappsService } from 'src/subapps/resources/subapps.service';
 
 @Injectable()
 export class AuthenticationService {
@@ -29,6 +30,7 @@ export class AuthenticationService {
     private readonly jwtService: JwtService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
+    private readonly subappsService: SubappsService,
   ) {}
 
   async signUp(signUpDto: SignUpDto) {
@@ -37,6 +39,7 @@ export class AuthenticationService {
       user.email = signUpDto.email.toLowerCase();
       user.password = await this.hashingService.hash(signUpDto.password);
       await this.usersRepository.save(user);
+      await this.subappsService.updateSubappUserData();
       return `User ${signUpDto.email} created successfully`;
     } catch (err) {
       const pgUniqueViolationErrorCode = '23505';

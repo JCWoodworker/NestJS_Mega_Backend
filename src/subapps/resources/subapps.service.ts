@@ -50,4 +50,8 @@ export class SubappsService {
       };
     }
   }
+
+  async updateSubappUserData() {
+    return { message: 'not yet implemented' };
+  }
 }
