@@ -1,11 +1,12 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
 import { UserSubappAccess } from '../../subapps/resources/entities/userSubappAccess.entity';
 import { Role } from '../enums/role.enum';
+import { UUID } from 'crypto';
 
 @Entity()
 export class Users {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id: UUID;
 
   @OneToMany(
     () => UserSubappAccess,

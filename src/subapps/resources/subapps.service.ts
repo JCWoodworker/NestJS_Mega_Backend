@@ -3,6 +3,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { InjectRepository } from '@nestjs/typeorm';
 import { UserSubappAccess } from './entities/userSubappAccess.entity';
 import { Repository } from 'typeorm';
+import { UUID } from 'crypto';
 
 interface ImageSubmissionBody {
   inventoryId: string;
@@ -51,14 +52,17 @@ export class SubappsService {
     }
   }
 
-  async addSubappUserData(userId: string, subappId: string) {
+  async addSubappUserData(userId: UUID, subappId: string) {
     try {
       const userSubappData = new UserSubappAccess();
       userSubappData.userId = userId;
       userSubappData.appId = subappId;
+      debugger;
       await this.userSubappAccessRepository.save(userSubappData);
+      debugger;
       return { message: 'Subapp user data added successfully' };
     } catch (err) {
+      debugger;
       const pgUniqueViolationErrorCode = '23505';
       if (err.code === pgUniqueViolationErrorCode) {
         throw new ConflictException();

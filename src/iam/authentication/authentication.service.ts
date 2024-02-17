@@ -43,6 +43,7 @@ export class AuthenticationService {
       await this.subappsService.addSubappUserData(user.id, signUpDto.subappId);
       return `User ${signUpDto.email} created successfully`;
     } catch (err) {
+      debugger;
       const pgUniqueViolationErrorCode = '23505';
       if (err.code === pgUniqueViolationErrorCode) {
         throw new ConflictException();
