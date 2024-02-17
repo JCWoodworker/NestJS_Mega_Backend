@@ -12,7 +12,7 @@ export class UserSubappAccess {
   appId: string;
 
   @Column()
-  subscription_tier: number;
+  subscription_tier: string;
 
   @Column()
   access_level: string;

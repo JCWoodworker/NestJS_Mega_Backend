@@ -3,6 +3,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { InjectRepository } from '@nestjs/typeorm';
 import { UserSubappAccess } from './entities/userSubappAccess.entity';
 import { Repository } from 'typeorm';
+import { Users } from 'src/users/entities/users.entity';
 
 interface ImageSubmissionBody {
   inventoryId: string;
@@ -51,8 +52,8 @@ export class SubappsService {
     }
   }
 
-  async updateSubappUserData(user: unknown, subappId: string) {
-    debugger
+  async updateSubappUserData(user: Users, subappId: string) {
+    debugger;
     console.log('user' + JSON.stringify(user, null, 2));
     console.log('subappID' + subappId);
     return { message: 'not yet implemented' };
