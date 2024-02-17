@@ -52,7 +52,7 @@ export class SubappsService {
     }
   }
 
-  async updateSubappUserData(user: Users, subappId: string) {
+  async addSubappUserData(user: Users, subappId: string) {
     debugger;
     console.log('user' + JSON.stringify(user, null, 2));
     console.log('subappID' + subappId);

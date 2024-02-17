@@ -43,7 +43,7 @@ export class GoogleAuthenticationService implements OnModuleInit {
       } else {
         const newUser = await this.usersRepository.save({ email, googleId });
         // Need to get subapp ID from client on google login
-        await this.subappsService.updateSubappUserData(newUser, subappId);
+        await this.subappsService.addSubappUserData(newUser, subappId);
         const tokens = await this.authService.generateTokens(newUser);
         return { tokens };
       }
