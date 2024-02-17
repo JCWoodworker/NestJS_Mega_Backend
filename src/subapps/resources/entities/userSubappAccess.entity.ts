@@ -1,11 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
+import { Users } from 'src/users/entities/users.entity';
 
 @Entity()
 export class UserSubappAccess {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @ManyToOne(() => Users, (user) => user.id)
   userId: string;
 
   @Column()

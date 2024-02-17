@@ -56,7 +56,6 @@ export class SubappsService {
       const userSubappData = new UserSubappAccess();
       userSubappData.userId = userId;
       userSubappData.appId = subappId;
-      // Getting a 401 error when running this query
       await this.userSubappAccessRepository.save(userSubappData);
       return { message: 'Subapp user data added successfully' };
     } catch (err) {
