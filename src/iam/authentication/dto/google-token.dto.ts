@@ -6,4 +6,7 @@ export class GoogleTokenDto {
 
   @IsOptional()
   subappId?: string;
+
+  @IsOptional()
+  subscriptionTier?: string;
 }
