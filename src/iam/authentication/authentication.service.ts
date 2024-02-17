@@ -39,7 +39,7 @@ export class AuthenticationService {
       user.email = signUpDto.email.toLowerCase();
       user.password = await this.hashingService.hash(signUpDto.password);
       await this.usersRepository.save(user);
-      await this.subappsService.updateSubappUserData();
+      await this.subappsService.updateSubappUserData(user, signUpDto.subappId);
       return `User ${signUpDto.email} created successfully`;
     } catch (err) {
       const pgUniqueViolationErrorCode = '23505';

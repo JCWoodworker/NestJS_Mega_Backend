@@ -10,6 +10,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { Repository } from 'typeorm';
 import { Users } from '../../../users/entities/users.entity';
 import { AuthenticationService } from '../authentication.service';
+import { SubappsService } from 'src/subapps/resources/subapps.service';
 
 @Injectable()
 export class GoogleAuthenticationService implements OnModuleInit {
@@ -20,6 +21,7 @@ export class GoogleAuthenticationService implements OnModuleInit {
     private readonly authService: AuthenticationService,
     @InjectRepository(Users)
     private readonly usersRepository: Repository<Users>,
+    private readonly subappsService: SubappsService,
   ) {}
 
   onModuleInit() {
@@ -28,7 +30,7 @@ export class GoogleAuthenticationService implements OnModuleInit {
     this.oauthClient = new OAuth2Client(clientId, clientSecret);
   }
 
-  async authenticate(token: string) {
+  async authenticate(token: string, subappId?: string) {
     try {
       const loginTicket = await this.oauthClient.verifyIdToken({
         idToken: token,
@@ -40,6 +42,8 @@ export class GoogleAuthenticationService implements OnModuleInit {
         return { tokens };
       } else {
         const newUser = await this.usersRepository.save({ email, googleId });
+        // Need to get subapp ID from client on google login
+        await this.subappsService.updateSubappUserData(newUser, subappId);
         const tokens = await this.authService.generateTokens(newUser);
         return { tokens };
       }
