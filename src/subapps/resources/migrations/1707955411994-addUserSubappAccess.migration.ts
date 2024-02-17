@@ -10,7 +10,8 @@ export class AddUserSubappAccess1707955411994 implements MigrationInterface {
         "subscription_tier" character varying NOT NULL DEFAULT 'basic',
         "access_level" character varying NOT NULL DEFAULT 'basic',
         "created_at" TIMESTAMP NOT NULL DEFAULT now(),
-        "updated_at" TIMESTAMP NOT NULL DEFAULT now()
+        "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
+        CONSTRAINT "FK_USER_SUBAPP_ACCESS_USER" FOREIGN KEY ("userId") REFERENCES "users" ("id")
       )`,
     );
   }
