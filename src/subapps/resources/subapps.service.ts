@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { InjectRepository } from '@nestjs/typeorm';
 import { UserSubappAccess } from './entities/userSubappAccess.entity';
@@ -53,9 +53,18 @@ export class SubappsService {
   }
 
   async addSubappUserData(user: Users, subappId: string) {
-    debugger;
-    console.log('user' + JSON.stringify(user, null, 2));
-    console.log('subappID' + subappId);
-    return { message: 'not yet implemented' };
+    try {
+      const userSubappData = new UserSubappAccess();
+      userSubappData.userId = user.id;
+      userSubappData.appId = subappId;
+      await this.userSubappAccessRepository.save(userSubappData);
+      return { message: 'Subapp user data added successfully' };
+    } catch (err) {
+      const pgUniqueViolationErrorCode = '23505';
+      if (err.code === pgUniqueViolationErrorCode) {
+        throw new ConflictException();
+      }
+      throw err;
+    }
   }
 }
