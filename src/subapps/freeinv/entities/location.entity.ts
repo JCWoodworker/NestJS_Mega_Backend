@@ -1,6 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
 import { Rooms } from './room.entity';
-
 @Entity()
 export class Locations {
   @PrimaryGeneratedColumn()
@@ -17,9 +16,6 @@ export class Locations {
 
   @OneToMany(() => Rooms, (rooms) => rooms.location)
   rooms: Rooms[];
-
-  @Column()
-  userId: string;
 
   @Column()
   created_at: Date;
