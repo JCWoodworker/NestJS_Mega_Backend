@@ -3,7 +3,6 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { InjectRepository } from '@nestjs/typeorm';
 import { UserSubappAccess } from './entities/userSubappAccess.entity';
 import { Repository } from 'typeorm';
-import { Users } from 'src/users/entities/users.entity';
 
 interface ImageSubmissionBody {
   inventoryId: string;
@@ -52,11 +51,12 @@ export class SubappsService {
     }
   }
 
-  async addSubappUserData(user: Users, subappId: string) {
+  async addSubappUserData(userId: string, subappId: string) {
     try {
       const userSubappData = new UserSubappAccess();
-      userSubappData.userId = user.id;
+      userSubappData.userId = userId;
       userSubappData.appId = subappId;
+      // Getting a 401 error when running this query
       await this.userSubappAccessRepository.save(userSubappData);
       return { message: 'Subapp user data added successfully' };
     } catch (err) {

@@ -3,7 +3,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 export class AddUserSubappAccess1707955411994 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     queryRunner.query(
-      `CREATE TABLE "userSubappAccess" (
+      `CREATE TABLE "user_subapp_access" (
         "id" SERIAL NOT NULL PRIMARY KEY,
         "userId" character varying NOT NULL,
         "appId" character varying NOT NULL,
