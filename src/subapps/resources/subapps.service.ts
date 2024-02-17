@@ -52,11 +52,18 @@ export class SubappsService {
     }
   }
 
-  async addSubappUserData(userId: string, subappId: string) {
+  // This is only used by authentication service to add subapp user data on sign up
+  async addSubappUserData(
+    userId: string,
+    subappId: string,
+    subscriptionTier: string,
+  ) {
     try {
       const userSubappData = new UserSubappAccess();
       userSubappData.userId = userId as UUID;
       userSubappData.appId = subappId;
+      userSubappData.subscription_tier = subscriptionTier;
+
       await this.userSubappAccessRepository.save(userSubappData);
       return { message: 'Subapp user data added successfully' };
     } catch (err) {

@@ -42,6 +42,7 @@ export class AuthenticationService {
       await this.subappsService.addSubappUserData(
         user.id.toString(),
         signUpDto.subappId,
+        signUpDto.subscriptionTier,
       );
       return `User ${signUpDto.email} created successfully`;
     } catch (err) {

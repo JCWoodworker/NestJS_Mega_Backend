@@ -9,4 +9,8 @@ export class SignUpDto {
 
   @IsString()
   subappId: string;
+
+  // Subscription tier must be 'basic', 'mid', 'high', or 'unlimited'
+  @IsString()
+  subscriptionTier: string;
 }

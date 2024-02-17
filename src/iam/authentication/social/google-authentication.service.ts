@@ -30,7 +30,11 @@ export class GoogleAuthenticationService implements OnModuleInit {
     this.oauthClient = new OAuth2Client(clientId, clientSecret);
   }
 
-  async authenticate(token: string, subappId?: string) {
+  async authenticate(
+    token: string,
+    subappId?: string,
+    subscription_tier?: string,
+  ) {
     try {
       const loginTicket = await this.oauthClient.verifyIdToken({
         idToken: token,
@@ -43,7 +47,11 @@ export class GoogleAuthenticationService implements OnModuleInit {
       } else {
         const newUser = await this.usersRepository.save({ email, googleId });
         // Need to get subapp ID from client on google login
-        await this.subappsService.addSubappUserData(newUser.id, subappId);
+        await this.subappsService.addSubappUserData(
+          newUser.id,
+          subappId,
+          subscription_tier,
+        );
         const tokens = await this.authService.generateTokens(newUser);
         return { tokens };
       }
