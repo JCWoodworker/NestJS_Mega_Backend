@@ -16,7 +16,7 @@ import { ConfigType } from '@nestjs/config';
 import { ActiveUserData } from '../interfaces/active-user-data.interface';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RefreshTokensService } from './refresh-token-storage/refresh-token-storage.service';
-import { randomUUID } from 'crypto';
+import { UUID, randomUUID } from 'crypto';
 import { InvalidateRefreshTokenError } from './refresh-token-storage/invalidate-refresh-token-error';
 import { SubappsService } from 'src/subapps/resources/subapps.service';
 
@@ -40,7 +40,10 @@ export class AuthenticationService {
       user.password = await this.hashingService.hash(signUpDto.password);
       await this.usersRepository.save(user);
       debugger;
-      await this.subappsService.addSubappUserData(user.id, signUpDto.subappId);
+      await this.subappsService.addSubappUserData(
+        user.id.toString(),
+        signUpDto.subappId,
+      );
       return `User ${signUpDto.email} created successfully`;
     } catch (err) {
       debugger;
@@ -121,7 +124,9 @@ export class AuthenticationService {
         issuer: this.jwtConfiguration.issuer,
         audience: this.jwtConfiguration.audience,
       });
-      const user = await this.usersRepository.findOneByOrFail({ id: sub });
+      const user = await this.usersRepository.findOneByOrFail({
+        id: sub as UUID,
+      });
       const isValid =
         await this.refreshTokenStorageService.validateRefreshToken(
           user.id,

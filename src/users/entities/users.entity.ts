@@ -1,5 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
-import { UserSubappAccess } from '../../subapps/resources/entities/userSubappAccess.entity';
+import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 import { Role } from '../enums/role.enum';
 import { UUID } from 'crypto';
 
@@ -7,12 +6,6 @@ import { UUID } from 'crypto';
 export class Users {
   @PrimaryGeneratedColumn('uuid')
   id: UUID;
-
-  @OneToMany(
-    () => UserSubappAccess,
-    (userSubappAccess) => userSubappAccess.userId,
-  )
-  userSubappAccess: UserSubappAccess[];
 
   @Column({ unique: true })
   email: string;

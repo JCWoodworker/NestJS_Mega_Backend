@@ -1,5 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { Users } from 'src/users/entities/users.entity';
+import { UUID } from 'crypto';
 
 @Entity()
 export class UserSubappAccess {
@@ -7,7 +14,8 @@ export class UserSubappAccess {
   id: number;
 
   @ManyToOne(() => Users, (user) => user.id)
-  userId: string;
+  @JoinColumn({ name: 'userId' })
+  userId: UUID;
 
   @Column()
   appId: string;

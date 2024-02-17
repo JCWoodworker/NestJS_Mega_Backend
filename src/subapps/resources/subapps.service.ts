@@ -52,16 +52,17 @@ export class SubappsService {
     }
   }
 
-  async addSubappUserData(userId: UUID, subappId: string) {
+  async addSubappUserData(userId: string, subappId: string) {
     try {
       const userSubappData = new UserSubappAccess();
-      userSubappData.userId = userId;
+      userSubappData.userId = userId as UUID;
       userSubappData.appId = subappId;
       debugger;
       await this.userSubappAccessRepository.save(userSubappData);
       debugger;
       return { message: 'Subapp user data added successfully' };
     } catch (err) {
+      console.log(JSON.stringify(err));
       debugger;
       const pgUniqueViolationErrorCode = '23505';
       if (err.code === pgUniqueViolationErrorCode) {
