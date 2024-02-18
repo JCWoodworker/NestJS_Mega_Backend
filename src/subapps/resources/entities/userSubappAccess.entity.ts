@@ -18,7 +18,7 @@ export class UserSubappAccess {
   userId: UUID;
 
   @Column()
-  appId: string;
+  subappId: string;
 
   @Column()
   subscription_tier: string;

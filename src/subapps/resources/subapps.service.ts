@@ -61,7 +61,7 @@ export class SubappsService {
     try {
       const userSubappData = new UserSubappAccess();
       userSubappData.userId = userId as UUID;
-      userSubappData.appId = subappId;
+      userSubappData.subappId = subappId;
       userSubappData.subscription_tier = subscriptionTier;
 
       await this.userSubappAccessRepository.save(userSubappData);
@@ -72,6 +72,28 @@ export class SubappsService {
       if (err.code === pgUniqueViolationErrorCode) {
         throw new ConflictException();
       }
+      throw err;
+    }
+  }
+
+  async findOneByUserIdAndSubappId(userId: string, subappId: string) {
+    debugger;
+    try {
+      const userSubappData = await this.userSubappAccessRepository.findOne({
+        where: {
+          userId: userId as UUID,
+          subappId,
+        },
+      });
+      debugger;
+      if (userSubappData) {
+        return true;
+      } else {
+        return false;
+      }
+    } catch (err) {
+      debugger;
+      console.log(JSON.stringify(err));
       throw err;
     }
   }
