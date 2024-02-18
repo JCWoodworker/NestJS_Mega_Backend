@@ -70,6 +70,11 @@ export class AuthenticationService {
       throw new UnauthorizedException('Password does not match');
     }
     const tokens = await this.generateTokens(user);
+    const userId = user.id;
+    const userSubappData = await this.subappsService.findOneByUserIdAndSubappId(
+      userId,
+      signInDto.subappId,
+    );
     return { tokens };
   }
 
