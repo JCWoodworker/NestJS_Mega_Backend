@@ -4,7 +4,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { UserSubappAccess } from './entities/userSubappAccess.entity';
 import { Repository } from 'typeorm';
 import { UUID } from 'crypto';
-import { v4 as uuidv4 } from 'uuid';
 
 interface ImageSubmissionBody {
   inventoryId: string;
@@ -77,16 +76,16 @@ export class SubappsService {
     }
   }
 
-  async findOneByUserIdAndSubappId(userId: UUID, subappId: string) {
-    try {
-      const result = await this.userSubappAccessRepository.findOneBy({
-        userId,
-        subappId,
-      });
-      debugger;
-    } catch (err) {
-      debugger;
-      throw err;
-    }
-  }
+  // async findOneByUserIdAndSubappId(userId: UUID, subappId: string) {
+  //   try {
+  //     const result = await this.userSubappAccessRepository.findOneBy({
+  //       userId,
+  //       subappId,
+  //     });
+  //     debugger;
+  //   } catch (err) {
+  //     debugger;
+  //     throw err;
+  //   }
+  // }
 }

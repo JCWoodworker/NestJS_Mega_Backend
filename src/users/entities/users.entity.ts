@@ -1,11 +1,10 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 import { Role } from '../enums/role.enum';
-import { UUID } from 'crypto';
 
 @Entity()
 export class Users {
   @PrimaryGeneratedColumn('uuid')
-  id: UUID;
+  id: string;
 
   @Column({ unique: true })
   email: string;

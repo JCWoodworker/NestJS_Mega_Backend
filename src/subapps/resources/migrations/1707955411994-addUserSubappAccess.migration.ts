@@ -5,7 +5,7 @@ export class AddUserSubappAccess1707955411994 implements MigrationInterface {
     queryRunner.query(
       `CREATE TABLE "user_subapp_access" (
         "id" SERIAL NOT NULL PRIMARY KEY,
-        "userId" uuid NOT NULL,
+        "userId" character varying NOT NULL,
         "subappId" character varying NOT NULL,
         "subscription_tier" character varying NOT NULL DEFAULT 'basic',
         "access_level" character varying NOT NULL DEFAULT 'basic',

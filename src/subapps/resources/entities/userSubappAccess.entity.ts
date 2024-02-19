@@ -6,7 +6,6 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Users } from 'src/users/entities/users.entity';
-import { UUID } from 'crypto';
 
 @Entity()
 export class UserSubappAccess {
@@ -15,7 +14,7 @@ export class UserSubappAccess {
 
   @ManyToOne(() => Users, (user) => user.id)
   @JoinColumn({ name: 'userId' })
-  userId: UUID;
+  userId: string;
 
   @Column()
   subappId: string;
