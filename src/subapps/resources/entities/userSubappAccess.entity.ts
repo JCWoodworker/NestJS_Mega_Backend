@@ -14,7 +14,8 @@ export class UserSubappAccess {
 
   // @ManyToOne(() => Users, (user) => user.id)
   // @JoinColumn({ name: 'userId' })
-  // userId: string;
+  @Column()
+  userId: string;
 
   @Column()
   subappId: string;
