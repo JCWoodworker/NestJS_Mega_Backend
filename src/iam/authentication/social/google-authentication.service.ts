@@ -43,16 +43,16 @@ export class GoogleAuthenticationService implements OnModuleInit {
       const user = await this.usersRepository.findOneBy({ googleId });
       if (user) {
         const userId = user.id.toString();
-        const authResult = await this.subappsService.findOneByUserIdAndSubappId(
-          userId,
-          subappId,
-        );
-        if (!authResult) {
-          await this.subappsService.addSubappUserData(
+        const userSubappAccessExists =
+          await this.subappsService.findOneByUserIdAndSubappId(
             userId,
             subappId,
-            subscription_tier,
           );
+        if (!userSubappAccessExists) {
+          return {
+            message:
+              'User does not have access to this subapp.  Please sign up for this subapp first',
+          };
         }
         const tokens = await this.authService.generateTokens(user);
         return { tokens };
