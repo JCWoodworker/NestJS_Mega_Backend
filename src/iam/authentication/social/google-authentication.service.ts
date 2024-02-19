@@ -42,6 +42,12 @@ export class GoogleAuthenticationService implements OnModuleInit {
       const { email, sub: googleId } = loginTicket.getPayload();
       const user = await this.usersRepository.findOneBy({ googleId });
       if (user) {
+        const userId = user.id.toString();
+        const authResult = await this.subappsService.findOneByUserIdAndSubappId(
+          userId,
+          subappId,
+        );
+        debugger;
         const tokens = await this.authService.generateTokens(user);
         return { tokens };
       } else {

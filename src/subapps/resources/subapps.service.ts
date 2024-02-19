@@ -75,16 +75,12 @@ export class SubappsService {
     }
   }
 
-  // async findOneByUserIdAndSubappId(userId: string, subappId: string) {
-  //   try {
-  //     const result = await this.userSubappAccessRepository.findOneBy({
-  //       userId,
-  //       subappId,
-  //     });
-  //     debugger;
-  //   } catch (err) {
-  //     debugger;
-  //     throw err;
-  //   }
-  // }
+  async findOneByUserIdAndSubappId(userId: string, subappId: string) {
+    try {
+      const subappResult = await this.userSubappAccessRepository.find();
+    } catch (err) {
+      debugger;
+      throw err;
+    }
+  }
 }

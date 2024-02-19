@@ -2,19 +2,19 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
-  ManyToOne,
-  JoinColumn,
+  // ManyToOne,
+  // JoinColumn,
 } from 'typeorm';
-import { Users } from 'src/users/entities/users.entity';
+// import { Users } from 'src/users/entities/users.entity';
 
 @Entity()
 export class UserSubappAccess {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => Users, (user) => user.id)
-  @JoinColumn({ name: 'userId' })
-  userId: string;
+  // @ManyToOne(() => Users, (user) => user.id)
+  // @JoinColumn({ name: 'userId' })
+  // userId: string;
 
   @Column()
   subappId: string;
