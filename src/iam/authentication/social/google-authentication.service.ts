@@ -49,10 +49,11 @@ export class GoogleAuthenticationService implements OnModuleInit {
             subappId,
           );
         if (!userSubappAccessExists) {
-          return {
-            message:
-              'User does not have access to this subapp.  Please sign up for this subapp first',
-          };
+          await this.subappsService.addSubappUserData(
+            userId,
+            subappId,
+            subscription_tier,
+          );
         }
         const tokens = await this.authService.generateTokens(user);
         return { tokens };
