@@ -48,6 +48,10 @@ export class GoogleAuthenticationService implements OnModuleInit {
             userId,
             subappId,
           );
+        /* 
+        WE'RE NOW SENDING 'signin' OR 'signup' ACTION TO THE AUTHENTICATION SERVICE
+        THIS IS YET TO BE HANDLED HERE, BUT WILL BE ASAP.
+        */
         if (!userSubappAccessExists) {
           await this.subappsService.addSubappUserData(
             userId,
