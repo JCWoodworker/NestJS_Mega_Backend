@@ -3,7 +3,6 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { InjectRepository } from '@nestjs/typeorm';
 import { UserSubappAccess } from './entities/userSubappAccess.entity';
 import { Repository } from 'typeorm';
-import { UUID } from 'crypto';
 
 interface ImageSubmissionBody {
   inventoryId: string;
@@ -60,7 +59,7 @@ export class SubappsService {
   ) {
     try {
       const userSubappData = new UserSubappAccess();
-      userSubappData.userId = userId as UUID;
+      userSubappData.userId = userId;
       userSubappData.subappId = subappId;
       userSubappData.subscription_tier = subscriptionTier;
 
@@ -76,7 +75,7 @@ export class SubappsService {
     }
   }
 
-  // async findOneByUserIdAndSubappId(userId: UUID, subappId: string) {
+  // async findOneByUserIdAndSubappId(userId: string, subappId: string) {
   //   try {
   //     const result = await this.userSubappAccessRepository.findOneBy({
   //       userId,

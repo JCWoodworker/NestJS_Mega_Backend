@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Users } from './entities/users.entity';
-import { UUID } from 'crypto';
 
 @Injectable()
 export class UsersService {
@@ -23,7 +22,7 @@ export class UsersService {
 
   async findOneById(id: string) {
     const user = await this.usersRepository.findOne({
-      where: { id: id as UUID },
+      where: { id },
     });
     return {
       id: user.id,

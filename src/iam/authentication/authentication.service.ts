@@ -16,7 +16,7 @@ import { ConfigType } from '@nestjs/config';
 import { ActiveUserData } from '../interfaces/active-user-data.interface';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RefreshTokensService } from './refresh-token-storage/refresh-token-storage.service';
-import { UUID, randomUUID } from 'crypto';
+import { randomUUID } from 'crypto';
 import { InvalidateRefreshTokenError } from './refresh-token-storage/invalidate-refresh-token-error';
 import { SubappsService } from 'src/subapps/resources/subapps.service';
 
@@ -124,7 +124,7 @@ export class AuthenticationService {
         audience: this.jwtConfiguration.audience,
       });
       const user = await this.usersRepository.findOneByOrFail({
-        id: sub as UUID,
+        id: sub,
       });
       const isValid =
         await this.refreshTokenStorageService.validateRefreshToken(
