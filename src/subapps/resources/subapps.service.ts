@@ -77,9 +77,17 @@ export class SubappsService {
 
   async findOneByUserIdAndSubappId(userId: string, subappId: string) {
     try {
-      const subappResult = await this.userSubappAccessRepository.find();
+      await this.userSubappAccessRepository.findOneByOrFail({
+        userId,
+        subappId,
+      });
+      return true;
     } catch (err) {
-      debugger;
+      console.log(JSON.stringify(err));
+      if (err.message.includes('Could not find any entity of type')) {
+        console.log('you got it dude');
+        return false;
+      }
       throw err;
     }
   }

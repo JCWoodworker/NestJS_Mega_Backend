@@ -69,6 +69,17 @@ export class AuthenticationService {
     if (!isEqual) {
       throw new UnauthorizedException('Password does not match');
     }
+    const userSubappAccessExists =
+      await this.subappsService.findOneByUserIdAndSubappId(
+        user.id,
+        signInDto.subappId,
+      );
+    if (!userSubappAccessExists) {
+      return {
+        message:
+          'User does not have access to this subapp.  Please sign up for this subapp first',
+      };
+    }
     const tokens = await this.generateTokens(user);
     return { tokens };
   }

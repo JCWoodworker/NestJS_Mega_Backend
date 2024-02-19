@@ -47,7 +47,13 @@ export class GoogleAuthenticationService implements OnModuleInit {
           userId,
           subappId,
         );
-        debugger;
+        if (!authResult) {
+          await this.subappsService.addSubappUserData(
+            userId,
+            subappId,
+            subscription_tier,
+          );
+        }
         const tokens = await this.authService.generateTokens(user);
         return { tokens };
       } else {
