@@ -43,6 +43,12 @@ export class GoogleAuthenticationService implements OnModuleInit {
       const user = await this.usersRepository.findOneBy({ googleId });
       if (user) {
         const tokens = await this.authService.generateTokens(user);
+        const isAlreadySubappUser =
+          await this.subappsService.findOneByUserIdAndSubappId(
+            user.id,
+            subappId,
+          );
+        debugger;
         return { tokens };
       } else {
         const newUser = await this.usersRepository.save({ email, googleId });

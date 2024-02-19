@@ -77,21 +77,15 @@ export class SubappsService {
     }
   }
 
-  async findOneByUserIdAndSubappId(userId: string, subappId: string) {
-    const sqlQuery = this.userSubappAccessRepository
-      .createQueryBuilder()
-      .select()
-      .where('userId = :userId', { userId: userId as UUID })
-      .andWhere('subappId = :subappId', { subappId })
-      .getSql();
-    console.log(sqlQuery);
-    debugger;
+  async findOneByUserIdAndSubappId(userId: UUID, subappId: string) {
     try {
-      const userSubappData = await this.userSubappAccessRepository.findOneBy({
-        userId: userId as UUID,
+      const result = await this.userSubappAccessRepository.findOneBy({
+        userId,
         subappId,
-      })
+      });
+      debugger;
     } catch (err) {
+      debugger;
       throw err;
     }
   }
