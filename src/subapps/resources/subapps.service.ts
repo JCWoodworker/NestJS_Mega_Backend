@@ -83,7 +83,6 @@ export class SubappsService {
       });
       return true;
     } catch (err) {
-      console.log(JSON.stringify(err));
       if (err.message.includes('Could not find any entity of type')) {
         return false;
       } else {

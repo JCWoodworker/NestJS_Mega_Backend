@@ -63,7 +63,7 @@ export class GoogleAuthenticationService implements OnModuleInit {
           return {
             status: 403,
             message:
-              'This user has authenticated successfully, but does not have access to this specific subapp.  Please sign up for this subapp first',
+              'You have authenticated successfully, but you do not have access to this specific subapp.  Please sign up for this subapp first',
           };
         }
         const tokens = await this.authService.generateTokens(user);
