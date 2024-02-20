@@ -16,6 +16,6 @@ export class AddFreeinvLocations1704335944858 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    queryRunner.query(`DROP TABLE "locations"`);
+    await queryRunner.query(`DROP TABLE "locations"`);
   }
 }

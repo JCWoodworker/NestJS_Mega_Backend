@@ -1,6 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
 import { Rooms } from './room.entity';
-
 @Entity()
 export class Locations {
   @PrimaryGeneratedColumn()

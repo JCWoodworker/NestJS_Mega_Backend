@@ -22,7 +22,7 @@ export class UsersService {
 
   async findOneById(id: string) {
     const user = await this.usersRepository.findOne({
-      where: { id: id },
+      where: { id },
     });
     return {
       id: user.id,
