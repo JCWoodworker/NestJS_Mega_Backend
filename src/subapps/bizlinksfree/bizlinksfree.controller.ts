@@ -16,7 +16,7 @@ export class BizlinksfreeController {
   @Auth(AuthType.None)
   @Get()
   async chillOut() {
-    return { message: 'Chill the fuck out bro!' };
+    return { message: 'Chill out bro ... this is Biz Links FREE!!!' };
   }
   // findAll() {
   //   return this.bizlinksfreeService.findAll();
