@@ -85,10 +85,10 @@ export class SubappsService {
     } catch (err) {
       console.log(JSON.stringify(err));
       if (err.message.includes('Could not find any entity of type')) {
-        console.log('you got it dude');
         return false;
+      } else {
+        throw err;
       }
-      throw err;
     }
   }
 }

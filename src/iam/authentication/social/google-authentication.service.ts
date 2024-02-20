@@ -32,7 +32,8 @@ export class GoogleAuthenticationService implements OnModuleInit {
 
   async authenticate(
     token: string,
-    subappId?: string,
+    subappId: string,
+    signUpOrIn: string,
     subscription_tier?: string,
   ) {
     try {
@@ -52,12 +53,18 @@ export class GoogleAuthenticationService implements OnModuleInit {
         WE'RE NOW SENDING 'signin' OR 'signup' ACTION TO THE AUTHENTICATION SERVICE
         THIS IS YET TO BE HANDLED HERE, BUT WILL BE ASAP.
         */
-        if (!userSubappAccessExists) {
+        if (!userSubappAccessExists && signUpOrIn === 'signup') {
           await this.subappsService.addSubappUserData(
             userId,
             subappId,
             subscription_tier,
           );
+        } else if (!userSubappAccessExists && signUpOrIn === 'signin') {
+          return {
+            status: 403,
+            message:
+              'This user has authenticated successfully, but does not have access to this specific subapp.  Please sign up for this subapp first',
+          };
         }
         const tokens = await this.authService.generateTokens(user);
         return { tokens };

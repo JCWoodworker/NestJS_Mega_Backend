@@ -16,6 +16,7 @@ export class GoogleAuthenticationController {
     return this.googleAuthService.authenticate(
       tokenDto.token,
       tokenDto.subappId,
+      tokenDto.signUpOrIn,
       tokenDto.subscriptionTier,
     );
   }

@@ -1,11 +1,15 @@
-import { IsNotEmpty, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsEnum } from 'class-validator';
+import { AuthActionType } from './dto.enum';
 
 export class GoogleTokenDto {
   @IsNotEmpty()
   token: string;
 
   @IsOptional()
-  subappId?: string;
+  subappId: string;
+
+  @IsEnum(AuthActionType)
+  signUpOrIn: string;
 
   @IsOptional()
   subscriptionTier?: string;
