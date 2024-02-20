@@ -30,6 +30,7 @@ async function bootstrap() {
       },
     }),
   );
+
   app.use(cookieParser());
 
   // Set views engine with handlebars

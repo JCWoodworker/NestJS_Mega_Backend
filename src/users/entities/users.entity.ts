@@ -17,4 +17,10 @@ export class Users {
 
   @Column({ nullable: true })
   googleId: string;
+
+  @Column()
+  created_at: Date;
+
+  @Column()
+  updated_at: Date;
 }

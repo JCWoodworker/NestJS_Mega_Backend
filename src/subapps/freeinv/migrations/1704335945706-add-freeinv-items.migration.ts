@@ -12,12 +12,17 @@ export class AddFreeinvItems1704335945706 implements MigrationInterface {
         "userId" character varying NOT NULL,
         "created_at" TIMESTAMP NOT NULL DEFAULT now(),
         "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
-        CONSTRAINT "FK_Items_Room" FOREIGN KEY ("roomId") REFERENCES "rooms"("id")
+        CONSTRAINT "FK_Items_Room"
+          FOREIGN KEY ("roomId") 
+          REFERENCES "rooms"("id")
       )`,
     );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    queryRunner.query(`DROP TABLE "items"`);
+    await queryRunner.query(
+      `ALTER TABLE "items" DROP CONSTRAINT "FK_Items_Room"`,
+    );
+    await queryRunner.query(`DROP TABLE "items"`);
   }
 }

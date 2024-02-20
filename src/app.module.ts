@@ -19,8 +19,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { RolesGuard } from './iam/authorization/guards/roles.guard';
 import { AuthenticationGuard } from './iam/authentication/guards/authentication/authentication.guard';
 import { AccessTokenGuard } from './iam/authentication/guards/access-token/access-token.guard';
-import { FreeinvModule } from './subapps/freeinv/freeinv.module';
-import { SubappsModule } from './subapps/subapps.module';
+import { SubappsModule } from './subapps/resources/subapps.module';
 
 @Module({
   imports: [
@@ -43,7 +42,6 @@ import { SubappsModule } from './subapps/subapps.module';
     JwtModule.registerAsync(jwtConfig.asProvider()),
     UsersModule,
     IamModule,
-    FreeinvModule,
     SubappsModule,
   ],
   controllers: [AppController],
