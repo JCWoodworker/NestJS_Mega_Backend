@@ -9,6 +9,7 @@ export class AddFreeinvLocations1704335944858 implements MigrationInterface {
         "description" character varying,
         "type" character varying NOT NULL DEFAULT 'location',
         "userId" character varying NOT NULL,
+        "image_url" character varying,
         "created_at" TIMESTAMP NOT NULL DEFAULT now(),
         "updated_at" TIMESTAMP NOT NULL DEFAULT now()
       )`,

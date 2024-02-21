@@ -10,6 +10,7 @@ export class AddFreeinvItems1704335945706 implements MigrationInterface {
         "roomId" integer, 
         "type" character varying NOT NULL DEFAULT 'item',
         "userId" character varying NOT NULL,
+        "image_url" character varying,
         "created_at" TIMESTAMP NOT NULL DEFAULT now(),
         "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
         CONSTRAINT "FK_Items_Room"

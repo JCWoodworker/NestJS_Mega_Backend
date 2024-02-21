@@ -21,6 +21,9 @@ export class Locations {
   userId: string;
 
   @Column()
+  imageUrl: string;
+
+  @Column()
   created_at: Date;
 
   @Column()

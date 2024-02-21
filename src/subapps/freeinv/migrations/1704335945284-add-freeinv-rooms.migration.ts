@@ -10,6 +10,7 @@ export class AddFreeinvRooms1704335945284 implements MigrationInterface {
         "type" character varying NOT NULL DEFAULT 'room',
         "locationId" integer,
         "userId" character varying NOT NULL,
+        "image_url" character varying,
         "created_at" TIMESTAMP NOT NULL DEFAULT now(),
         "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
         CONSTRAINT "FK_ROOMS_LOCATION" 
