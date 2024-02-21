@@ -4,6 +4,8 @@ import { BizlinksfreeService } from './bizlinksfree.service';
 // import { UpdateBizlinksfreeDto } from './dto/update-bizlinksfree.dto';
 import { Auth } from 'src/iam/decorators/auth.decorator';
 import { AuthType } from 'src/iam/enums/auth-type.enum';
+// import { Role } from 'src/users/enums/role.enum';
+// import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
 
 @Controller('subapps/bizlinksfree')
 export class BizlinksfreeController {
@@ -13,6 +15,8 @@ export class BizlinksfreeController {
   // create(@Body() createBizlinksfreeDto: CreateBizlinksfreeDto) {
   //   return this.bizlinksfreeService.create(createBizlinksfreeDto);
   // }
+
+  // @Roles(Role.Admin, Role.Basic)
   @Auth(AuthType.None)
   @Get()
   async chillOut() {
