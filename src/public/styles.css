@@ -29,7 +29,7 @@ input {
 }
 
 
-.reset-password-container {
+/* .reset-password-container {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -62,4 +62,4 @@ input {
 
 .reset-password-button:active {
   opacity: 0.6;
-}
+} */
