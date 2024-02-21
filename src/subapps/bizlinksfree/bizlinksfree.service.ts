@@ -1,3 +1,14 @@
+/*
+
+MUCH TO DO:
+
+This service was recently generated and many lines were commented out since they were 
+unnecessary, BUT eventually will need editing.
+
+* Business logic is not yet implemented, but their basic structure was generated
+
+*/
+
 import { Injectable } from '@nestjs/common';
 import { CreateBizlinksfreeDto } from './dto/create-bizlinksfree.dto';
 // import { UpdateBizlinksfreeDto } from './dto/update-bizlinksfree.dto';

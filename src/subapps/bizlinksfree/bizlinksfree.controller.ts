@@ -1,3 +1,15 @@
+/*
+
+MUCH TO DO:
+
+This controller was recently generated and many lines were commented out since they were 
+unnecessary, BUT eventually will need editing.
+
+* DTO's are not yet implemented, but their basic structure was generated
+* Endpoits were not yet implemented either, but their basic structure was generated
+
+*/
+
 import { Controller, Get } from '@nestjs/common';
 import { BizlinksfreeService } from './bizlinksfree.service';
 // import { CreateBizlinksfreeDto } from './dto/create-bizlinksfree.dto';
@@ -17,9 +29,10 @@ export class BizlinksfreeController {
   // }
 
   // @Roles(Role.Admin, Role.Basic)
+
   @Auth(AuthType.None)
   @Get()
-  async chillOut() {
+  chillOut() {
     return { message: 'Chill out bro ... this is Biz Links FREE!!!' };
   }
   // findAll() {
