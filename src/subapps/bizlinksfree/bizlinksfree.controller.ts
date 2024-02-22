@@ -11,7 +11,8 @@ unnecessary, BUT eventually will need editing.
 */
 
 import { Controller, Get } from '@nestjs/common';
-import { BizlinksfreeService } from './services/bizlinksfreeUserSettings.service';
+import { BizlinksfreeUserSettingsService } from './services/bizlinksfreeUserSettings.service';
+import { BizlinksfreeUrlService } from './services/bizlinksfreeUrl.service';
 // import { CreateBizlinksfreeDto } from './dto/create-bizlinksfree.dto';
 // import { UpdateBizlinksfreeDto } from './dto/update-bizlinksfree.dto';
 import { Auth } from 'src/iam/decorators/auth.decorator';
@@ -21,7 +22,10 @@ import { AuthType } from 'src/iam/enums/auth-type.enum';
 
 @Controller()
 export class BizlinksfreeController {
-  constructor(private readonly bizlinksfreeService: BizlinksfreeService) {}
+  constructor(
+    private readonly bizlinksfreeService: BizlinksfreeUserSettingsService,
+    private readonly bizlinksfreeUrlService: BizlinksfreeUrlService,
+  ) {}
 
   // @Post()
   // create(@Body() createBizlinksfreeDto: CreateBizlinksfreeDto) {
@@ -33,7 +37,7 @@ export class BizlinksfreeController {
   @Auth(AuthType.None)
   @Get()
   chillOut() {
-    return { message: 'Chill out bro ... this is Biz Links FREE!!!' };
+    return { message: 'Chill out bro ... Biz Links is FREE!!!' };
   }
   // findAll() {
   //   return this.bizlinksfreeService.findAll();
