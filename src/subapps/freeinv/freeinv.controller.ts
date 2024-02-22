@@ -9,7 +9,7 @@ import { Role } from 'src/users/enums/role.enum';
 import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
 
 @Roles(Role.Admin, Role.Basic)
-@Controller('subapps/freeinv')
+@Controller('freeinv')
 export class FreeinvController {
   constructor(
     private readonly itemsService: ItemsService,

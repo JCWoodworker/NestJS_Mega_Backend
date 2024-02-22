@@ -1,3 +1,15 @@
+/*
+
+The controller path of 'subapps' is actually declared in app.module.ts
+All child controllers under this one are also declared in app.module.ts
+
+Why??  So we don't have to add /subapps to all subapp controllers AND we don't
+even have to give each main subapp controller a path prefix in the controller itself
+
+Read the NestJS "RouterModule" docs - https://docs.nestjs.com/recipes/router-module
+
+*/
+
 import {
   Controller,
   Post,
@@ -12,7 +24,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 
 // REMOVE AuthType.None AND APPLY PROPER AUTHORIZATION FOR ALL SUBAPPS!!!
 @Auth(AuthType.None)
-@Controller('subapps')
+@Controller()
 export class SubappsController {
   constructor(private readonly subappsService: SubappsService) {}
 

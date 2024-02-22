@@ -19,7 +19,7 @@ import { AuthType } from 'src/iam/enums/auth-type.enum';
 // import { Role } from 'src/users/enums/role.enum';
 // import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
 
-@Controller('subapps/bizlinksfree')
+@Controller()
 export class BizlinksfreeController {
   constructor(private readonly bizlinksfreeService: BizlinksfreeService) {}
 
