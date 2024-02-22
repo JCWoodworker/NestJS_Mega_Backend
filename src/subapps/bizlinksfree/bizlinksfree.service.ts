@@ -15,8 +15,10 @@ import { Repository } from 'typeorm';
 
 import { BizlinksfreeUserSettings } from './entities/bizlinksfreeUserSettings.entity';
 import { BizlinksfreeUrl } from './entities/bizlinksfreeUrl.entity';
-import { CreateBizlinksfreeDto } from './dto/create-bizlinksfree-user-settings.dto';
-// import { UpdateBizlinksfreeDto } from './dto/update-bizlinksfree.dto';
+import { CreateBizlinksfreeUserSettingsDto } from './dto/create-bizlinksfree-user-settings.dto';
+// import { UpdateBizlinksfreeUserSettingsDto } from './dto/update-bizlinksfree-user-settings.dto';
+// import { CreateBizlinksfreeUrlDto } from './dto/create-bizlinksfree-url.dto';
+// import { UpdateBizlinksfreeUrlDto } from './dto/update-bizlinksfree-url.dto';
 
 @Injectable()
 export class BizlinksfreeService {
@@ -27,8 +29,8 @@ export class BizlinksfreeService {
     @InjectRepository(BizlinksfreeUrl)
     private readonly bizlinksfreeUrlRepository: Repository<BizlinksfreeUrl>,
   ) {}
-  create(createBizlinksfreeDto: CreateBizlinksfreeDto) {
-    console.log(createBizlinksfreeDto);
+  create(createBizlinksfreeUserSettingsDto: CreateBizlinksfreeUserSettingsDto) {
+    console.log(createBizlinksfreeUserSettingsDto);
     return 'This action adds a new bizlinksfree';
   }
 
@@ -40,7 +42,7 @@ export class BizlinksfreeService {
   //   return `This action returns a #${id} bizlinksfree`;
   // }
 
-  // update(id: number, updateBizlinksfreeDto: UpdateBizlinksfreeDto) {
+  // update(id: number, updateBizlinksfreeUserSettingsDto: UpdateBizlinksfreeUserSettingsDto) {
   //   return `This action updates a #${id} bizlinksfree`;
   // }
 
