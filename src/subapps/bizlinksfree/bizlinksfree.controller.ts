@@ -11,7 +11,7 @@ unnecessary, BUT eventually will need editing.
 */
 
 import { Controller, Get } from '@nestjs/common';
-import { BizlinksfreeService } from './bizlinksfree.service';
+import { BizlinksfreeService } from './services/bizlinksfreeUserSettings.service';
 // import { CreateBizlinksfreeDto } from './dto/create-bizlinksfree.dto';
 // import { UpdateBizlinksfreeDto } from './dto/update-bizlinksfree.dto';
 import { Auth } from 'src/iam/decorators/auth.decorator';

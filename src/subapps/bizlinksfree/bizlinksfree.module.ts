@@ -4,7 +4,8 @@ import { ConfigModule } from '@nestjs/config';
 import authConfig from 'src/config/auth.config';
 
 import { BizlinksfreeController } from './bizlinksfree.controller';
-import { BizlinksfreeService } from './bizlinksfree.service';
+import { BizlinksfreeUserSettingsService } from './services/bizlinksfreeUserSettings.service';
+import { BizlinksfreeUrlService } from './services/bizlinksfreeUrl.service';
 
 import { BizlinksfreeUserSettings } from './entities/bizlinksfreeUserSettings.entity';
 import { BizlinksfreeUrl } from './entities/bizlinksfreeUrl.entity';
@@ -15,6 +16,6 @@ import { BizlinksfreeUrl } from './entities/bizlinksfreeUrl.entity';
     ConfigModule.forFeature(authConfig),
   ],
   controllers: [BizlinksfreeController],
-  providers: [BizlinksfreeService],
+  providers: [BizlinksfreeUserSettingsService, BizlinksfreeUrlService],
 })
 export class BizlinksfreeModule {}

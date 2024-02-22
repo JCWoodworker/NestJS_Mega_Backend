@@ -13,21 +13,17 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { BizlinksfreeUserSettings } from './entities/bizlinksfreeUserSettings.entity';
-import { BizlinksfreeUrl } from './entities/bizlinksfreeUrl.entity';
-import { CreateBizlinksfreeUserSettingsDto } from './dto/create-bizlinksfree-user-settings.dto';
+import { BizlinksfreeUserSettings } from '../entities/bizlinksfreeUserSettings.entity';
+import { CreateBizlinksfreeUserSettingsDto } from '../dto/create-bizlinksfree-user-settings.dto';
 // import { UpdateBizlinksfreeUserSettingsDto } from './dto/update-bizlinksfree-user-settings.dto';
 // import { CreateBizlinksfreeUrlDto } from './dto/create-bizlinksfree-url.dto';
 // import { UpdateBizlinksfreeUrlDto } from './dto/update-bizlinksfree-url.dto';
 
 @Injectable()
-export class BizlinksfreeService {
+export class BizlinksfreeUserSettingsService {
   constructor(
     @InjectRepository(BizlinksfreeUserSettings)
     private readonly bizlinksfreeUserSettingsRepository: Repository<BizlinksfreeUserSettings>,
-
-    @InjectRepository(BizlinksfreeUrl)
-    private readonly bizlinksfreeUrlRepository: Repository<BizlinksfreeUrl>,
   ) {}
   create(createBizlinksfreeUserSettingsDto: CreateBizlinksfreeUserSettingsDto) {
     console.log(createBizlinksfreeUserSettingsDto);
