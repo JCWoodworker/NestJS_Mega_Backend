@@ -10,11 +10,23 @@ unnecessary, BUT eventually will need editing.
 */
 
 import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+
+import { BizlinksfreeUserSettings } from './entities/bizlinksfreeUserSettings.entity';
+import { BizlinksfreeUrl } from './entities/bizlinksfreeUrl.entity';
 import { CreateBizlinksfreeDto } from './dto/create-bizlinksfree.dto';
 // import { UpdateBizlinksfreeDto } from './dto/update-bizlinksfree.dto';
 
 @Injectable()
 export class BizlinksfreeService {
+  constructor(
+    @InjectRepository(BizlinksfreeUserSettings)
+    private readonly bizlinksfreeUserSettingsRepository: Repository<BizlinksfreeUserSettings>,
+
+    @InjectRepository(BizlinksfreeUrl)
+    private readonly bizlinksfreeUrlRepository: Repository<BizlinksfreeUrl>,
+  ) {}
   create(createBizlinksfreeDto: CreateBizlinksfreeDto) {
     console.log(createBizlinksfreeDto);
     return 'This action adds a new bizlinksfree';

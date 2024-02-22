@@ -14,6 +14,7 @@ UPDATE logic is next on the TODO list for these services.
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+
 import { Locations } from '../entities/location.entity';
 import { CreateInventoryElementDto } from '../dto/create-inventory-element.dto';
 
