@@ -15,7 +15,7 @@ import { Repository } from 'typeorm';
 
 import { BizlinksfreeUserSettings } from './entities/bizlinksfreeUserSettings.entity';
 import { BizlinksfreeUrl } from './entities/bizlinksfreeUrl.entity';
-import { CreateBizlinksfreeDto } from './dto/create-bizlinksfree.dto';
+import { CreateBizlinksfreeDto } from './dto/create-bizlinksfree-user-settings.dto';
 // import { UpdateBizlinksfreeDto } from './dto/update-bizlinksfree.dto';
 
 @Injectable()
