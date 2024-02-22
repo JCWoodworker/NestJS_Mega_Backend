@@ -21,7 +21,6 @@ export class ItemsService {
   }
 
   async create(body: CreateInventoryElementDto, userId: string) {
-    debugger;
     const item = { ...body, userId };
     return await this.itemsRepository.save(item);
   }
