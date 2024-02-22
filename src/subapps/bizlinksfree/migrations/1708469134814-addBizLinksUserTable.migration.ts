@@ -9,7 +9,7 @@ export class AddBizLinksUserTable1708469134814 implements MigrationInterface {
       "display_name" character varying NOT NULL,
       "business_name" character varying,
       "color_scheme" character varying NOT NULL DEFAULT 'default',
-      "logo_url" character varying, NOT NULL DEFAULT 'default',
+      "logo_url" character varying NOT NULL DEFAULT 'default',
       "facebook_url" character varying,
       "twitter_url" character varying,
       "instagram_url" character varying,
