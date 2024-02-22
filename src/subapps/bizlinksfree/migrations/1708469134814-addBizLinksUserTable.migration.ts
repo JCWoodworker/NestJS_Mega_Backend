@@ -5,7 +5,7 @@ export class AddBizLinksUserTable1708469134814 implements MigrationInterface {
     queryRunner.query(
       `CREATE TABLE "bizlinksfree_user_settings" (
       "id" SERIAL NOT NULL PRIMARY KEY,
-      "userId" character varying NOT NULL,
+      "user_id" character varying NOT NULL,
       "display_name" character varying NOT NULL,
       "business_name" character varying,
       "color_scheme" character varying NOT NULL DEFAULT 'default',

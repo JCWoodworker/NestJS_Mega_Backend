@@ -5,11 +5,17 @@ export class BizlinksfreeUrl {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
-  userId: string;
+  @Column({
+    unique: true,
+    nullable: false,
+  })
+  user_id: string;
 
   @Column()
   url: string;
+
+  @Column()
+  display_name: string;
 
   @Column()
   created_at: Date;

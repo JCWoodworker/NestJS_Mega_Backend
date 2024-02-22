@@ -9,7 +9,7 @@ export class BizlinksfreeUserSettings {
     unique: true,
     nullable: false,
   })
-  userId: string;
+  user_id: string;
 
   @Column()
   display_name: string;

@@ -5,8 +5,9 @@ export class AddBizLinksUrlTable1708567463172 implements MigrationInterface {
     queryRunner.query(
       `CREATE TABLE "bizlinksfree_url" (
           "id" SERIAL NOT NULL PRIMARY KEY,
-          "userId" character varying NOT NULL,
+          "user_id" character varying NOT NULL,
           "url" character varying NOT NULL,
+          "display_name" character varying NOT NULL,
           "created_at" TIMESTAMP NOT NULL DEFAULT now(),
           "updated_at" TIMESTAMP NOT NULL DEFAULT now()
         )`,
