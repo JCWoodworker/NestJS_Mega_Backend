@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Items } from '../entities/item.entity';
+import { CreateInventoryElementDto } from '../dto/create-inventory-element.dto';
 
 @Injectable()
 export class ItemsService {
@@ -19,12 +20,9 @@ export class ItemsService {
     });
   }
 
-  async create(body: any, userId: string) {
+  async create(body: CreateInventoryElementDto, userId: string) {
+    debugger;
     const item = { ...body, userId };
     return await this.itemsRepository.save(item);
   }
-
-  // imageUpload() NEEDS to be extracted into it's own controller and service!!
-  // This should probably even be moved out of subapps/freeinv and be able to be used
-  // across all subapps.
 }

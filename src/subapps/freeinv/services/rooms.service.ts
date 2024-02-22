@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Rooms } from '../entities/room.entity';
+import { CreateInventoryElementDto } from '../dto/create-inventory-element.dto';
 
 @Injectable()
 export class RoomsService {
@@ -22,7 +23,7 @@ export class RoomsService {
     });
   }
 
-  async create(body: any, userId: string) {
+  async create(body: CreateInventoryElementDto, userId: string) {
     const room = { ...body, userId };
     return this.locationsRepository.save(room);
   }

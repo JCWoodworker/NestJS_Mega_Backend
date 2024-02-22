@@ -3,6 +3,7 @@ import { Controller, Get, Post, Body, Req } from '@nestjs/common';
 import { LocationsService } from './services/locations.service';
 import { RoomsService } from './services/rooms.service';
 import { ItemsService } from './services/items.service';
+import { CreateInventoryElementDto } from './dto/create-inventory-element.dto';
 
 import { Role } from 'src/users/enums/role.enum';
 import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
@@ -24,7 +25,7 @@ export class FreeinvController {
   }
 
   @Post('locations')
-  createLocation(@Body() body: any, @Req() request) {
+  createLocation(@Body() body: CreateInventoryElementDto, @Req() request) {
     const userId = request.user.sub;
     return this.locationsService.create(body, userId);
   }
