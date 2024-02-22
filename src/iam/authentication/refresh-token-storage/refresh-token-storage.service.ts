@@ -1,3 +1,10 @@
+/*
+We will want to make sure we delete the refresh token both when the user signs out
+and especially when a user is deleted from the system.
+
+Set up a relationship between the user and the refresh token with cascade on delete.
+*/
+
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
