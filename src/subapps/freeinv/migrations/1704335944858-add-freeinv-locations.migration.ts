@@ -12,7 +12,7 @@ export class AddFreeinvLocations1704335944858 implements MigrationInterface {
         "image_url" character varying NOT NULL DEFAULT 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/65/No-Image-Placeholder.svg/832px-No-Image-Placeholder.svg.png',
         "orphan_location" boolean NOT NULL DEFAULT false,
         "created_at" TIMESTAMP NOT NULL DEFAULT now(),
-        "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
+        "updated_at" TIMESTAMP NOT NULL DEFAULT now()
       )`,
     );
   }
