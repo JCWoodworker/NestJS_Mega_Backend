@@ -30,7 +30,7 @@ export class LocationsService {
     return locationList;
   }
 
-  async findLocationByLocationId(locationId: number) {
+  async findLocationById(locationId: number) {
     return this.locationsRepository.findOne({
       where: { id: locationId },
     });
@@ -53,8 +53,15 @@ export class LocationsService {
   }
 
   async delete(locationId: number, userId: string) {
+    debugger;
+    try {
+      const locationForDeletion = await this.findLocationById(locationId);
+    } catch (error) {
+      debugger
+      throw error.message;
+    }
+    debugger;
     /*
-    const locationForDeletion = await findLocationById(locationId)
       If no location, return error
     Compare userId to locationForDeletion.userId
       If location is not owned by user, return error
