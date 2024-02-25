@@ -10,7 +10,7 @@ export class AddFreeinvItems1704335945706 implements MigrationInterface {
         "roomId" integer, 
         "type" character varying NOT NULL DEFAULT 'item',
         "userId" character varying NOT NULL,
-        "image_url" character varying,
+        "image_url" character varying NOT NULL DEFAULT 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/65/No-Image-Placeholder.svg/832px-No-Image-Placeholder.svg.png',
         "created_at" TIMESTAMP NOT NULL DEFAULT now(),
         "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
         CONSTRAINT "FK_Items_Room"
