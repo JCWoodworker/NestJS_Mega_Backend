@@ -16,6 +16,7 @@ export class AddFreeinvItems1704335945706 implements MigrationInterface {
         CONSTRAINT "FK_Items_Room"
           FOREIGN KEY ("roomId") 
           REFERENCES "rooms"("id")
+          ON DELETE CASCADE
       )`,
     );
   }

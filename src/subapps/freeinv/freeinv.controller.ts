@@ -33,15 +33,18 @@ export class FreeinvController {
   }
 
   @Post('locations')
-  createLocation(@Body() body: CreateInventoryElementDto, @Req() request) {
+  async createLocation(
+    @Body() body: CreateInventoryElementDto,
+    @Req() request,
+  ) {
     const userId = request.user.sub;
-    return this.locationsService.create(body, userId);
+    return await this.locationsService.create(body, userId);
   }
 
   @Delete('locations/:id')
   async deleteLocation(@Param('id') locationId: number, @Req() request) {
     const userId = request.user.sub;
-    return this.locationsService.delete(locationId, userId);
+    return await this.locationsService.delete(locationId, userId);
   }
 
   // ROOMS

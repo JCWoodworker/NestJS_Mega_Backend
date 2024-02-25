@@ -19,11 +19,14 @@ import { Locations } from '../entities/location.entity';
 import { CreateInventoryElementDto } from '../dto/create-inventory-element.dto';
 import { UpdateInventoryElementDto } from '../dto/update-inventory-element.dto';
 
+import { ItemsService } from './items.service';
+
 @Injectable()
 export class LocationsService {
   constructor(
     @InjectRepository(Locations)
     private readonly locationsRepository: Repository<Locations>,
+    private readonly itemsService: ItemsService,
   ) {}
   async findAllLocationsByUserId(userId: string) {
     const locationList = this.locationsRepository.find({ where: { userId } });
@@ -32,6 +35,7 @@ export class LocationsService {
 
   async findLocationById(locationId: number) {
     return this.locationsRepository.findOne({
+      relations: ['rooms', 'rooms.items'],
       where: { id: locationId },
     });
   }
@@ -45,7 +49,7 @@ export class LocationsService {
 
   async create(body: CreateInventoryElementDto, userId: string) {
     const location = { ...body, userId };
-    return this.locationsRepository.save(location);
+    return await this.locationsRepository.save(location);
   }
 
   async update(id: number, body: UpdateInventoryElementDto) {
@@ -53,26 +57,33 @@ export class LocationsService {
   }
 
   async delete(locationId: number, userId: string) {
-    debugger;
-    try {
-      const locationForDeletion = await this.findLocationById(locationId);
-    } catch (error) {
-      debugger
-      throw error.message;
+    const locationForDeletion = await this.findLocationById(locationId);
+
+    if (!locationForDeletion) {
+      return { message: 'Location not found' };
     }
+
+    if (locationForDeletion.userId !== userId) {
+      //  We will need more logic here in the future to account for an admin making changes on behalf of a user
+      return {
+        message:
+          'User attempting to make the change does not own this location and is not an admin',
+      };
+    }
+
+    if (locationForDeletion.rooms.length === 0) {
+      return await this.locationsRepository.delete(locationId);
+    }
+
+    const allItemsFromLocation =
+      await this.itemsService.findAllItemsByLocationId(locationId);
     debugger;
+    if (allItemsFromLocation.length === 0) {
+      return await this.locationsRepository.delete(locationId);
+    }
+    return false;
+
     /*
-      If no location, return error
-    Compare userId to locationForDeletion.userId
-      If location is not owned by user, return error
-    If locationForDeletion.rooms.length === 0
-      delete location
-    If locationForDeletion.rooms.length > 0
-      for each room, check if room.items.length === 0
-      if ALL rooms have no items
-        delete all rooms
-        delete location
-      else const allItemsFromLocation = for each room, get all items
       
     Check if user has a location and a room with the orphan_room boolean set to true
       If true
@@ -89,9 +100,5 @@ export class LocationsService {
     return message: "Location deleted and orphaned items moved to new orphan location and room"
 
     */
-
-    return {
-      message: `Location ${locationId} for user ${userId} would have been deleted, but this is not implemented`,
-    };
   }
 }
