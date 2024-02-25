@@ -16,4 +16,7 @@ export class CreateInventoryElementDto {
 
   @IsOptional()
   roomId?: number;
+
+  @IsOptional()
+  image_url?: string;
 }

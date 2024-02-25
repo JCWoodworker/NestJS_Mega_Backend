@@ -17,6 +17,7 @@ import { Repository } from 'typeorm';
 
 import { Locations } from '../entities/location.entity';
 import { CreateInventoryElementDto } from '../dto/create-inventory-element.dto';
+import { UpdateInventoryElementDto } from '../dto/update-inventory-element.dto';
 
 @Injectable()
 export class LocationsService {
@@ -39,5 +40,9 @@ export class LocationsService {
   async create(body: CreateInventoryElementDto, userId: string) {
     const location = { ...body, userId };
     return this.locationsRepository.save(location);
+  }
+
+  async update(id: number, body: UpdateInventoryElementDto) {
+    return this.locationsRepository.update(id, body);
   }
 }
