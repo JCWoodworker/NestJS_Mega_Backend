@@ -13,8 +13,8 @@ To use this app, you need to create a free account.
 * Add controllers for each service and connect them to the freeinv main controller
   * re-organize folders to be more logical
     * resource folders for locations, room, and items with services and controllers
-
+* Add middleware to reduce return objects to only the necessary information
+  * This can be a generic function that takes an object and returns an object with only the necessary information by accepting strings as arguments for the keys
 * Add feature for deleting a location
 * Add feature for deleting a room
 * Add feature for deleting an item
-
