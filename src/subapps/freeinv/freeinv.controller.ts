@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Req,
+  Delete,
+  Param,
+} from '@nestjs/common';
 
 import { LocationsService } from './services/locations.service';
 import { RoomsService } from './services/rooms.service';
@@ -25,9 +33,18 @@ export class FreeinvController {
   }
 
   @Post('locations')
-  createLocation(@Body() body: CreateInventoryElementDto, @Req() request) {
+  async createLocation(
+    @Body() body: CreateInventoryElementDto,
+    @Req() request,
+  ) {
     const userId = request.user.sub;
-    return this.locationsService.create(body, userId);
+    return await this.locationsService.create(body, userId);
+  }
+
+  @Delete('locations/:id')
+  async deleteLocation(@Param('id') locationId: number, @Req() request) {
+    const userId = request.user.sub;
+    return await this.locationsService.delete(locationId, userId);
   }
 
   // ROOMS

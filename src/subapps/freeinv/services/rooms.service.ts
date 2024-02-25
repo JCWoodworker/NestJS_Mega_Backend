@@ -18,6 +18,12 @@ export class RoomsService {
     });
   }
 
+  async findRoomByRoomId(roomId: number) {
+    return this.roomsRepository.findOne({
+      where: { id: roomId },
+    });
+  }
+
   async findAllRoomsByLocationId(id: number) {
     return this.roomsRepository.find({
       where: { locationId: id },

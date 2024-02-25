@@ -15,9 +15,21 @@ export class ItemsService {
     return this.itemsRepository.find({ where: { userId: userId } });
   }
 
+  async findAllItemsByLocationId(locationId: number) {
+    return this.itemsRepository.find({
+      where: { roomId: locationId },
+    });
+  }
+
   async findAllByRoomId(id: number) {
     return this.itemsRepository.find({
       where: { roomId: id },
+    });
+  }
+
+  async findRoomByItemId(itemId: number) {
+    return this.itemsRepository.findOne({
+      where: { id: itemId },
     });
   }
 
