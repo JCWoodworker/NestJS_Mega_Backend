@@ -21,6 +21,12 @@ export class ItemsService {
     });
   }
 
+  async findRoomByItemId(itemId: number) {
+    return this.itemsRepository.findOne({
+      where: { id: itemId },
+    });
+  }
+
   async create(body: CreateInventoryElementDto, userId: string) {
     const item = { ...body, userId };
     return await this.itemsRepository.save(item);
