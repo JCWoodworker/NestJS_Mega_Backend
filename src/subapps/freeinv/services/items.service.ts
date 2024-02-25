@@ -15,7 +15,7 @@ export class ItemsService {
     return this.itemsRepository.find({ where: { userId: userId } });
   }
 
-  async findAllByItemId(id: number) {
+  async findAllByRoomId(id: number) {
     return this.itemsRepository.find({
       where: { roomId: id },
     });
