@@ -16,6 +16,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { Locations } from '../entities/location.entity';
+import { Rooms } from '../entities/room.entity';
+import { Items } from '../entities/item.entity';
 import { CreateInventoryElementDto } from '../dto/create-inventory-element.dto';
 import { UpdateInventoryElementDto } from '../dto/update-inventory-element.dto';
 
@@ -26,6 +28,10 @@ export class LocationsService {
   constructor(
     @InjectRepository(Locations)
     private readonly locationsRepository: Repository<Locations>,
+    @InjectRepository(Rooms)
+    private readonly roomsRepository: Repository<Rooms>,
+    @InjectRepository(Items)
+    private readonly itemsRepository: Repository<Items>,
     private readonly itemsService: ItemsService,
   ) {}
   async findAllLocationsByUserId(userId: string) {
@@ -58,6 +64,7 @@ export class LocationsService {
 
   async delete(locationId: number, userId: string) {
     const locationForDeletion = await this.findLocationById(locationId);
+    const roomIds = locationForDeletion.rooms.map((room) => room.id);
 
     if (!locationForDeletion) {
       return { message: 'Location not found' };
@@ -70,35 +77,42 @@ export class LocationsService {
           'User attempting to make the change does not own this location and is not an admin',
       };
     }
-
-    if (locationForDeletion.rooms.length === 0) {
-      return await this.locationsRepository.delete(locationId);
-    }
-
     const allItemsFromLocation =
       await this.itemsService.findAllItemsByLocationId(locationId);
-    debugger;
     if (allItemsFromLocation.length === 0) {
       return await this.locationsRepository.delete(locationId);
     }
-    return false;
+    const orphanRoomId = await this.findOrAddOrphanLocation(userId);
+    await this.itemsRepository
+      .createQueryBuilder()
+      .update(Items)
+      .set({ roomId: +orphanRoomId })
+      .where('items."roomId" IN (:...roomIds)', { roomIds })
+      .execute();
 
-    /*
-      
-    Check if user has a location and a room with the orphan_room boolean set to true
-      If true
-        save the orphanLocationId and orphanRoomId
-      If false
-        const newOrphanLocation = create a new location with the orphan_room boolean set to true
-        const newOrphanRoom = create a new room using newOrphanLocation.id, and with the orphan_room boolean set to true
+    return await this.locationsRepository.delete(locationId);
+  }
 
-    Change roomId for all items in allItemsFromLocation to orphanRoomId or newOrphanRoom.id
-
-    delete all rooms with locationForDeletion.id
-    delete locationForDeletion
-
-    return message: "Location deleted and orphaned items moved to new orphan location and room"
-
-    */
+  async findOrAddOrphanLocation(userId: string) {
+    const currentOrphanLocation = await this.locationsRepository.findOne({
+      relations: ['rooms'],
+      where: { userId, orphan_location: true },
+    });
+    if (currentOrphanLocation) {
+      const currentOrphanRoomId = currentOrphanLocation.rooms[0].id;
+      return currentOrphanRoomId;
+    }
+    const newOrphanLocation = await this.locationsRepository.save({
+      userId,
+      name: 'Orphan Home',
+      orphan_location: true,
+    });
+    const newOrphanRoom = await this.roomsRepository.save({
+      userId,
+      name: 'Orphan Room',
+      orphan_room: true,
+      locationId: newOrphanLocation.id,
+    });
+    return newOrphanRoom.id;
   }
 }
