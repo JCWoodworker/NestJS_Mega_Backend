@@ -1,5 +1,9 @@
 # My Free INV
 
+prod = www.myfreeinv.com
+preprod = www.myfreeinvpreprod.netlify.app
+base endpoint = /freeinv
+
 ## What is it?
 
 This is a free inventory app.
@@ -7,6 +11,13 @@ This is a free inventory app.
 ## How to use it?
 
 To use this app, you need to create a free account.
+
+## Directory Structure
+
+* The free inventory app is in the `src/subapps/freeinv` folder.
+  * This includes the module, controller, and service
+* subfolders include:
+ `dto`, `entities`, `migrations`, `seeders`, `services`, and `controllers`
 
 ## TODO
 
@@ -23,3 +34,8 @@ To use this app, you need to create a free account.
   properties back to the client
 * Add method for deleting a room
 * Add method for deleting an item
+
+* We need to change naming conventions to reflect "myfreeinv" instead of "freeinv"
+  * folders, files, and endpoints
+
+* We need to add and implement seeders for the initial data.
