@@ -35,4 +35,5 @@ export class ItemsService {
   async update(id: number, body: UpdateInventoryElementDto) {
     return this.itemsRepository.update(id, body);
   }
+  //ignore this comment
 }
