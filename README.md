@@ -105,3 +105,44 @@ DATABASE_NAME
 * DATABASE_URL={{See URL Structure Above}}
 
 ALLOWED_ORIGINS=origin1,origin2,origin3
+
+
+## TODOs
+
+* Update README files for the following:
+  * config
+  * iam
+  * subapps
+    * freeinv
+    * bizlinksfree
+  * users
+  * WHAT ARE WE WRITING ABOUT??
+    * Structure
+    * Endpoints
+    * Guards
+    * Models
+    * Migrations
+    * DTO's
+    * Services
+    * Controllers
+    * Middleware
+    * Entities
+    * Enums
+    * Seeders
+    * TODOs
+
+* SEE EACH README FOR THEIR SPECIFIC TODOs
+
+**THIS README**
+* Add directory map
+  * We need to show the structure, then explain how/why it is set up that way
+* Full HOW-TO guides for the following:
+  * Setting up this repo if cloning for your own project
+  * Adding Subapps
+  * Handling Migrations and setting up Postgres connection
+  * Managing resources
+  * Setting up configurations
+    * Main.ts settings
+    * .env settings
+    * CORS settings
+  * TODOs
