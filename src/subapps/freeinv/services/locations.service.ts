@@ -61,19 +61,25 @@ export class LocationsService {
     );
 
     if (!locationForDeletion) {
-      return { message: 'Location not found' };
+      return { result: false, message: 'Location not found' };
     }
 
     if (locationForDeletion.userId !== userId) {
       //  We will need more logic here in the future to account for an admin making changes on behalf of a user
       return {
+        result: false,
         message:
           'User attempting to make the change does not own this location and is not an admin',
       };
     }
 
     if (itemIds.length === 0) {
-      return await this.locationsRepository.delete(locationId);
+      try {
+        await this.locationsRepository.delete(locationId);
+        return { result: true, message: 'Location deleted, no orphaned items' };
+      } catch (error) {
+        return { result: false, message: 'Error deleting location' };
+      }
     }
 
     const orphanRoomId = await this.findOrAddOrphanLocation(userId);
@@ -83,7 +89,15 @@ export class LocationsService {
       .set({ roomId: +orphanRoomId })
       .where('items."roomId" IN (:...roomIds)', { roomIds })
       .execute();
-    return await this.locationsRepository.delete(locationId);
+    try {
+      await this.locationsRepository.delete(locationId);
+      return {
+        result: true,
+        message: `Location deleted, ${itemIds.length} orphaned items moved to new orphan location`,
+      };
+    } catch (error) {
+      return { result: false, message: 'Error deleting location' };
+    }
   }
 
   async findOrAddOrphanLocation(userId: string) {
