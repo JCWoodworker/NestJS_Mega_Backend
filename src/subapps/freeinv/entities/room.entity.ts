@@ -7,6 +7,7 @@ import {
 } from 'typeorm';
 import { Locations } from './location.entity';
 import { Items } from './item.entity';
+import { IsBoolean } from 'class-validator';
 
 @Entity()
 export class Rooms {
@@ -33,6 +34,13 @@ export class Rooms {
 
   @Column()
   userId: string;
+
+  @Column()
+  image_url: string;
+
+  @Column({ default: false })
+  @IsBoolean()
+  orphan_room: boolean;
 
   @Column()
   created_at: Date;

@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Items } from '../entities/item.entity';
+import { CreateInventoryElementDto } from '../dto/create-inventory-element.dto';
+import { UpdateInventoryElementDto } from '../dto/update-inventory-element.dto';
 
 @Injectable()
 export class ItemsService {
@@ -13,18 +15,24 @@ export class ItemsService {
     return this.itemsRepository.find({ where: { userId: userId } });
   }
 
-  async findAllByItemId(id: number) {
+  async findAllByRoomId(id: number) {
     return this.itemsRepository.find({
       where: { roomId: id },
     });
   }
 
-  async create(body: any, userId: string) {
+  async findRoomByItemId(itemId: number) {
+    return this.itemsRepository.findOne({
+      where: { id: itemId },
+    });
+  }
+
+  async create(body: CreateInventoryElementDto, userId: string) {
     const item = { ...body, userId };
     return await this.itemsRepository.save(item);
   }
 
-  // imageUpload() NEEDS to be extracted into it's own controller and service!!
-  // This should probably even be moved out of subapps/freeinv and be able to be used
-  // across all subapps.
+  async update(id: number, body: UpdateInventoryElementDto) {
+    return this.itemsRepository.update(id, body);
+  }
 }

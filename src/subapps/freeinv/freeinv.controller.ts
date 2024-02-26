@@ -1,14 +1,23 @@
-import { Controller, Get, Post, Body, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Req,
+  Delete,
+  Param,
+} from '@nestjs/common';
 
 import { LocationsService } from './services/locations.service';
 import { RoomsService } from './services/rooms.service';
 import { ItemsService } from './services/items.service';
+import { CreateInventoryElementDto } from './dto/create-inventory-element.dto';
 
 import { Role } from 'src/users/enums/role.enum';
 import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
 
 @Roles(Role.Admin, Role.Basic)
-@Controller('subapps/freeinv')
+@Controller()
 export class FreeinvController {
   constructor(
     private readonly itemsService: ItemsService,
@@ -24,9 +33,18 @@ export class FreeinvController {
   }
 
   @Post('locations')
-  createLocation(@Body() body: any, @Req() request) {
+  async createLocation(
+    @Body() body: CreateInventoryElementDto,
+    @Req() request,
+  ) {
     const userId = request.user.sub;
-    return this.locationsService.create(body, userId);
+    return await this.locationsService.create(body, userId);
+  }
+
+  @Delete('locations/:id')
+  async deleteLocation(@Param('id') locationId: number, @Req() request) {
+    const userId = request.user.sub;
+    return await this.locationsService.delete(locationId, userId);
   }
 
   // ROOMS
@@ -36,7 +54,7 @@ export class FreeinvController {
     return this.roomsService.findAllRoomsByUserId(userId);
   }
   @Post('rooms')
-  async createRoom(@Body() body: any, @Req() request) {
+  async createRoom(@Body() body: CreateInventoryElementDto, @Req() request) {
     const userId = request.user.sub;
     return this.roomsService.create(body, userId);
   }
@@ -48,7 +66,7 @@ export class FreeinvController {
     return this.itemsService.findAllItemsByUserid(userId);
   }
   @Post('items')
-  async createItem(@Body() body: any, @Req() request) {
+  async createItem(@Body() body: CreateInventoryElementDto, @Req() request) {
     const userId = request.user.sub;
     return this.itemsService.create(body, userId);
   }

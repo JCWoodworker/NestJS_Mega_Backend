@@ -25,6 +25,9 @@ export class Items {
   userId: string;
 
   @Column()
+  image_url: string;
+
+  @Column()
   created_at: Date;
 
   @Column()

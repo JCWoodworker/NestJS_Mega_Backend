@@ -1,8 +1,18 @@
 # JC's Nest.JS boilerplate
 
+## Table Of Contents
+
+* [Current Features](#current-features)
+* [Handling Migrations](#handling-migrations)
+* [Configurations](#configurations)
+* [CORS](#cors)
+
+
 ## This README is a work in progress, and is more of a notebook for me while I build this API
 
 * Please be patient while I construct a proper readme
+
+## Current Features
 
 * Current features include:
   * PostgreSQL integration
@@ -41,16 +51,6 @@
   * They need to run as JS files so they need to be built first
 
 --
-
-## Auth
-
-* Send POST request in the following JSON format:
-  {
-    "username": "someuser",
-    "password": "mypassword"
-  }
-
-## Endpoints
 
 ## Configurations
 
@@ -102,6 +102,47 @@ DATABASE_PASSWORD
 DATABASE_NAME
 
 * URL Structure: postgres://{username}:{password}@{host}:{port}/{database name}
-DATABASE_URL
+* DATABASE_URL={{See URL Structure Above}}
 
 ALLOWED_ORIGINS=origin1,origin2,origin3
+
+
+## TODOs
+
+* Update README files for the following:
+  * config
+  * iam
+  * subapps
+    * freeinv
+    * bizlinksfree
+  * users
+  * WHAT ARE WE WRITING ABOUT??
+    * Structure
+    * Endpoints
+    * Guards
+    * Models
+    * Migrations
+    * DTO's
+    * Services
+    * Controllers
+    * Middleware
+    * Entities
+    * Enums
+    * Seeders
+    * TODOs
+
+* SEE EACH README FOR THEIR SPECIFIC TODOs
+
+**THIS README**
+* Add directory map
+  * We need to show the structure, then explain how/why it is set up that way
+* Full HOW-TO guides for the following:
+  * Setting up this repo if cloning for your own project
+  * Adding Subapps
+  * Handling Migrations and setting up Postgres connection
+  * Managing resources
+  * Setting up configurations
+    * Main.ts settings
+    * .env settings
+    * CORS settings
+  * TODOs

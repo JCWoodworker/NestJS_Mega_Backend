@@ -7,6 +7,9 @@ import authConfig from './config/auth.config';
 
 import { UsersModule } from './users/users.module';
 import { IamModule } from './iam/iam.module';
+import { FreeinvModule } from './subapps/freeinv/freeinv.module';
+import { BizlinksfreeModule } from './subapps/bizlinksfree/bizlinksfree.module';
+
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -15,12 +18,11 @@ import jwtConfig from './iam/config/jwt.config';
 
 import * as Joi from '@hapi/joi';
 
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, RouterModule } from '@nestjs/core';
 import { RolesGuard } from './iam/authorization/guards/roles.guard';
 import { AuthenticationGuard } from './iam/authentication/guards/authentication/authentication.guard';
 import { AccessTokenGuard } from './iam/authentication/guards/access-token/access-token.guard';
 import { SubappsModule } from './subapps/resources/subapps.module';
-
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -43,6 +45,22 @@ import { SubappsModule } from './subapps/resources/subapps.module';
     UsersModule,
     IamModule,
     SubappsModule,
+    RouterModule.register([
+      {
+        path: 'subapps',
+        module: SubappsModule,
+        children: [
+          {
+            path: 'freeinv',
+            module: FreeinvModule,
+          },
+          {
+            path: 'bizlinksfree',
+            module: BizlinksfreeModule,
+          },
+        ],
+      },
+    ]),
   ],
   controllers: [AppController],
   providers: [
