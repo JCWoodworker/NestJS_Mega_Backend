@@ -1,14 +1,8 @@
 /*
+There needs to be a freeinv service that handles business logic from multiple services.
+We should not cross-use methods between loactions, rooms, and items services.
 
-We NEED to eventually set up all the logic that allows for cascading deletions of rooms
-when a location is deleted, BUT we must remove the room id from the item entity without
-deleting the item itself.
-
-The goal is to make sure no Items are deleted unless the user manually deletes them,
-and they can just live in limbo without a room id until a one is appointed.
-
-UPDATE logic is next on the TODO list for these services.
-
+This is not a good practice regarding single responsibility
 */
 
 import { Injectable } from '@nestjs/common';
@@ -21,8 +15,6 @@ import { Items } from '../entities/item.entity';
 import { CreateInventoryElementDto } from '../dto/create-inventory-element.dto';
 import { UpdateInventoryElementDto } from '../dto/update-inventory-element.dto';
 
-import { ItemsService } from './items.service';
-
 @Injectable()
 export class LocationsService {
   constructor(
@@ -32,7 +24,6 @@ export class LocationsService {
     private readonly roomsRepository: Repository<Rooms>,
     @InjectRepository(Items)
     private readonly itemsRepository: Repository<Items>,
-    private readonly itemsService: ItemsService,
   ) {}
   async findAllLocationsByUserId(userId: string) {
     const locationList = this.locationsRepository.find({ where: { userId } });
@@ -65,6 +56,9 @@ export class LocationsService {
   async delete(locationId: number, userId: string) {
     const locationForDeletion = await this.findLocationById(locationId);
     const roomIds = locationForDeletion.rooms.map((room) => room.id);
+    const itemIds = locationForDeletion.rooms.flatMap((room) =>
+      room.items.map((item) => item.id),
+    );
 
     if (!locationForDeletion) {
       return { message: 'Location not found' };
@@ -77,11 +71,11 @@ export class LocationsService {
           'User attempting to make the change does not own this location and is not an admin',
       };
     }
-    const allItemsFromLocation =
-      await this.itemsService.findAllItemsByLocationId(locationId);
-    if (allItemsFromLocation.length === 0) {
+
+    if (itemIds.length === 0) {
       return await this.locationsRepository.delete(locationId);
     }
+
     const orphanRoomId = await this.findOrAddOrphanLocation(userId);
     await this.itemsRepository
       .createQueryBuilder()
@@ -89,7 +83,6 @@ export class LocationsService {
       .set({ roomId: +orphanRoomId })
       .where('items."roomId" IN (:...roomIds)', { roomIds })
       .execute();
-
     return await this.locationsRepository.delete(locationId);
   }
 
