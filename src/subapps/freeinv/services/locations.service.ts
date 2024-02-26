@@ -82,11 +82,11 @@ export class LocationsService {
       }
     }
 
-    const orphanRoomId = await this.findOrAddOrphanLocation(userId);
+    const orphanRoom = await this.findOrAddOrphanLocation(userId);
     await this.itemsRepository
       .createQueryBuilder()
       .update(Items)
-      .set({ roomId: +orphanRoomId })
+      .set({ roomId: +orphanRoom.id })
       .where('items."roomId" IN (:...roomIds)', { roomIds })
       .execute();
     try {
@@ -94,6 +94,7 @@ export class LocationsService {
       return {
         result: true,
         message: `Location deleted, ${itemIds.length} orphaned items moved to new orphan location`,
+        orphanRoom,
       };
     } catch (error) {
       return { result: false, message: 'Error deleting location' };
@@ -106,8 +107,8 @@ export class LocationsService {
       where: { userId, orphan_location: true },
     });
     if (currentOrphanLocation) {
-      const currentOrphanRoomId = currentOrphanLocation.rooms[0].id;
-      return currentOrphanRoomId;
+      const currentOrphanRoom = currentOrphanLocation.rooms[0];
+      return currentOrphanRoom;
     }
     const newOrphanLocation = await this.locationsRepository.save({
       userId,
@@ -120,6 +121,6 @@ export class LocationsService {
       orphan_room: true,
       locationId: newOrphanLocation.id,
     });
-    return newOrphanRoom.id;
+    return newOrphanRoom;
   }
 }
