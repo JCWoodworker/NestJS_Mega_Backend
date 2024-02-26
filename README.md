@@ -1,8 +1,18 @@
 # JC's Nest.JS boilerplate
 
+## Table Of Contents
+
+* [Current Features](#current-features)
+* [Handling Migrations](#handling-migrations)
+* [Configurations](#configurations)
+* [CORS](#cors)
+
+
 ## This README is a work in progress, and is more of a notebook for me while I build this API
 
 * Please be patient while I construct a proper readme
+
+## Current Features
 
 * Current features include:
   * PostgreSQL integration
@@ -41,16 +51,6 @@
   * They need to run as JS files so they need to be built first
 
 --
-
-## Auth
-
-* Send POST request in the following JSON format:
-  {
-    "username": "someuser",
-    "password": "mypassword"
-  }
-
-## Endpoints
 
 ## Configurations
 
