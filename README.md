@@ -102,6 +102,6 @@ DATABASE_PASSWORD
 DATABASE_NAME
 
 * URL Structure: postgres://{username}:{password}@{host}:{port}/{database name}
-DATABASE_URL={{URL Structure}}
+* DATABASE_URL={{See URL Structure Above}}
 
 ALLOWED_ORIGINS=origin1,origin2,origin3
