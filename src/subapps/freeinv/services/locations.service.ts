@@ -55,9 +55,9 @@ export class LocationsService {
 
   async delete(locationId: number, userId: string) {
     const locationForDeletion = await this.findLocationById(locationId);
-    const roomIds = locationForDeletion.rooms.map((room) => room.id);
-    const itemIds = locationForDeletion.rooms.flatMap((room) =>
-      room.items.map((item) => item.id),
+    const roomIds = locationForDeletion.rooms?.map((room) => room.id);
+    const itemIds = locationForDeletion.rooms?.flatMap(
+      (room) => room.items?.map((item) => item.id),
     );
 
     if (!locationForDeletion) {
@@ -111,12 +111,12 @@ export class LocationsService {
     }
     const newOrphanLocation = await this.locationsRepository.save({
       userId,
-      name: 'Orphan Home',
+      name: 'Orphaned Items Home',
       orphan_location: true,
     });
     const newOrphanRoom = await this.roomsRepository.save({
       userId,
-      name: 'Orphan Room',
+      name: 'Orphaned Items Room',
       orphan_room: true,
       locationId: newOrphanLocation.id,
     });
