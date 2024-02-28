@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { CreateMycuttingboardDto } from './dto/create-board.dto';
-import { UpdateMycuttingboardDto } from './dto/update-board.dto';
+import { CreateBoardDto } from './dto/create-board.dto';
+import { UpdateBoardDto } from './dto/update-board.dto';
 
 @Injectable()
 export class MycuttingboardService {
-  create(createMycuttingboardDto: CreateMycuttingboardDto) {
+  create(createBoardDto: CreateBoardDto) {
     return 'This action adds a new mycuttingboard';
   }
 
@@ -16,7 +16,7 @@ export class MycuttingboardService {
     return `This action returns a #${id} mycuttingboard`;
   }
 
-  update(id: number, updateMycuttingboardDto: UpdateMycuttingboardDto) {
+  update(id: number, updateBoardDto: UpdateBoardDto) {
     return `This action updates a #${id} mycuttingboard`;
   }
 

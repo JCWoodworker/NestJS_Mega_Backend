@@ -8,16 +8,16 @@ import {
   Delete,
 } from '@nestjs/common';
 import { MycuttingboardService } from './mycuttingboard.service';
-import { CreateMycuttingboardDto } from './dto/create-board.dto';
-import { UpdateMycuttingboardDto } from './dto/update-board.dto';
+import { CreateBoardDto } from './dto/create-board.dto';
+import { UpdateBoardDto } from './dto/update-board.dto';
 
 @Controller('mycuttingboard')
 export class MycuttingboardController {
   constructor(private readonly mycuttingboardService: MycuttingboardService) {}
 
   @Post()
-  create(@Body() createMycuttingboardDto: CreateMycuttingboardDto) {
-    return this.mycuttingboardService.create(createMycuttingboardDto);
+  create(@Body() createBoardDto: CreateBoardDto) {
+    return this.mycuttingboardService.create(createBoardDto);
   }
 
   @Get()
@@ -31,11 +31,8 @@ export class MycuttingboardController {
   }
 
   @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Body() updateMycuttingboardDto: UpdateMycuttingboardDto,
-  ) {
-    return this.mycuttingboardService.update(+id, updateMycuttingboardDto);
+  update(@Param('id') id: string, @Body() updateBoardDto: UpdateBoardDto) {
+    return this.mycuttingboardService.update(+id, updateBoardDto);
   }
 
   @Delete(':id')
