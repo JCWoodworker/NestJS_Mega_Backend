@@ -1,26 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { CreateBoardDto } from './dto/create-board.dto';
-import { UpdateBoardDto } from './dto/update-board.dto';
+
+import { BoardsService } from './resources/services/boards.service';
+import { LinksService } from './resources/services/links.service';
+import { WoodsService } from './resources/services/woods.service';
+
+// import { CreateBoardDto } from './dto/create-board.dto';
+// import { UpdateBoardDto } from './dto/update-board.dto';
 
 @Injectable()
 export class MycuttingboardService {
-  create(createBoardDto: CreateBoardDto) {
-    return 'This action adds a new mycuttingboard';
-  }
-
-  findAll() {
-    return `This action returns all mycuttingboard`;
-  }
-
-  findOne(id: number) {
-    return `This action returns a #${id} mycuttingboard`;
-  }
-
-  update(id: number, updateBoardDto: UpdateBoardDto) {
-    return `This action updates a #${id} mycuttingboard`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} mycuttingboard`;
-  }
+  constructor(
+    private readonly boardsService: BoardsService,
+    private readonly linksService: LinksService,
+    private readonly woodsService: WoodsService,
+  ) {}
 }
