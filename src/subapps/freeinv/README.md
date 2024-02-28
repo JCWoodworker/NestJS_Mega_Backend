@@ -29,6 +29,8 @@ To use this app, you need to create a free account.
     it should be in the parent service - in this case freeinv.service.ts
   * Same goes for controllers, each service should have its own controller
   * Stick to single responsibility!!!
+  * UPDATE 2/28/2024: added freeinv.service.ts, imported locations, rooms, and items services,
+    and added it as a provider in freeinv.module.ts
 
 * Add middleware for serializing and deserializing objects so we are not sending unnecessary
   properties back to the client
