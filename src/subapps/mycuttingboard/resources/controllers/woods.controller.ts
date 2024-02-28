@@ -6,7 +6,7 @@ export class WoodsController {
   constructor(private readonly woodsService: WoodsService) {}
 
   @Get('')
-  async findAll() {
+  async getTestMessage() {
     return await this.woodsService.getMessage();
   }
 }

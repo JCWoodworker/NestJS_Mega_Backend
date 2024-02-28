@@ -6,7 +6,7 @@ export class LinksController {
   constructor(private readonly linksService: LinksService) {}
 
   @Get('')
-  async findAll() {
+  async getTestMessage() {
     return await this.linksService.getMessage();
   }
 }

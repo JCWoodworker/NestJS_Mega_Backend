@@ -6,7 +6,7 @@ export class BoardsController {
   constructor(private readonly boardsService: BoardsService) {}
 
   @Get('')
-  async findAll() {
+  async getTestMessage() {
     return await this.boardsService.getMessage();
   }
 }
