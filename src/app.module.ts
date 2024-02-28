@@ -23,6 +23,7 @@ import { RolesGuard } from './iam/authorization/guards/roles.guard';
 import { AuthenticationGuard } from './iam/authentication/guards/authentication/authentication.guard';
 import { AccessTokenGuard } from './iam/authentication/guards/access-token/access-token.guard';
 import { SubappsModule } from './subapps/resources/subapps.module';
+import { MycuttingboardModule } from './subapps/mycuttingboard/mycuttingboard.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -61,6 +62,7 @@ import { SubappsModule } from './subapps/resources/subapps.module';
         ],
       },
     ]),
+    MycuttingboardModule,
   ],
   controllers: [AppController],
   providers: [
