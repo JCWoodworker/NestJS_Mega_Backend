@@ -2,7 +2,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class AddBizLinksUrlTable1708567463172 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    queryRunner.query(
+    await queryRunner.query(
       `CREATE TABLE "bizlinksfree_url" (
           "id" SERIAL NOT NULL PRIMARY KEY,
           "user_id" character varying NOT NULL,

@@ -9,6 +9,8 @@ import { UsersModule } from './users/users.module';
 import { IamModule } from './iam/iam.module';
 import { FreeinvModule } from './subapps/freeinv/freeinv.module';
 import { BizlinksfreeModule } from './subapps/bizlinksfree/bizlinksfree.module';
+import { MycuttingboardModule } from './subapps/mycuttingboard/mycuttingboard.module';
+import { SubappsModule } from './subapps/resources/subapps.module';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -22,7 +24,6 @@ import { APP_GUARD, RouterModule } from '@nestjs/core';
 import { RolesGuard } from './iam/authorization/guards/roles.guard';
 import { AuthenticationGuard } from './iam/authentication/guards/authentication/authentication.guard';
 import { AccessTokenGuard } from './iam/authentication/guards/access-token/access-token.guard';
-import { SubappsModule } from './subapps/resources/subapps.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -58,9 +59,14 @@ import { SubappsModule } from './subapps/resources/subapps.module';
             path: 'bizlinksfree',
             module: BizlinksfreeModule,
           },
+          {
+            path: 'mycuttingboard',
+            module: MycuttingboardModule,
+          },
         ],
       },
     ]),
+    MycuttingboardModule,
   ],
   controllers: [AppController],
   providers: [
