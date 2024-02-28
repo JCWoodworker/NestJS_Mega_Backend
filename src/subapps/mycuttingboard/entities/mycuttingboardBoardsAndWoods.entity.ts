@@ -6,10 +6,10 @@ export class Boards {
   id: number;
 
   @Column()
-  user_id: string;
+  board_id: string;
 
   @Column()
-  board_id: string;
+  wood_id: string;
 
   @Column()
   created_at: Date;

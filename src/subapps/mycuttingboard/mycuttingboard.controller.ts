@@ -8,8 +8,8 @@ import {
   Delete,
 } from '@nestjs/common';
 import { MycuttingboardService } from './mycuttingboard.service';
-import { CreateMycuttingboardDto } from './dto/create-mycuttingboard.dto';
-import { UpdateMycuttingboardDto } from './dto/update-mycuttingboard.dto';
+import { CreateMycuttingboardDto } from './dto/create-board.dto';
+import { UpdateMycuttingboardDto } from './dto/update-board.dto';
 
 @Controller('mycuttingboard')
 export class MycuttingboardController {

@@ -1,12 +1,14 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateLinksTable1709143563872 implements MigrationInterface {
+export class CreateBoardsAndWoodsTable1709143701179
+  implements MigrationInterface
+{
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `CREATE TABLE "links" (
+      `CREATE TABLE "boards_and_woods" (
         "id" SERIAL NOT NULL PRIMARY KEY,
-        "link_url" character varying NOT NULL,
-        "link_display_name" character varying NOT NULL,
+        "board_id" character varying NOT NULL,
+        "wood_id" character varying NOT NULL,
         "created_at" TIMESTAMP NOT NULL DEFAULT now(),
         "updated_at" TIMESTAMP NOT NULL DEFAULT now()
       )`,
@@ -14,6 +16,6 @@ export class CreateLinksTable1709143563872 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE "links"`);
+    await queryRunner.query(`DROP TABLE "boards_and_woods"`);
   }
 }

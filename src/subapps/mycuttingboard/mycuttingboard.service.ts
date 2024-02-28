@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { CreateMycuttingboardDto } from './dto/create-mycuttingboard.dto';
-import { UpdateMycuttingboardDto } from './dto/update-mycuttingboard.dto';
+import { CreateMycuttingboardDto } from './dto/create-board.dto';
+import { UpdateMycuttingboardDto } from './dto/update-board.dto';
 
 @Injectable()
 export class MycuttingboardService {

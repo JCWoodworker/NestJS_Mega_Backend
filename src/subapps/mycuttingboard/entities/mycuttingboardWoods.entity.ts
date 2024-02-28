@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { IsUrl } from 'class-validator';
 
 @Entity()
 export class Woods {
@@ -16,6 +17,10 @@ export class Woods {
 
   @Column()
   wood_hardness: string;
+
+  @Column()
+  @IsUrl()
+  wood_image_url: string;
 
   @Column()
   created_at: Date;

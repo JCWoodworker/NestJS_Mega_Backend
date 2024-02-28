@@ -6,6 +6,9 @@ export class Boards {
   id: number;
 
   @Column()
+  user_id: string;
+
+  @Column()
   board_type: string;
 
   @Column()
