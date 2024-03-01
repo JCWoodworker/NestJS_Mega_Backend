@@ -7,10 +7,10 @@ import authConfig from './config/auth.config';
 
 import { UsersModule } from './users/users.module';
 import { IamModule } from './iam/iam.module';
+import { SubappsModule } from './subapps/resources/subapps.module';
 import { FreeinvModule } from './subapps/freeinv/freeinv.module';
 import { BizlinksfreeModule } from './subapps/bizlinksfree/bizlinksfree.module';
 import { MycuttingboardModule } from './subapps/mycuttingboard/mycuttingboard.module';
-import { SubappsModule } from './subapps/resources/subapps.module';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
