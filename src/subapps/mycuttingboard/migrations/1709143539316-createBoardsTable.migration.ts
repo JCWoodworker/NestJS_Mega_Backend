@@ -8,6 +8,8 @@ export class CreateBoardsTable1709143539316 implements MigrationInterface {
         "user_id" character varying NOT NULL,
         "board_type" character varying NOT NULL,
         "board_description" character varying,
+        "customer_message" character varying,
+        "board_image_url" character varying,
         "created_at" TIMESTAMP NOT NULL DEFAULT now(),
         "updated_at" TIMESTAMP NOT NULL DEFAULT now()
       )`,
