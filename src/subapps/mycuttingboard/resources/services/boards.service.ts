@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { Boards } from '../../entities/mycuttingboardBoards.entity';
+import { error } from 'console';
 @Injectable()
 export class BoardsService {
   constructor(
@@ -13,7 +14,7 @@ export class BoardsService {
   async getBoardDataById(id: number) {
     const board = await this.boardsRepository.findOne({ where: { id } });
     if (!board) {
-      throw new Error('Board not found');
+      throw new HttpException('Board not found', HttpStatus.NOT_FOUND);
     }
     return board;
   }
