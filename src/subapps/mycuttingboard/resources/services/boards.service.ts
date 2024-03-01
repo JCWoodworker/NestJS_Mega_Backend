@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { Boards } from '../../entities/mycuttingboardBoards.entity';
-import { error } from 'console';
 @Injectable()
 export class BoardsService {
   constructor(
