@@ -11,6 +11,10 @@ export class BoardsService {
   ) {}
 
   async getBoardDataById(id: number) {
-    return await this.boardsRepository.findOne({ where: { id } });
+    const board = await this.boardsRepository.findOne({ where: { id } });
+    if (!board) {
+      throw new Error('Board not found');
+    }
+    return board;
   }
 }
