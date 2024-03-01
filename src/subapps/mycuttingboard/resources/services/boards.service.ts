@@ -1,9 +1,16 @@
 import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+
+import { Boards } from '../../entities/mycuttingboardBoards.entity';
 @Injectable()
 export class BoardsService {
-  constructor() {}
+  constructor(
+    @InjectRepository(Boards)
+    private boardsRepository: Repository<Boards>,
+  ) {}
 
-  async getMessage() {
-    return 'Hello from boards service!';
+  async getBoardDataById(id: number) {
+    return await this.boardsRepository.findOne({ where: { id } });
   }
 }

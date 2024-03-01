@@ -1,12 +1,15 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Param } from '@nestjs/common';
 import { BoardsService } from '../services/boards.service';
+import { Auth } from 'src/iam/decorators/auth.decorator';
+import { AuthType } from 'src/iam/enums/auth-type.enum';
 
+@Auth(AuthType.None)
 @Controller('boards')
 export class BoardsController {
   constructor(private readonly boardsService: BoardsService) {}
 
-  @Get('')
-  async getTestMessage() {
-    return await this.boardsService.getMessage();
+  @Get(':id')
+  async getTestMessage(@Param('id') id: number) {
+    return await this.boardsService.getBoardDataById(id);
   }
 }
