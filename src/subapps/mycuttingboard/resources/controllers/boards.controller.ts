@@ -14,8 +14,8 @@ export class BoardsController {
   }
 
   // @Auth(AuthType.Bearer)
-  // @Post()
-  // async addBoardData(@Body() boardData) {
-  //   return await this.boardsService.addBoardData(boardData);
-  // }
+  @Post()
+  async addBoardData(@Body() boardData) {
+    return await this.boardsService.addBoardData(boardData);
+  }
 }
