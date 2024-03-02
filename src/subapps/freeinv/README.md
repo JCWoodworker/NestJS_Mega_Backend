@@ -29,6 +29,8 @@ To use this app, you need to create a free account.
     it should be in the parent service - in this case freeinv.service.ts
   * Same goes for controllers, each service should have its own controller
   * Stick to single responsibility!!!
+  * UPDATE 2/28/2024: added freeinv.service.ts, imported locations, rooms, and items services,
+    and added it as a provider in freeinv.module.ts
 
 * Add middleware for serializing and deserializing objects so we are not sending unnecessary
   properties back to the client
@@ -39,3 +41,16 @@ To use this app, you need to create a free account.
   * folders, files, and endpoints
 
 * We need to add and implement seeders for the initial data.
+
+* We need to decide how we are generating and serving ads to the app and in emails
+  * Ads are based on user data
+    * What's in inventory
+    * Meta tags
+    * Links they've posted
+    * Etc
+
+* We need to enhance the experience of signing up for apps eventually.
+  * Will there be a main dashboard where users can see their list of apps?
+  * Do we refer to them as tools?
+  * How can we make the ecosystem work together
+  * How can we track usage?

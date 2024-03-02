@@ -11,6 +11,8 @@ import {
 import { LocationsService } from './services/locations.service';
 import { RoomsService } from './services/rooms.service';
 import { ItemsService } from './services/items.service';
+import { FreeinvService } from './freeinv.service';
+
 import { CreateInventoryElementDto } from './dto/create-inventory-element.dto';
 
 import { Role } from 'src/users/enums/role.enum';
@@ -23,6 +25,7 @@ export class FreeinvController {
     private readonly itemsService: ItemsService,
     private readonly locationsService: LocationsService,
     private readonly roomsService: RoomsService,
+    private readonly freeinvService: FreeinvService,
   ) {}
 
   // LOCATIONS
@@ -75,5 +78,11 @@ export class FreeinvController {
   async getAllLocationsWithRoomsAndItems(@Req() request) {
     const userId = request.user.sub;
     return this.locationsService.getAllLocationsWithRoomsAndItems(userId);
+  }
+
+  //TEST
+  @Get('testing')
+  async testing() {
+    return await this.freeinvService.testingMessage();
   }
 }
