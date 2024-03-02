@@ -1,4 +1,4 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Body, Post } from '@nestjs/common';
 import { BoardsService } from '../services/boards.service';
 import { Auth } from 'src/iam/decorators/auth.decorator';
 import { AuthType } from 'src/iam/enums/auth-type.enum';
@@ -11,5 +11,11 @@ export class BoardsController {
   @Get(':id')
   async getTestMessage(@Param('id') id: number) {
     return await this.boardsService.getBoardDataById(id);
+  }
+
+  // @Auth(AuthType.Bearer)
+  @Post()
+  async addBoardData(@Body() boardData) {
+    return await this.boardsService.addBoardData(boardData);
   }
 }

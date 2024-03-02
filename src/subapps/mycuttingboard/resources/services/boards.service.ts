@@ -17,4 +17,8 @@ export class BoardsService {
     }
     return board;
   }
+
+  async addBoardData(boardData: Boards) {
+    return await this.boardsRepository.save(boardData);
+  }
 }
