@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Body, Post } from '@nestjs/common';
+import { Controller, Get, Param, Body, Post, Delete } from '@nestjs/common';
 import { BoardsService } from '../services/boards.service';
 import { Auth } from 'src/iam/decorators/auth.decorator';
 import { AuthType } from 'src/iam/enums/auth-type.enum';
@@ -21,5 +21,12 @@ export class BoardsController {
   async addBoardData(@Body() boardData) {
     debugger;
     return await this.boardsService.addBoardData(boardData);
+  }
+
+  @Roles(Role.Admin)
+  @Auth(AuthType.Bearer)
+  @Delete(':id')
+  async deleteBoardData(@Param('id') id: number) {
+    return await this.boardsService.deleteBoardData(id);
   }
 }

@@ -21,4 +21,8 @@ export class BoardsService {
   async addBoardData(boardData: Boards) {
     return await this.boardsRepository.save(boardData);
   }
+
+  async deleteBoardData(id: number) {
+    return await this.boardsRepository.delete({ id });
+  }
 }
