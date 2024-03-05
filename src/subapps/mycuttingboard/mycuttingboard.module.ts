@@ -12,14 +12,14 @@ import { LinksService } from './resources/services/links.service';
 import { WoodsService } from './resources/services/woods.service';
 
 import { MycuttingboardBoards } from './entities/mycuttingboardBoards.entity';
-import { Links } from './entities/mycuttingboardLinks.entity';
+import { MycuttingboardLinks } from './entities/mycuttingboardLinks.entity';
 import { MycuttingboardWoods } from './entities/mycuttingboardWoods.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       MycuttingboardBoards,
-      Links,
+      MycuttingboardLinks,
       MycuttingboardWoods,
     ]),
   ],
