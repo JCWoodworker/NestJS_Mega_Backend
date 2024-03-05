@@ -3,7 +3,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 export class CreateWoodsTable1709143555371 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `CREATE TABLE "woods" (
+      `CREATE TABLE "mycuttingboard_woods" (
         "id" SERIAL NOT NULL PRIMARY KEY,
         "wood_name" character varying NOT NULL,
         "wood_description" character varying,

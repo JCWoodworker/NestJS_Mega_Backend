@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
 @Entity()
-export class UserLinks {
+export class MycuttingboardUserLinks {
   @PrimaryGeneratedColumn()
   id: number;
 

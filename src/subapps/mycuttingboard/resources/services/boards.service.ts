@@ -2,12 +2,12 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { Boards } from '../../entities/mycuttingboardBoards.entity';
+import { MycuttingboardBoards } from '../../entities/mycuttingboardBoards.entity';
 @Injectable()
 export class BoardsService {
   constructor(
-    @InjectRepository(Boards)
-    private boardsRepository: Repository<Boards>,
+    @InjectRepository(MycuttingboardBoards)
+    private boardsRepository: Repository<MycuttingboardBoards>,
   ) {}
 
   async getBoardDataById(id: number) {
@@ -18,7 +18,7 @@ export class BoardsService {
     return board;
   }
 
-  async addBoardData(boardData: Boards) {
+  async addBoardData(boardData: MycuttingboardBoards) {
     return await this.boardsRepository.save(boardData);
   }
 

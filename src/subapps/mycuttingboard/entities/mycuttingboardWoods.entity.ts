@@ -2,7 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 import { IsUrl } from 'class-validator';
 
 @Entity()
-export class Woods {
+export class MycuttingboardWoods {
   @PrimaryGeneratedColumn()
   id: number;
 
