@@ -1,4 +1,5 @@
 export enum SubappIds {
-  FREEINV = 'freeinv',
   BIZLINKS = 'bizlinks',
+  MYCUTTINGBOARD = 'mycuttingboard',
+  MYFREEINV = 'myfreeinv',
 }

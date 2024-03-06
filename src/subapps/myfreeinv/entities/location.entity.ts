@@ -1,8 +1,8 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
-import { Rooms } from './room.entity';
+import { MyfreeinvRooms } from './room.entity';
 import { IsBoolean } from 'class-validator';
 @Entity()
-export class Locations {
+export class MyfreeinvLocations {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -15,8 +15,8 @@ export class Locations {
   @Column()
   type: string;
 
-  @OneToMany(() => Rooms, (rooms) => rooms.location)
-  rooms: Rooms[];
+  @OneToMany(() => MyfreeinvRooms, (rooms) => rooms.location)
+  rooms: MyfreeinvRooms[];
 
   @Column()
   userId: string;

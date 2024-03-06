@@ -9,21 +9,21 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { Locations } from '../entities/location.entity';
-import { Rooms } from '../entities/room.entity';
-import { Items } from '../entities/item.entity';
+import { MyfreeinvLocations } from '../entities/location.entity';
+import { MyfreeinvRooms } from '../entities/room.entity';
+import { MyfreeinvItems } from '../entities/item.entity';
 import { CreateInventoryElementDto } from '../dto/create-inventory-element.dto';
 import { UpdateInventoryElementDto } from '../dto/update-inventory-element.dto';
 
 @Injectable()
 export class LocationsService {
   constructor(
-    @InjectRepository(Locations)
-    private readonly locationsRepository: Repository<Locations>,
-    @InjectRepository(Rooms)
-    private readonly roomsRepository: Repository<Rooms>,
-    @InjectRepository(Items)
-    private readonly itemsRepository: Repository<Items>,
+    @InjectRepository(MyfreeinvLocations)
+    private readonly locationsRepository: Repository<MyfreeinvLocations>,
+    @InjectRepository(MyfreeinvRooms)
+    private readonly roomsRepository: Repository<MyfreeinvRooms>,
+    @InjectRepository(MyfreeinvItems)
+    private readonly itemsRepository: Repository<MyfreeinvItems>,
   ) {}
   async findAllLocationsByUserId(userId: string) {
     const locationList = this.locationsRepository.find({ where: { userId } });
@@ -85,9 +85,9 @@ export class LocationsService {
     const orphanRoom = await this.findOrAddOrphanLocation(userId);
     await this.itemsRepository
       .createQueryBuilder()
-      .update(Items)
+      .update(MyfreeinvItems)
       .set({ roomId: +orphanRoom.id })
-      .where('items."roomId" IN (:...roomIds)', { roomIds })
+      .where('myfreeinv_items."roomId" IN (:...roomIds)', { roomIds })
       .execute();
     try {
       await this.locationsRepository.delete(locationId);

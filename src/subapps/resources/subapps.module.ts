@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { FreeinvModule } from '../freeinv/freeinv.module';
+import { MyfreeinvModule } from '../myfreeinv/myfreeinv.module';
 import { BizlinksfreeModule } from '../bizlinksfree/bizlinksfree.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
@@ -15,7 +15,7 @@ import authConfig from 'src/config/auth.config';
   imports: [
     TypeOrmModule.forFeature([UserSubappAccess]),
     ConfigModule.forFeature(authConfig),
-    FreeinvModule,
+    MyfreeinvModule,
     BizlinksfreeModule,
   ],
   controllers: [SubappsController],

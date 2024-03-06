@@ -1,8 +1,8 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
-import { Rooms } from './room.entity';
+import { MyfreeinvRooms } from './room.entity';
 
 @Entity()
-export class Items {
+export class MyfreeinvItems {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -18,8 +18,8 @@ export class Items {
   @Column()
   roomId: number;
 
-  @ManyToOne(() => Rooms, (room) => room.items)
-  room: Rooms;
+  @ManyToOne(() => MyfreeinvRooms, (room) => room.items)
+  room: MyfreeinvRooms;
 
   @Column()
   userId: string;

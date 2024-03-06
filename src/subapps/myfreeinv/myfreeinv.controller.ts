@@ -11,7 +11,7 @@ import {
 import { LocationsService } from './services/locations.service';
 import { RoomsService } from './services/rooms.service';
 import { ItemsService } from './services/items.service';
-import { FreeinvService } from './freeinv.service';
+import { FreeinvService } from './myfreeinv.service';
 
 import { CreateInventoryElementDto } from './dto/create-inventory-element.dto';
 
