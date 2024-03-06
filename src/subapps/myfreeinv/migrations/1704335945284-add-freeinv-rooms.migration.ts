@@ -1,9 +1,9 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddFreeinvRooms1704335945284 implements MigrationInterface {
+export class AddMyfreeinvRooms1704335945284 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     queryRunner.query(
-      `CREATE TABLE "rooms" (
+      `CREATE TABLE "myfreeinv_rooms" (
         "id" SERIAL NOT NULL PRIMARY KEY,
         "name" character varying NOT NULL,
         "description" character varying,
@@ -16,7 +16,7 @@ export class AddFreeinvRooms1704335945284 implements MigrationInterface {
         "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
         CONSTRAINT "FK_ROOMS_LOCATION" 
           FOREIGN KEY ("locationId") 
-          REFERENCES "locations" ("id")
+          REFERENCES "myfreeinv_locations" ("id")
           ON DELETE CASCADE
       )`,
     );
