@@ -2,15 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { Rooms } from '../entities/room.entity';
+import { MyfreeinvRooms } from '../entities/room.entity';
 import { CreateInventoryElementDto } from '../dto/create-inventory-element.dto';
 import { UpdateInventoryElementDto } from '../dto/update-inventory-element.dto';
 
 @Injectable()
 export class RoomsService {
   constructor(
-    @InjectRepository(Rooms)
-    private readonly roomsRepository: Repository<Rooms>,
+    @InjectRepository(MyfreeinvRooms)
+    private readonly roomsRepository: Repository<MyfreeinvRooms>,
   ) {}
 
   async findAllRoomsByUserId(userId: string) {

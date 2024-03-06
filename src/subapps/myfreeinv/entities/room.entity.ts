@@ -5,12 +5,12 @@ import {
   ManyToOne,
   OneToMany,
 } from 'typeorm';
-import { Locations } from './location.entity';
-import { Items } from './item.entity';
+import { MyfreeinvLocations } from './location.entity';
+import { MyfreeinvItems } from './item.entity';
 import { IsBoolean } from 'class-validator';
 
 @Entity()
-export class Rooms {
+export class MyfreeinvRooms {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -26,11 +26,11 @@ export class Rooms {
   @Column()
   locationId: number;
 
-  @ManyToOne(() => Locations, (locations) => locations.rooms)
-  location: Locations;
+  @ManyToOne(() => MyfreeinvLocations, (locations) => locations.rooms)
+  location: MyfreeinvLocations;
 
-  @OneToMany(() => Items, (items) => items.room)
-  items: Items[];
+  @OneToMany(() => MyfreeinvItems, (items) => items.room)
+  items: MyfreeinvItems[];
 
   @Column()
   userId: string;

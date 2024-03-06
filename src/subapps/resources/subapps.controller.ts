@@ -22,7 +22,6 @@ import { Auth } from 'src/iam/decorators/auth.decorator';
 import { AuthType } from 'src/iam/enums/auth-type.enum';
 import { FileInterceptor } from '@nestjs/platform-express';
 
-// REMOVE AuthType.None AND APPLY PROPER AUTHORIZATION FOR ALL SUBAPPS!!!
 @Auth(AuthType.Bearer)
 @Controller()
 export class SubappsController {
