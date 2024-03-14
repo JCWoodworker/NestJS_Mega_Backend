@@ -73,6 +73,13 @@ export class LocationsService {
       };
     }
 
+    if (itemIds.length > 0 && locationForDeletion.orphan_location === true) {
+      return {
+        result: false,
+        message: 'Cannot delete location with orphaned items',
+      };
+    }
+
     if (itemIds.length === 0) {
       try {
         await this.locationsRepository.delete(locationId);
