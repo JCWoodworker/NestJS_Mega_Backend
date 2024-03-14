@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 
-import { ItemsService } from './services/items.service';
-import { RoomsService } from './services/rooms.service';
-import { LocationsService } from './services/locations.service';
+import { ItemsService } from './resources/services/items.service';
+import { RoomsService } from './resources/services/rooms.service';
+import { LocationsService } from './resources/services/locations.service';
 
 @Injectable()
 export class FreeinvService {

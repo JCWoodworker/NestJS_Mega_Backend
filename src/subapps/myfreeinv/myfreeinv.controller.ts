@@ -8,9 +8,9 @@ import {
   Param,
 } from '@nestjs/common';
 
-import { LocationsService } from './services/locations.service';
-import { RoomsService } from './services/rooms.service';
-import { ItemsService } from './services/items.service';
+import { LocationsService } from './resources/services/locations.service';
+import { RoomsService } from './resources/services/rooms.service';
+import { ItemsService } from './resources/services/items.service';
 import { FreeinvService } from './myfreeinv.service';
 
 import { CreateInventoryElementDto } from './dto/create-inventory-element.dto';
