@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Req,
-  Delete,
-  Param,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Req } from '@nestjs/common';
 
 import { LocationsService } from './resources/services/locations.service';
 import { RoomsService } from './resources/services/rooms.service';
@@ -27,28 +19,6 @@ export class FreeinvController {
     private readonly roomsService: RoomsService,
     private readonly freeinvService: FreeinvService,
   ) {}
-
-  // LOCATIONS
-  @Get('locations')
-  findAllLocationsByUserId(@Req() request) {
-    const userId = request.user.sub;
-    return this.locationsService.findAllLocationsByUserId(userId);
-  }
-
-  @Post('locations')
-  async createLocation(
-    @Body() body: CreateInventoryElementDto,
-    @Req() request,
-  ) {
-    const userId = request.user.sub;
-    return await this.locationsService.create(body, userId);
-  }
-
-  @Delete('locations/:id')
-  async deleteLocation(@Param('id') locationId: number, @Req() request) {
-    const userId = request.user.sub;
-    return await this.locationsService.delete(locationId, userId);
-  }
 
   // ROOMS
   @Get('rooms')
@@ -78,11 +48,5 @@ export class FreeinvController {
   async getAllLocationsWithRoomsAndItems(@Req() request) {
     const userId = request.user.sub;
     return this.locationsService.getAllLocationsWithRoomsAndItems(userId);
-  }
-
-  //TEST
-  @Get('testing')
-  async testing() {
-    return await this.freeinvService.testingMessage();
   }
 }

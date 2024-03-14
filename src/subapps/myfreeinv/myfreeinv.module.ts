@@ -11,6 +11,10 @@ import { ConfigModule } from '@nestjs/config';
 import authConfig from 'src/config/auth.config';
 
 import { FreeinvController } from './myfreeinv.controller';
+import { LocationsController } from './resources/controllers/locations.controller';
+import { RoomsController } from './resources/controllers/rooms.controller';
+import { ItemsController } from './resources/controllers/items.controller';
+
 import { LocationsService } from './resources/services/locations.service';
 import { RoomsService } from './resources/services/rooms.service';
 import { ItemsService } from './resources/services/items.service';
@@ -29,7 +33,12 @@ import { MyfreeinvItems } from './entities/item.entity';
     ]),
     ConfigModule.forFeature(authConfig),
   ],
-  controllers: [FreeinvController],
+  controllers: [
+    FreeinvController,
+    LocationsController,
+    RoomsController,
+    ItemsController,
+  ],
   providers: [FreeinvService, ItemsService, LocationsService, RoomsService],
 })
 export class MyfreeinvModule {}
