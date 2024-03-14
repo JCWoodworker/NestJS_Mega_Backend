@@ -11,8 +11,4 @@ export class FreeinvService {
     private readonly locationsService: LocationsService,
     private readonly roomsService: RoomsService,
   ) {}
-
-  async testingMessage() {
-    return 'test hello';
-  }
 }
