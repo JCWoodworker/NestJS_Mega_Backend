@@ -12,7 +12,6 @@ export class FreeinvController {
 
   @Get('all-user-data')
   async getAllUserData(@Req() request) {
-    debugger;
     const userId = request.user.sub;
     return this.freeinvService.getAllUserData(userId);
   }
