@@ -1725,6 +1725,19 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@nestjs/devtools-integration@npm:^0.1.6":
+  version: 0.1.6
+  resolution: "@nestjs/devtools-integration@npm:0.1.6"
+  dependencies:
+    chalk: "npm:^4.1.2"
+    node-fetch: "npm:^2.6.9"
+  peerDependencies:
+    "@nestjs/common": ^9.3.7 || ^10.0.0
+    "@nestjs/core": ^9.3.7 || ^10.0.0
+  checksum: 7a8e5297469a6105fedd2283c5de21ff07bfa8b4d173faf540cc935ae67cbce7cf3fc14485e9ef4c3c6c85be9aa9e28bd5838dc236f8800dfdabc61899e1eba8
+  languageName: node
+  linkType: hard
+
 "@nestjs/jwt@npm:^10.2.0":
   version: 10.2.0
   resolution: "@nestjs/jwt@npm:10.2.0"
@@ -7325,6 +7338,7 @@ __metadata:
     "@nestjs/common": "npm:^10.2.8"
     "@nestjs/config": "npm:^3.1.1"
     "@nestjs/core": "npm:^10.3.0"
+    "@nestjs/devtools-integration": "npm:^0.1.6"
     "@nestjs/jwt": "npm:^10.2.0"
     "@nestjs/mapped-types": "npm:^2.0.3"
     "@nestjs/platform-express": "npm:^10.2.8"

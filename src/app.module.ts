@@ -24,8 +24,12 @@ import { APP_GUARD, RouterModule } from '@nestjs/core';
 import { RolesGuard } from './iam/authorization/guards/roles.guard';
 import { AuthenticationGuard } from './iam/authentication/guards/authentication/authentication.guard';
 import { AccessTokenGuard } from './iam/authentication/guards/access-token/access-token.guard';
+import { DevtoolsModule } from '@nestjs/devtools-integration';
 @Module({
   imports: [
+    DevtoolsModule.register({
+      http: process.env.ENVIRONMENT !== 'development',
+    }),
     ConfigModule.forRoot({
       isGlobal: true,
       load: [appConfig, authConfig],
