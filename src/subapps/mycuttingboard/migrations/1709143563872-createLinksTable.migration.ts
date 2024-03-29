@@ -1,6 +1,8 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateLinksTable1709143563872 implements MigrationInterface {
+export class CreateMycuttingboardLinksTable1709143563872
+  implements MigrationInterface
+{
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
       `CREATE TABLE "mycuttingboard_links" (

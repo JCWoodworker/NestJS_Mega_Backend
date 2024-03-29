@@ -1,11 +1,11 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateBoardsAndWoodsTable1709143701179
+export class CreateMycuttingboardBoardsAndWoodsTable1709143701179
   implements MigrationInterface
 {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `CREATE TABLE "boards_and_woods" (
+      `CREATE TABLE "mycuttingboard_boards_and_woods" (
         "id" SERIAL NOT NULL PRIMARY KEY,
         "board_id" character varying NOT NULL,
         "wood_id" character varying NOT NULL,
