@@ -27,6 +27,9 @@ import { AccessTokenGuard } from './iam/authentication/guards/access-token/acces
 import { DevtoolsModule } from '@nestjs/devtools-integration';
 @Module({
   imports: [
+    DevtoolsModule.register({
+      http: process.env.ENVIRONMENT !== 'development',
+    }),
     ConfigModule.forRoot({
       isGlobal: true,
       load: [appConfig, authConfig],
@@ -67,9 +70,6 @@ import { DevtoolsModule } from '@nestjs/devtools-integration';
         ],
       },
     ]),
-    DevtoolsModule.register({
-      http: process.env.ENVIRONMENT !== 'development',
-    }),
     MycuttingboardModule,
   ],
   controllers: [AppController],
