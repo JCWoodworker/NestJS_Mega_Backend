@@ -10,6 +10,7 @@ import { SubappsController } from './subapps.controller';
 import { UserSubappAccess } from './entities/userSubappAccess.entity';
 
 import authConfig from 'src/config/auth.config';
+import { MycuttingboardModule } from '../mycuttingboard/mycuttingboard.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import authConfig from 'src/config/auth.config';
     ConfigModule.forFeature(authConfig),
     MyfreeinvModule,
     BizlinksfreeModule,
+    MycuttingboardModule,
   ],
   controllers: [SubappsController],
   providers: [SubappsService],

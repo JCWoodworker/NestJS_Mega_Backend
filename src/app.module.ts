@@ -70,7 +70,6 @@ import { DevtoolsModule } from '@nestjs/devtools-integration';
         ],
       },
     ]),
-    MycuttingboardModule,
   ],
   controllers: [AppController],
   providers: [
