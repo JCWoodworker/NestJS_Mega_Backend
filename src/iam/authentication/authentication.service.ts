@@ -18,7 +18,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RefreshTokensService } from './refresh-token-storage/refresh-token-storage.service';
 import { randomUUID } from 'crypto';
 import { InvalidateRefreshTokenError } from './refresh-token-storage/invalidate-refresh-token-error';
-import { SubappsService } from 'src/subapps/resources/subapps.service';
+import { SubappsService } from 'src/subapps/subapps.service';
 
 @Injectable()
 export class AuthenticationService {

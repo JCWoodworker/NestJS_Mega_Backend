@@ -10,7 +10,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { Repository } from 'typeorm';
 import { Users } from '../../../users/entities/users.entity';
 import { AuthenticationService } from '../authentication.service';
-import { SubappsService } from 'src/subapps/resources/subapps.service';
+import { SubappsService } from 'src/subapps/subapps.service';
 
 @Injectable()
 export class GoogleAuthenticationService implements OnModuleInit {

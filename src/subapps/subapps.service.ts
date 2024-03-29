@@ -1,7 +1,7 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { InjectRepository } from '@nestjs/typeorm';
-import { UserSubappAccess } from './entities/userSubappAccess.entity';
+import { UserSubappAccess } from './resources/entities/userSubappAccess.entity';
 import { Repository } from 'typeorm';
 
 interface ImageSubmissionBody {

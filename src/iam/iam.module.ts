@@ -14,7 +14,7 @@ import { RefreshTokensService } from './authentication/refresh-token-storage/ref
 import { RefreshTokens } from './authentication/refresh-token-storage/refresh-token-storage.entity';
 import { GoogleAuthenticationService } from './authentication/social/google-authentication.service';
 import { GoogleAuthenticationController } from './authentication/social/google-authentication.controller';
-import { SubappsService } from 'src/subapps/resources/subapps.service';
+import { SubappsService } from 'src/subapps/subapps.service';
 import { UserSubappAccess } from 'src/subapps/resources/entities/userSubappAccess.entity';
 
 @Module({
