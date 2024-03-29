@@ -109,6 +109,9 @@ ALLOWED_ORIGINS=origin1,origin2,origin3
 
 ## TODOs
 
+*** MOVE MYCUTTINGBOARD TO SUBAPPS MODULE ***
+* It currently resides under app module and needs to be moved to it's proper scope
+
 * Update README files for the following:
   * config
   * iam
