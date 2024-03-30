@@ -1,5 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
-import { LinksService } from '../services/links.service';
+import { LinksService } from './services/links.service';
 
 @Controller('links')
 export class LinksController {
