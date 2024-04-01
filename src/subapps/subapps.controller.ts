@@ -28,7 +28,8 @@ export class SubappsController {
   constructor(private readonly subappsService: SubappsService) {}
 
   // S3 BUCKET UPLOAD
-  // This needs to be moved up to the general subapps controller/service
+  // TODO: Add logic to handle sending a subapp name to the backlend
+  // This will help us direct images to the proper bucket
   @Post('image-upload')
   @UseInterceptors(FileInterceptor('image'))
   async imageUpload(@UploadedFile() file: Express.Multer.File, @Body() body) {
