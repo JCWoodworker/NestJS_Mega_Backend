@@ -2,9 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { MyfreeinvRooms } from '../entities/room.entity';
-import { CreateInventoryElementDto } from '../dto/create-inventory-element.dto';
-import { UpdateInventoryElementDto } from '../dto/update-inventory-element.dto';
+import { MyfreeinvRooms } from '../../entities/room.entity';
+import { CreateInventoryElementDto } from '../../dto/create-inventory-element.dto';
+import { UpdateInventoryElementDto } from '../../dto/update-inventory-element.dto';
 
 @Injectable()
 export class RoomsService {

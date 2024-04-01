@@ -33,7 +33,7 @@ To use this app, you need to create a free account.
     and added it as a provider in freeinv.module.ts
 
 * Add middleware for serializing and deserializing objects so we are not sending unnecessary
-  properties back to the client
+  properties back to the client - see further details in comments within myfreeinv service 
 * Add method for deleting a room
 * Add method for deleting an item
 

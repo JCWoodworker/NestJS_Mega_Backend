@@ -1,5 +1,5 @@
 import { Controller, Get, Param, Body, Post, Delete } from '@nestjs/common';
-import { BoardsService } from '../services/boards.service';
+import { BoardsService } from './services/boards.service';
 import { Auth } from 'src/iam/decorators/auth.decorator';
 import { AuthType } from 'src/iam/enums/auth-type.enum';
 import { Role } from 'src/users/enums/role.enum';

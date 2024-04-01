@@ -9,11 +9,11 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { MyfreeinvLocations } from '../entities/location.entity';
-import { MyfreeinvRooms } from '../entities/room.entity';
-import { MyfreeinvItems } from '../entities/item.entity';
-import { CreateInventoryElementDto } from '../dto/create-inventory-element.dto';
-import { UpdateInventoryElementDto } from '../dto/update-inventory-element.dto';
+import { MyfreeinvLocations } from '../../entities/location.entity';
+import { MyfreeinvRooms } from '../../entities/room.entity';
+import { MyfreeinvItems } from '../../entities/item.entity';
+import { CreateInventoryElementDto } from '../../dto/create-inventory-element.dto';
+import { UpdateInventoryElementDto } from '../../dto/update-inventory-element.dto';
 
 @Injectable()
 export class LocationsService {
@@ -70,6 +70,13 @@ export class LocationsService {
         result: false,
         message:
           'User attempting to make the change does not own this location and is not an admin',
+      };
+    }
+
+    if (itemIds.length > 0 && locationForDeletion.orphan_location === true) {
+      return {
+        result: false,
+        message: 'Cannot delete location with orphaned items',
       };
     }
 
