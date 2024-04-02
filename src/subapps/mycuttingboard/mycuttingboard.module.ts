@@ -7,9 +7,9 @@ import { LinksController } from './resources/controllers/links.controller';
 import { WoodsController } from './resources/controllers/woods.controller';
 
 import { MycuttingboardService } from './mycuttingboard.service';
-import { BoardsService } from './resources/controllers/services/boards.service';
-import { LinksService } from './resources/controllers/services/links.service';
-import { WoodsService } from './resources/controllers/services/woods.service';
+import { BoardsService } from './resources/services/boards.service';
+import { LinksService } from './resources/services/links.service';
+import { WoodsService } from './resources/services/woods.service';
 
 import { MycuttingboardBoards } from './entities/mycuttingboardBoards.entity';
 import { MycuttingboardLinks } from './entities/mycuttingboardLinks.entity';
