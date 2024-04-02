@@ -19,7 +19,6 @@ export class BoardsController {
   @Auth(AuthType.Bearer)
   @Post()
   async addBoardData(@Body() boardData) {
-    debugger;
     return await this.boardsService.addBoardData(boardData);
   }
 
