@@ -5,7 +5,6 @@ import { AuthType } from 'src/iam/enums/auth-type.enum';
 import { Role } from 'src/users/enums/role.enum';
 import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
 
-@Auth(AuthType.Bearer)
 @Controller('boards')
 export class BoardsController {
   constructor(private readonly boardsService: BoardsService) {}
