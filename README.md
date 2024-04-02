@@ -110,7 +110,11 @@ ALLOWED_ORIGINS=origin1,origin2,origin3
 ## TODOs
 
 *** MOVE MYCUTTINGBOARD TO SUBAPPS MODULE ***
-* It currently resides under app module and needs to be moved to it's proper scope
+* Fix all instances of camelCase in migrations!!
+  * We need to be more consistent with naming conventions
+  * example:
+    * "subappId" character varying NOT NULL,
+    * "subscription_tier" character varying NOT NULL DEFAULT 'basic',
 
 * Update README files for the following:
   * config

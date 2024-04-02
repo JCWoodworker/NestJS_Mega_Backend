@@ -61,7 +61,6 @@ export class SubappsService {
       userSubappData.userId = userId;
       userSubappData.subappId = subappId;
       userSubappData.subscription_tier = subscriptionTier;
-
       await this.userSubappAccessRepository.save(userSubappData);
       return { message: 'Subapp user data added successfully' };
     } catch (err) {
