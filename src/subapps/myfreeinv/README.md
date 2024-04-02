@@ -21,17 +21,6 @@ To use this app, you need to create a free account.
 
 ## TODO
 
-* We need to re-organize for better readability and cleaner code.
-  * re-organize folders to be more logical
-  * resource folders for locations, room, and items with services and controllers
-  * Central subapp controller AND service.  We should NOT be cross-using methods between
-    the location, room, and item services.  If a method needs to call from more than one service
-    it should be in the parent service - in this case freeinv.service.ts
-  * Same goes for controllers, each service should have its own controller
-  * Stick to single responsibility!!!
-  * UPDATE 2/28/2024: added freeinv.service.ts, imported locations, rooms, and items services,
-    and added it as a provider in freeinv.module.ts
-
 * Add middleware for serializing and deserializing objects so we are not sending unnecessary
   properties back to the client - see further details in comments within myfreeinv service 
 * Add method for deleting a room
