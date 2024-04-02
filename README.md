@@ -109,7 +109,6 @@ ALLOWED_ORIGINS=origin1,origin2,origin3
 
 ## TODOs
 
-*** MOVE MYCUTTINGBOARD TO SUBAPPS MODULE ***
 * Fix all instances of camelCase in migrations!!
   * We need to be more consistent with naming conventions
   * example:
