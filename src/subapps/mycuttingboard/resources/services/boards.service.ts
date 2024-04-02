@@ -2,7 +2,7 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { MycuttingboardBoards } from '../../../entities/mycuttingboardBoards.entity';
+import { MycuttingboardBoards } from '../../entities/mycuttingboardBoards.entity';
 @Injectable()
 export class BoardsService {
   constructor(

@@ -13,7 +13,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { BizlinksfreeUrl } from '../entities/bizlinksfreeUrl.entity';
+import { BizlinksfreeUrl } from '../../entities/bizlinksfreeUrl.entity';
 // import { CreateBizlinksfreeUrlDto } from './dto/create-bizlinksfree-url.dto';
 // import { UpdateBizlinksfreeUrlDto } from './dto/update-bizlinksfree-url.dto';
 

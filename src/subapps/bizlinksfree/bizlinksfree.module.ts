@@ -4,8 +4,8 @@ import { ConfigModule } from '@nestjs/config';
 import authConfig from 'src/config/auth.config';
 
 import { BizlinksfreeController } from './bizlinksfree.controller';
-import { BizlinksfreeUserSettingsService } from './services/bizlinksfreeUserSettings.service';
-import { BizlinksfreeUrlService } from './services/bizlinksfreeUrl.service';
+import { BizlinksfreeUserSettingsService } from './resources/services/bizlinksfreeUserSettings.service';
+import { BizlinksfreeUrlService } from './resources/services/bizlinksfreeUrl.service';
 
 import { BizlinksfreeUserSettings } from './entities/bizlinksfreeUserSettings.entity';
 import { BizlinksfreeUrl } from './entities/bizlinksfreeUrl.entity';
