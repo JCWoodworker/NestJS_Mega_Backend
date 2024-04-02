@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { MycuttingboardWoods } from '../../../entities/mycuttingboardWoods.entity';
+import { MycuttingboardWoods } from '../../entities/mycuttingboardWoods.entity';
 
 @Injectable()
 export class WoodsService {
