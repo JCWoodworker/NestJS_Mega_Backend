@@ -12,10 +12,12 @@ import { AccessTokenGuard } from './authentication/guards/access-token/access-to
 import { RefreshTokensModule } from './authentication/refresh-token-storage/refresh-token-storage.module';
 import { RefreshTokensService } from './authentication/refresh-token-storage/refresh-token-storage.service';
 import { RefreshTokens } from './authentication/refresh-token-storage/refresh-token-storage.entity';
-import { GoogleAuthenticationService } from './authentication/social/google-authentication.service';
-import { GoogleAuthenticationController } from './authentication/social/google-authentication.controller';
+import { GoogleAuthenticationService } from './authentication/social/google/google-authentication.service';
+import { GoogleAuthenticationController } from './authentication/social/google/google-authentication.controller';
 import { SubappsService } from 'src/subapps/subapps.service';
 import { UserSubappAccess } from 'src/subapps/resources/entities/userSubappAccess.entity';
+import { FacebookAuthenticationController } from './authentication/social/facebook/facebook-authentication.controller';
+import { FacebookAuthenticationService } from './authentication/social/facebook/facebook-authentication.service';
 
 @Module({
   providers: [
@@ -28,6 +30,7 @@ import { UserSubappAccess } from 'src/subapps/resources/entities/userSubappAcces
     RefreshTokensService,
     GoogleAuthenticationService,
     SubappsService,
+    FacebookAuthenticationService,
   ],
   imports: [
     TypeOrmModule.forFeature([Users, RefreshTokens, UserSubappAccess]),
@@ -36,6 +39,10 @@ import { UserSubappAccess } from 'src/subapps/resources/entities/userSubappAcces
     RefreshTokensModule,
   ],
   exports: [],
-  controllers: [AuthenticationController, GoogleAuthenticationController],
+  controllers: [
+    AuthenticationController,
+    GoogleAuthenticationController,
+    FacebookAuthenticationController,
+  ],
 })
 export class IamModule {}
