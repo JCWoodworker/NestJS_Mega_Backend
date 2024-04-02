@@ -15,7 +15,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 // import { Response } from 'express';
 
 @Auth(AuthType.None)
-@Controller('authentication')
+@Controller()
 export class AuthenticationController {
   constructor(private readonly authService: AuthenticationService) {}
 

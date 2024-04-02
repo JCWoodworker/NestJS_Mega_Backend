@@ -5,7 +5,7 @@ import { ActiveUserData } from 'src/iam/interfaces/active-user-data.interface';
 import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
 import { Role } from 'src/users/enums/role.enum';
 
-@Controller('users')
+@Controller()
 export class UserController {
   constructor(private readonly userService: UsersService) {}
 

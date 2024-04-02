@@ -16,6 +16,7 @@ export class UsersService {
       return {
         id: user.id,
         email: user.email,
+        role: user.role,
       };
     });
   }
@@ -24,15 +25,11 @@ export class UsersService {
     const user = await this.usersRepository.findOne({
       where: { id },
     });
+    debugger;
     return {
       id: user.id,
       email: user.email,
+      role: user.role,
     };
-  }
-
-  async findOneByEmail(email: string) {
-    return await this.usersRepository.findOne({
-      where: { email: email },
-    });
   }
 }

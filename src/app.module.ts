@@ -52,6 +52,14 @@ import { DevtoolsModule } from '@nestjs/devtools-integration';
     SubappsModule,
     RouterModule.register([
       {
+        path: 'users',
+        module: UsersModule,
+      },
+      {
+        path: 'authentication',
+        module: IamModule,
+      },
+      {
         path: 'subapps',
         module: SubappsModule,
         children: [
