@@ -1,4 +1,12 @@
-import { Controller } from '@nestjs/common';
+import { Controller, Post } from '@nestjs/common';
+import { Auth } from 'src/iam/decorators/auth.decorator';
+import { AuthType } from 'src/iam/enums/auth-type.enum';
 
-@Controller('facebook-authentication')
-export class FacebookAuthenticationController {}
+@Auth(AuthType.None)
+@Controller('authentication/facebook')
+export class FacebookAuthenticationController {
+  @Post()
+  async authenticate() {
+    return 'Facebook Auth Not Yet Implemented';
+  }
+}
