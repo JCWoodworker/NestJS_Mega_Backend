@@ -74,8 +74,8 @@ export class GoogleAuthenticationService implements OnModuleInit {
               'You have authenticated successfully, but you do not have access to this specific subapp.  Please sign up for this subapp first',
           };
         }
-        const tokens = await this.authService.generateTokens(user);
-        return { tokens, userNameAndImage };
+        const userAndTokens = await this.authService.generateTokens(user);
+        return { userAndTokens };
       } else {
         const newUser = await this.usersRepository.save({
           email,
@@ -89,8 +89,8 @@ export class GoogleAuthenticationService implements OnModuleInit {
           subappId,
           subscription_tier,
         );
-        const tokens = await this.authService.generateTokens(newUser);
-        return { tokens, userNameAndImage };
+        const userAndTokens = await this.authService.generateTokens(newUser);
+        return { userAndTokens };
       }
     } catch (err) {
       const pgUniqueViolationErrorCode = '23505';

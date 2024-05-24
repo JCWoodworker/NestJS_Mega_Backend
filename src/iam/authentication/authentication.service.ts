@@ -105,8 +105,15 @@ export class AuthenticationService {
       refreshTokenId,
     );
     return {
-      accessToken,
-      refreshToken,
+      userInfo: {
+        firstName: user.first_name,
+        lastName: user.last_name,
+        imageUrl: user.image_url,
+      },
+      tokens: {
+        accessToken,
+        refreshToken,
+      },
     };
   }
 
