@@ -40,7 +40,18 @@ export class GoogleAuthenticationService implements OnModuleInit {
       const loginTicket = await this.oauthClient.verifyIdToken({
         idToken: token,
       });
-      const { email, sub: googleId } = loginTicket.getPayload();
+      const {
+        email,
+        sub: googleId,
+        given_name,
+        family_name,
+        picture,
+      } = loginTicket.getPayload();
+      const userNameAndImage = {
+        firstName: given_name,
+        lastName: family_name,
+        imageUrl: picture,
+      };
       const user = await this.usersRepository.findOneBy({ googleId });
       if (user) {
         const userId = user.id.toString();
@@ -56,6 +67,7 @@ export class GoogleAuthenticationService implements OnModuleInit {
             subscription_tier,
           );
         } else if (!userSubappAccessExists && signUpOrIn === 'signin') {
+          // instead, just add this app to their list of subapps they can access
           return {
             status: 403,
             message:
@@ -63,16 +75,22 @@ export class GoogleAuthenticationService implements OnModuleInit {
           };
         }
         const tokens = await this.authService.generateTokens(user);
-        return { tokens };
+        return { tokens, userNameAndImage };
       } else {
-        const newUser = await this.usersRepository.save({ email, googleId });
+        const newUser = await this.usersRepository.save({
+          email,
+          googleId,
+          first_name: userNameAndImage.firstName,
+          last_name: userNameAndImage.lastName,
+          image_url: userNameAndImage.imageUrl,
+        });
         await this.subappsService.addSubappUserData(
           newUser.id,
           subappId,
           subscription_tier,
         );
         const tokens = await this.authService.generateTokens(newUser);
-        return { tokens };
+        return { tokens, userNameAndImage };
       }
     } catch (err) {
       const pgUniqueViolationErrorCode = '23505';

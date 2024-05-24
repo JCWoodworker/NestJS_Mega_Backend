@@ -18,6 +18,15 @@ export class Users {
   @Column({ nullable: true })
   googleId: string;
 
+  @Column({ nullable: true })
+  first_name: string;
+
+  @Column({ nullable: true })
+  last_name: string;
+
+  @Column({ nullable: true })
+  image_url: string;
+
   @Column()
   created_at: Date;
 
