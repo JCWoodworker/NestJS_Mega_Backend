@@ -104,11 +104,13 @@ export class AuthenticationService {
       user.id,
       refreshTokenId,
     );
+
     return {
       userInfo: {
         firstName: user.first_name,
         lastName: user.last_name,
         imageUrl: user.image_url,
+        role: user.role,
       },
       tokens: {
         accessToken,
