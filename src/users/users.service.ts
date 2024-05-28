@@ -25,7 +25,6 @@ export class UsersService {
     const user = await this.usersRepository.findOne({
       where: { id },
     });
-    debugger;
     return {
       id: user.id,
       email: user.email,

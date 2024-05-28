@@ -12,11 +12,13 @@ import { CoastersService } from './resources/services/coasters.service';
 import { BoardsService } from './resources/services/boards.service';
 import { LinksService } from './resources/services/links.service';
 import { WoodsService } from './resources/services/woods.service';
+import { AdminService } from './resources/services/admin.service';
 
 import { MycuttingboardBoards } from './entities/mycuttingboardBoards.entity';
 import { MycuttingboardCoasters } from './entities/mycuttingboardCoasters.entity';
 import { MycuttingboardLinks } from './entities/mycuttingboardLinks.entity';
 import { MycuttingboardWoods } from './entities/mycuttingboardWoods.entity';
+import { AdminController } from './resources/controllers/admin.controller';
 
 @Module({
   imports: [
@@ -33,6 +35,7 @@ import { MycuttingboardWoods } from './entities/mycuttingboardWoods.entity';
     BoardsController,
     LinksController,
     WoodsController,
+    AdminController,
   ],
   providers: [
     MycuttingboardService,
@@ -40,6 +43,7 @@ import { MycuttingboardWoods } from './entities/mycuttingboardWoods.entity';
     BoardsService,
     LinksService,
     WoodsService,
+    AdminService,
   ],
 })
 export class MycuttingboardModule {}
