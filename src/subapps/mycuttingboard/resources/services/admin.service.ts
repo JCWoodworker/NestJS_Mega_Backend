@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { BoardsService } from './boards.service';
 import { CoastersService } from './coasters.service';
-import { WoodsService } from './woods.service';
+// import { WoodsService } from './woods.service';
 
 import { MycuttingboardBoards } from '../../entities/mycuttingboardBoards.entity';
 import { MycuttingboardCoasters } from '../../entities/mycuttingboardCoasters.entity';
@@ -13,7 +13,6 @@ export class AdminService {
   constructor(
     private boardsService: BoardsService,
     private coastersService: CoastersService,
-    private woodsService: WoodsService,
   ) {}
 
   async getTestMessage() {
