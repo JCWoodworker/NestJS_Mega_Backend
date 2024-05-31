@@ -25,4 +25,9 @@ export class CoastersService {
   async deleteCoasterData(id: number) {
     return await this.coastersRepository.delete({ id });
   }
+
+  // This needs a proper DTO before implementation
+  // async updateCoasterData(id: number, body: MycuttingboardCoasters) {
+  //   return await this.coastersRepository.update(id, body);
+  // }
 }
