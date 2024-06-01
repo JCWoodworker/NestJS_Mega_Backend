@@ -30,4 +30,8 @@ export class CoastersService {
   // async updateCoasterData(id: number, body: MycuttingboardCoasters) {
   //   return await this.coastersRepository.update(id, body);
   // }
+
+  getAllCoasterData() {
+    return this.coastersRepository.find();
+  }
 }

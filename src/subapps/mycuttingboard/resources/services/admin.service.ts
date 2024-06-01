@@ -21,6 +21,13 @@ export class AdminService {
     };
   }
 
+  async getAllProductData() {
+    const boards = await this.boardsService.getAllBoardData();
+    const coasters = await this.coastersService.getAllCoasterData();
+    // const woods = await this.woodsService.getAllWoodsData();
+    return { boards, coasters };
+  }
+
   /*
   CUTTING BOARD SERVICES
   */

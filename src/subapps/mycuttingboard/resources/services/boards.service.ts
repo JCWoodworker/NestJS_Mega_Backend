@@ -30,4 +30,8 @@ export class BoardsService {
   // async updateBoardData(id: number, boardData: MycuttingboardBoards) {
   //   return await this.boardsRepository.update({ id }, boardData);
   // }
+
+  getAllBoardData() {
+    return this.boardsRepository.find();
+  }
 }

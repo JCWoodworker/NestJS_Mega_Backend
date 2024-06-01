@@ -16,6 +16,11 @@ export class AdminController {
     return await this.adminService.getTestMessage();
   }
 
+  @Get('all-product-data')
+  async getAllProductData() {
+    return await this.adminService.getAllProductData();
+  }
+
   @Get('board/:id')
   async getBoardDataById(@Param('id') id: number) {
     return await this.adminService.getBoardDataById(id);
