@@ -25,4 +25,13 @@ export class BoardsService {
   async deleteBoardData(id: number) {
     return await this.boardsRepository.delete({ id });
   }
+
+  // This needs a proper DTO before implementation
+  // async updateBoardData(id: number, boardData: MycuttingboardBoards) {
+  //   return await this.boardsRepository.update({ id }, boardData);
+  // }
+
+  getAllBoardData() {
+    return this.boardsRepository.find();
+  }
 }

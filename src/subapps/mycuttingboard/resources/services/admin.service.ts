@@ -1,20 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+
+import { BoardsService } from './boards.service';
+import { CoastersService } from './coasters.service';
+// import { WoodsService } from './woods.service';
 
 import { MycuttingboardBoards } from '../../entities/mycuttingboardBoards.entity';
 import { MycuttingboardCoasters } from '../../entities/mycuttingboardCoasters.entity';
-import { MycuttingboardWoods } from '../../entities/mycuttingboardWoods.entity';
+// import { MycuttingboardWoods } from '../../entities/mycuttingboardWoods.entity';
 
 @Injectable()
 export class AdminService {
   constructor(
-    @InjectRepository(MycuttingboardBoards)
-    private boardsRepository: Repository<MycuttingboardBoards>,
-    @InjectRepository(MycuttingboardCoasters)
-    private coastersRepository: Repository<MycuttingboardCoasters>,
-    @InjectRepository(MycuttingboardWoods)
-    private woodsRepository: Repository<MycuttingboardWoods>,
+    private boardsService: BoardsService,
+    private coastersService: CoastersService,
   ) {}
 
   async getTestMessage() {
@@ -23,19 +21,42 @@ export class AdminService {
     };
   }
 
-  // async getBoardDataById(id: number) {
-  //   const board = await this.boardsRepository.findOne({ where: { id } });
-  //   if (!board) {
-  //     throw new HttpException('Board not found', HttpStatus.NOT_FOUND);
-  //   }
-  //   return board;
-  // }
+  async getAllProductData() {
+    const boards = await this.boardsService.getAllBoardData();
+    const coasters = await this.coastersService.getAllCoasterData();
+    // const woods = await this.woodsService.getAllWoodsData();
+    return { boards, coasters };
+  }
 
-  // async addBoardData(boardData: MycuttingboardBoards) {
-  //   return await this.boardsRepository.save(boardData);
-  // }
+  /*
+  CUTTING BOARD SERVICES
+  */
 
-  // async deleteBoardData(id: number) {
-  //   return await this.boardsRepository.delete({ id });
-  // }
+  async getBoardDataById(id: number) {
+    return await this.boardsService.getBoardDataById(id);
+  }
+
+  async addBoardData(boardData: MycuttingboardBoards) {
+    return await this.boardsService.addBoardData(boardData);
+  }
+
+  async deleteBoardData(id: number) {
+    return await this.boardsService.deleteBoardData(id);
+  }
+
+  /*
+  COASTER SERVICES
+  */
+
+  async getCoasterDataById(id: number) {
+    return await this.coastersService.getCoasterDataById(id);
+  }
+
+  async addCoasterData(coasterData: MycuttingboardCoasters) {
+    return await this.coastersService.addCoasterData(coasterData);
+  }
+
+  async deleteCoasterData(id: number) {
+    return await this.coastersService.deleteCoasterData(id);
+  }
 }
