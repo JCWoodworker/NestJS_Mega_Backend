@@ -1,16 +1,19 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 
 import { BoardsService } from './boards.service';
 import { CoastersService } from './coasters.service';
-// import { WoodsService } from './woods.service';
-
 import { MycuttingboardBoards } from '../../entities/mycuttingboardBoards.entity';
 import { MycuttingboardCoasters } from '../../entities/mycuttingboardCoasters.entity';
-// import { MycuttingboardWoods } from '../../entities/mycuttingboardWoods.entity';
 
 @Injectable()
 export class AdminService {
   constructor(
+    @InjectRepository(MycuttingboardBoards)
+    private boardsRepository: Repository<MycuttingboardBoards>,
+    @InjectRepository(MycuttingboardCoasters)
+    private coastersRepository: Repository<MycuttingboardCoasters>,
     private boardsService: BoardsService,
     private coastersService: CoastersService,
   ) {}
@@ -28,35 +31,19 @@ export class AdminService {
     return { boards, coasters };
   }
 
-  /*
-  CUTTING BOARD SERVICES
-  */
-
-  async getBoardDataById(id: number) {
-    return await this.boardsService.getBoardDataById(id);
-  }
-
-  async addBoardData(boardData: MycuttingboardBoards) {
-    return await this.boardsService.addBoardData(boardData);
-  }
-
-  async deleteBoardData(id: number) {
-    return await this.boardsService.deleteBoardData(id);
-  }
-
-  /*
-  COASTER SERVICES
-  */
-
-  async getCoasterDataById(id: number) {
-    return await this.coastersService.getCoasterDataById(id);
-  }
-
-  async addCoasterData(coasterData: MycuttingboardCoasters) {
-    return await this.coastersService.addCoasterData(coasterData);
-  }
-
-  async deleteCoasterData(id: number) {
-    return await this.coastersService.deleteCoasterData(id);
+  async addNewProduct(product: any) {
+    if (product.category === 'board') {
+      debugger;
+      return await this.boardsRepository.save(product.newProduct);
+    } else if (product.category === 'coaster') {
+      debugger;
+      return await this.coastersRepository.save(product.newProduct);
+    } else {
+      debugger;
+      throw new HttpException(
+        'Invalid product type',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
   }
 }
