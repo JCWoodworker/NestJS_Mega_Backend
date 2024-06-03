@@ -32,14 +32,24 @@ export class AdminService {
   }
 
   async addNewProduct(product: any) {
-    if (product.category === 'board') {
-      debugger;
+    if (product.category === 'boards') {
       return await this.boardsRepository.save(product.newProduct);
-    } else if (product.category === 'coaster') {
-      debugger;
+    } else if (product.category === 'coasters') {
       return await this.coastersRepository.save(product.newProduct);
     } else {
-      debugger;
+      throw new HttpException(
+        'Invalid product type',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+  }
+
+  async deleteProduct(id: number, category: string) {
+    if (category === 'boards') {
+      return await this.boardsRepository.delete({ id });
+    } else if (category === 'coasters') {
+      return await this.coastersRepository.delete({ id });
+    } else {
       throw new HttpException(
         'Invalid product type',
         HttpStatus.UNPROCESSABLE_ENTITY,
