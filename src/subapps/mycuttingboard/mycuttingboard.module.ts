@@ -39,8 +39,8 @@ import { CbcProduct } from './entities/cbcProducts.entity';
     BoardsController,
     LinksController,
     WoodsController,
-    AdminController,
     ProductController,
+    AdminController,
   ],
   providers: [
     MycuttingboardService,
@@ -48,8 +48,8 @@ import { CbcProduct } from './entities/cbcProducts.entity';
     BoardsService,
     LinksService,
     WoodsService,
-    AdminService,
     ProductService,
+    AdminService,
   ],
 })
 export class MycuttingboardModule {}
