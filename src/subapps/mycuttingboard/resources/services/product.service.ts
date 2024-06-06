@@ -11,4 +11,8 @@ export class ProductService {
   async getTestMessage() {
     return 'Hello from the Product service!';
   }
+
+  async addNewProduct(newProduct) {
+    return await this.cbcProductRepository.save(newProduct);
+  }
 }
