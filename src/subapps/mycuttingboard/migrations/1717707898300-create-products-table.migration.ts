@@ -6,10 +6,11 @@ export class CreateProductsTable1717707898300 implements MigrationInterface {
       `CREATE TABLE "cbc_products" (
         "id" SERIAL NOT NULL PRIMARY KEY,
         "user_id" character varying NOT NULL,
-        "board_type" character varying NOT NULL,
-        "board_description" character varying,
+        "type" character varying NOT NULL,
+        "title" character varying NOT NULL,
+        "description" character varying,
         "customer_message" character varying,
-        "board_image_url" character varying,
+        "image_url" character varying,
         "created_at" TIMESTAMP NOT NULL DEFAULT now(),
         "updated_at" TIMESTAMP NOT NULL DEFAULT now()
       )`,
