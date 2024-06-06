@@ -1,7 +1,7 @@
 import { IsEnum, IsUrl } from 'class-validator';
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
-enum CbcProductEnum {
+export enum CbcProductEnum {
   BOARD = 'board',
   COASTER = 'coaster',
 }
