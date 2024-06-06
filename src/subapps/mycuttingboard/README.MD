@@ -13,9 +13,9 @@
       "created_at" TIMESTAMP NOT NULL DEFAULT now(),
       "updated_at" TIMESTAMP NOT NULL DEFAULT now()
     )`
-  * [ ] Add an entity
-  * [ ] Update imports and methods in Services
-  * [ ] Update imports and methods in Controllers
+  * [x] Add an entity
+  * [x] Update imports and methods in Services
+  * [x] Update imports and methods in Controllers
   * [ ] update Module
 
 * [ ] Change "mycuttingboard_boards_and_woods" to "cbc_products_and_woods"
