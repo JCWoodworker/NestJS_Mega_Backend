@@ -6,9 +6,6 @@ import { WoodsService } from './resources/services/woods.service';
 import { AdminService } from './resources/services/admin.service';
 import { ProductService } from './resources/services/product.service';
 
-// import { CreateBoardDto } from './dto/create-board.dto';
-// import { UpdateBoardDto } from './dto/update-board.dto';
-
 @Injectable()
 export class MycuttingboardService {
   constructor(

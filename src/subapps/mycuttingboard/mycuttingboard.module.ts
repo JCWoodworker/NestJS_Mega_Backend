@@ -6,6 +6,8 @@ import { CoastersController } from './resources/controllers/coasters.controller'
 import { BoardsController } from './resources/controllers/boards.controller';
 import { LinksController } from './resources/controllers/links.controller';
 import { WoodsController } from './resources/controllers/woods.controller';
+import { AdminController } from './resources/controllers/admin.controller';
+import { ProductController } from './resources/controllers/product.controller';
 
 import { MycuttingboardService } from './mycuttingboard.service';
 import { CoastersService } from './resources/services/coasters.service';
@@ -20,9 +22,6 @@ import { MycuttingboardCoasters } from './entities/mycuttingboardCoasters.entity
 import { MycuttingboardLinks } from './entities/mycuttingboardLinks.entity';
 import { MycuttingboardWoods } from './entities/mycuttingboardWoods.entity';
 import { CbcProduct } from './entities/cbcProducts.entity';
-
-import { AdminController } from './resources/controllers/admin.controller';
-import { ProductController } from './resources/controllers/product.controller';
 
 @Module({
   imports: [
