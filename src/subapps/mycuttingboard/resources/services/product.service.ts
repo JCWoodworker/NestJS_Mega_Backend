@@ -9,12 +9,21 @@ export class ProductService {
     @InjectRepository(CbcProduct)
     private readonly cbcProductRepository: Repository<CbcProduct>,
   ) {}
-  async getTestMessage() {
-    return 'Hello from the Product service!';
+  async getAllProducts() {
+    return await this.cbcProductRepository.find();
+  }
+
+  async getProductById(id: number) {
+    return await this.cbcProductRepository.findOneBy({ id });
   }
 
   async addNewProduct(newProduct) {
-    return await this.cbcProductRepository.save(newProduct);
+    try {
+      await this.cbcProductRepository.save(newProduct);
+      return { message: 'Product added successfully', product: newProduct };
+    } catch (error) {
+      return false;
+    }
   }
 
   async deleteProduct(id: number) {
@@ -26,7 +35,7 @@ export class ProductService {
       await this.cbcProductRepository.delete({ id });
       return { message: `Successfully deleted - ${product.title}` };
     } catch (error) {
-      return { message: `Failed to delete ${error}` };
+      return { message: `Failed to delete - ${error}` };
     }
   }
 

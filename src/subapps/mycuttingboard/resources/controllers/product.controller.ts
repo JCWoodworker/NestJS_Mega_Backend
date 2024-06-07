@@ -15,9 +15,14 @@ import { CreateProductDto } from '../../dto/create-product.dto';
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
-  @Get('')
-  async getProductTestMessage() {
-    return await this.productService.getTestMessage();
+  @Get('all')
+  async getAllProducts() {
+    return await this.productService.getAllProducts();
+  }
+
+  @Get(':id')
+  async getProductById(@Param('id') id: number) {
+    return await this.productService.getProductById(id);
   }
 
   @Post('new')
