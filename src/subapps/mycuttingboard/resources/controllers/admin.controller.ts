@@ -1,24 +1,22 @@
-import { Controller, Get, Post, Body, Delete, Param } from '@nestjs/common';
-import { AdminService } from '../services/admin.service';
+import { AdminService } from './../services/admin.service';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Delete,
+  Param,
+  Patch,
+} from '@nestjs/common';
 import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
 import { Role } from 'src/users/enums/role.enum';
-import { MycuttingboardBoards } from '../../entities/mycuttingboardBoards.entity';
-import { MycuttingboardCoasters } from '../../entities/mycuttingboardCoasters.entity';
-
-type NewProductType = {
-  category: string;
-  newProduct: MycuttingboardBoards | MycuttingboardCoasters;
-};
+import { UpdateProductDto } from '../../dto/update-product.dto';
+import { CreateProductDto } from '../../dto/create-product.dto';
 
 @Roles(Role.Admin)
 @Controller('admin')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
-
-  @Get('test-message')
-  async getTestMessage() {
-    return await this.adminService.getTestMessage();
-  }
 
   @Get('all-product-data')
   async getAllProductData() {
@@ -26,15 +24,20 @@ export class AdminController {
   }
 
   @Post('add-new-product')
-  async addNewProduct(@Body() newProduct: NewProductType) {
+  async addNewProduct(@Body() newProduct: CreateProductDto) {
     return await this.adminService.addNewProduct(newProduct);
   }
 
-  @Delete('delete-product/:id/:category')
-  async deleteProduct(
+  @Patch('update-product/:id')
+  async updateProduct(
     @Param('id') id: number,
-    @Param('category') category: string,
+    @Body() productUpdateData: UpdateProductDto,
   ) {
-    return await this.adminService.deleteProduct(id, category);
+    return await this.adminService.updateProduct(id, productUpdateData);
+  }
+
+  @Delete('delete-product/:id')
+  async deleteProduct(@Param('id') id: number) {
+    return await this.adminService.deleteProduct(id);
   }
 }
