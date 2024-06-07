@@ -6,6 +6,8 @@ import { CoastersController } from './resources/controllers/coasters.controller'
 import { BoardsController } from './resources/controllers/boards.controller';
 import { LinksController } from './resources/controllers/links.controller';
 import { WoodsController } from './resources/controllers/woods.controller';
+import { AdminController } from './resources/controllers/admin.controller';
+import { ProductController } from './resources/controllers/product.controller';
 
 import { MycuttingboardService } from './mycuttingboard.service';
 import { CoastersService } from './resources/services/coasters.service';
@@ -13,12 +15,13 @@ import { BoardsService } from './resources/services/boards.service';
 import { LinksService } from './resources/services/links.service';
 import { WoodsService } from './resources/services/woods.service';
 import { AdminService } from './resources/services/admin.service';
+import { ProductService } from './resources/services/product.service';
 
 import { MycuttingboardBoards } from './entities/mycuttingboardBoards.entity';
 import { MycuttingboardCoasters } from './entities/mycuttingboardCoasters.entity';
 import { MycuttingboardLinks } from './entities/mycuttingboardLinks.entity';
 import { MycuttingboardWoods } from './entities/mycuttingboardWoods.entity';
-import { AdminController } from './resources/controllers/admin.controller';
+import { CbcProduct } from './entities/cbcProducts.entity';
 
 @Module({
   imports: [
@@ -27,6 +30,7 @@ import { AdminController } from './resources/controllers/admin.controller';
       MycuttingboardCoasters,
       MycuttingboardLinks,
       MycuttingboardWoods,
+      CbcProduct,
     ]),
   ],
   controllers: [
@@ -35,6 +39,7 @@ import { AdminController } from './resources/controllers/admin.controller';
     BoardsController,
     LinksController,
     WoodsController,
+    ProductController,
     AdminController,
   ],
   providers: [
@@ -43,6 +48,7 @@ import { AdminController } from './resources/controllers/admin.controller';
     BoardsService,
     LinksService,
     WoodsService,
+    ProductService,
     AdminService,
   ],
 })
