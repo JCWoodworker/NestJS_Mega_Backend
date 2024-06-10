@@ -16,6 +16,10 @@ export class CreateProductDto {
   @IsOptional()
   user_id?: string;
 
+  @IsString()
+  @IsOptional()
+  customer_message?: string;
+
   @IsUrl()
   @IsOptional()
   image_url?: string;
