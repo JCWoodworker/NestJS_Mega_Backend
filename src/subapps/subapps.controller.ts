@@ -36,7 +36,6 @@ export class SubappsController {
   @Post('image-upload')
   @UseInterceptors(FileInterceptor('image'))
   async imageUpload(@UploadedFile() file: Express.Multer.File) {
-    debugger;
     return await this.subappsService.imageUpload(file);
   }
 }
