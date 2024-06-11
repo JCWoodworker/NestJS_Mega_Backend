@@ -4,11 +4,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { UserSubappAccess } from './resources/entities/userSubappAccess.entity';
 import { Repository } from 'typeorm';
 
-interface ImageSubmissionBody {
-  inventoryId: string;
-  inventoryType: string;
-}
-
 @Injectable()
 export class SubappsService {
   constructor(
@@ -16,9 +11,7 @@ export class SubappsService {
     private readonly userSubappAccessRepository: Repository<UserSubappAccess>,
   ) {}
 
-  async imageUpload(file: Express.Multer.File, body: ImageSubmissionBody) {
-    console.log(`Image Upload Request Body: ${JSON.stringify(body)}`);
-
+  async imageUpload(file: Express.Multer.File) {
     const s3Bucket = process.env.AWS_S3_BUCKET_NAME;
     const s3Client = new S3Client({
       credentials: {
@@ -34,14 +27,16 @@ export class SubappsService {
         Body: file.buffer,
       };
       const command = new PutObjectCommand(params);
-      await s3Client.send(command);
+      const successfulImageUpload = await s3Client.send(command);
 
-      // const publicUrl = `https://${s3Bucket}.s3.amazonaws.com/${file.originalname}`;
-
-      return {
-        message: 'Image uploaded successfully',
-        publicUrl: `https://${s3Bucket}.s3.amazonaws.com/${file.originalname}`,
-      };
+      if (successfulImageUpload.$metadata.httpStatusCode !== 200) {
+        throw new Error();
+      } else {
+        return {
+          message: 'Image uploaded successfully',
+          publicUrl: `https://${s3Bucket}.s3.amazonaws.com/${file.originalname}`,
+        };
+      }
     } catch (error) {
       console.error(`Image upload error: ${error}`);
       return {

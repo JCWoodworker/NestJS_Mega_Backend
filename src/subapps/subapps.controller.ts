@@ -13,7 +13,6 @@ Read the NestJS "RouterModule" docs - https://docs.nestjs.com/recipes/router-mod
 import {
   Controller,
   Post,
-  Body,
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
@@ -21,6 +20,8 @@ import { SubappsService } from './subapps.service';
 import { Auth } from 'src/iam/decorators/auth.decorator';
 import { AuthType } from 'src/iam/enums/auth-type.enum';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Role } from 'src/users/enums/role.enum';
+import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
 
 @Auth(AuthType.Bearer)
 @Controller()
@@ -28,11 +29,14 @@ export class SubappsController {
   constructor(private readonly subappsService: SubappsService) {}
 
   // S3 BUCKET UPLOAD
-  // TODO: Add logic to handle sending a subapp name to the backlend
+  // TODO: Add logic to handle sending a subapp name to the backend
   // This will help us direct images to the proper bucket
+
+  @Roles(Role.Admin)
   @Post('image-upload')
   @UseInterceptors(FileInterceptor('image'))
-  async imageUpload(@UploadedFile() file: Express.Multer.File, @Body() body) {
-    return await this.subappsService.imageUpload(file, body);
+  async imageUpload(@UploadedFile() file: Express.Multer.File) {
+    debugger;
+    return await this.subappsService.imageUpload(file);
   }
 }
