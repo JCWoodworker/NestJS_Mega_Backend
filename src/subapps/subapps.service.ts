@@ -28,10 +28,10 @@ export class SubappsService {
       };
       const command = new PutObjectCommand(params);
       const successfulImageUpload = await s3Client.send(command);
-
       if (successfulImageUpload.$metadata.httpStatusCode !== 200) {
         throw new Error();
       } else {
+        console.log(`Image upload successful`);
         return {
           message: 'Image uploaded successfully',
           publicUrl: `https://${s3Bucket}.s3.amazonaws.com/${file.originalname}`,
