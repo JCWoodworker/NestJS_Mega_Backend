@@ -7,14 +7,11 @@ import {
   Delete,
   Param,
   Patch,
-  UploadedFile,
-  UseInterceptors,
 } from '@nestjs/common';
 import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
 import { Role } from 'src/users/enums/role.enum';
 import { UpdateProductDto } from '../../dto/update-product.dto';
 import { CreateProductDto } from '../../dto/create-product.dto';
-import { FileInterceptor } from '@nestjs/platform-express';
 
 @Roles(Role.Admin)
 @Controller('admin')
@@ -42,19 +39,5 @@ export class AdminController {
   @Delete('delete-product/:id')
   async deleteProduct(@Param('id') id: number) {
     return await this.adminService.deleteProduct(id);
-  }
-
-  @Post('add-new-product-with-image')
-  @UseInterceptors(FileInterceptor('image'))
-  async addNewProductWithImage(
-    @UploadedFile() file: Express.Multer.File,
-    @Body() newProduct: string,
-  ) {
-    debugger;
-    const parsedNewProduct: CreateProductDto = JSON.parse(newProduct);
-    return await this.adminService.addNewProductWithImage(
-      file,
-      parsedNewProduct,
-    );
   }
 }
