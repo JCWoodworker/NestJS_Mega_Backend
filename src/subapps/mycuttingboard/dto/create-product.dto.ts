@@ -14,11 +14,11 @@ export class CreateProductDto {
 
   @IsString()
   @IsOptional()
-  user_id?: string;
+  customer_message?: string;
 
   @IsString()
   @IsOptional()
-  customer_message?: string;
+  user_id?: string;
 
   @IsUrl()
   @IsOptional()
