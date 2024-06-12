@@ -21,8 +21,7 @@ export class AdminService {
       await this.productRepository.save(newProduct);
       return { message: 'Product added successfully', product: newProduct };
     } catch (error) {
-      console.log(`Something got fucked up: ${error}`);
-      return false;
+      return error;
     }
   }
 
