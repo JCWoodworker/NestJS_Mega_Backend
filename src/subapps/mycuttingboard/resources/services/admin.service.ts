@@ -21,7 +21,8 @@ export class AdminService {
       await this.productRepository.save(newProduct);
       return { message: 'Product added successfully', product: newProduct };
     } catch (error) {
-      return error.detail
+      return error.detail;
+    }
   }
 
   async updateProduct(id: number, productUpdateData: UpdateProductDto) {
