@@ -59,6 +59,7 @@ export class AdminService {
       filterObject(user, [
         'id',
         'email',
+        'role',
         'first_name',
         'last_name',
         'image_url',
