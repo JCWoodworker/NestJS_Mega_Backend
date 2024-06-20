@@ -16,10 +16,12 @@ import { ProductService } from './resources/services/product.service';
 import { MycuttingboardLinks } from './entities/mycuttingboardLinks.entity';
 import { MycuttingboardWoods } from './entities/mycuttingboardWoods.entity';
 import { CbcProduct } from './entities/cbcProducts.entity';
+import { Users } from 'src/users/entities/users.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
+      Users,
       MycuttingboardLinks,
       MycuttingboardWoods,
       CbcProduct,

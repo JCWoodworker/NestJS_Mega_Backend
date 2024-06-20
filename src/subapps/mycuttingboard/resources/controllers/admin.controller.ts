@@ -40,4 +40,9 @@ export class AdminController {
   async deleteProduct(@Param('id') id: number) {
     return await this.adminService.deleteProduct(id);
   }
+
+  @Get('all-users')
+  async getAllUsers() {
+    return await this.adminService.getAllUsers();
+  }
 }

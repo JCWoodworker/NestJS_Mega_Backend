@@ -4,12 +4,16 @@ import { Repository } from 'typeorm';
 
 import { CbcProduct } from '../../entities/cbcProducts.entity';
 import { UpdateProductDto } from '../../dto/update-product.dto';
+import { Users } from 'src/users/entities/users.entity';
+import { filterObject } from 'src/utils/filter-object';
 
 @Injectable()
 export class AdminService {
   constructor(
     @InjectRepository(CbcProduct)
     private productRepository: Repository<CbcProduct>,
+    @InjectRepository(Users)
+    private userRepository: Repository<Users>,
   ) {}
 
   async getAllProductData() {
@@ -44,5 +48,22 @@ export class AdminService {
     } catch (error) {
       return { message: `Failed to delete - ${error}` };
     }
+  }
+
+  async getAllUsers() {
+    // This is returning ALL users, not just users of the CBC app
+    // You'll need to update the subapps logic to get
+    // to a point where you're only returning CBC users
+    const allUsers = await this.userRepository.find();
+    const filteredUsers = allUsers.map((user) =>
+      filterObject(user, [
+        'id',
+        'email',
+        'first_name',
+        'last_name',
+        'image_url',
+      ]),
+    );
+    return filteredUsers;
   }
 }
