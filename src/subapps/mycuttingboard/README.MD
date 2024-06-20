@@ -12,7 +12,7 @@
   * [x] remove all imports for boards
   * [ ] remove all imports for coasters
 * [ ] Manually delete mycuttingboard_boards table from database
-  * [ ] Dev
+  * [x] Dev
   * [ ] Preprod
   * [ ] Prod
 * [ ] Manually delete mycuttingboard_coasters table from database
