@@ -1,30 +1,19 @@
 ## TODO: 
 
-* [ ] Delete all code pertaining to boards and coasters and remove imports and instances of them
-  * [x] boards service
-  * [x] boards controller
-  * [x] boards entity
-  * [x] boards migration
-  * [x] coasters service
-  * [x] coasters controller 
-  * [x] coasters entity
-  * [x] coasters migration
-  * [x] remove all imports for boards
-  * [ ] remove all imports for coasters
-* [ ] Manually delete mycuttingboard_boards table from database
-  * [x] Dev
-  * [ ] Preprod
-  * [ ] Prod
-* [ ] Manually delete mycuttingboard_coasters table from database
-  * [ ] Dev
-  * [ ] Preprod
-  * [ ] Prod
-* [ ] Manually delete mycuttingboard_boards_and_woods table from database
-  * [ ] Dev
-  * [ ] Preprod
-  * [ ] Prod
-
-* [ ] Change "mycuttingboard_boards_and_woods" to "cbc_products_and_woods"
+* [ ] Rename mycuttingboard_boards_and_woods table to cbc_products_and_woods
+  * [ ] service
+  * [ ] controller
+  * [ ] entity
+  * [ ] migration
+  * [ ] DTOs
+  * [ ] Manually delete mycuttingboard_boards_and_woods table from database
+    * [ ] Dev
+    * [ ] Preprod
+    * [ ] Prod
+  * [ ] Run new migrations
+    * [ ] dev
+    * [ ] preprod
+    * [ ] prod
 * [ ] Change all other table prefixes from "mycuttingboard" to "cbc"
 
 ## Completed TODOs:
@@ -46,4 +35,22 @@
   * [x] Update imports and methods in Services
   * [x] Update imports and methods in Controllers
   * [x] update Module
-
+* [x] Delete all code pertaining to boards and coasters and remove imports and instances of them
+  * [x] boards service
+  * [x] boards controller
+  * [x] boards entity
+  * [x] boards migration
+  * [x] coasters service
+  * [x] coasters controller 
+  * [x] coasters entity
+  * [x] coasters migration
+  * [x] remove all imports for boards
+  * [x] remove all imports for coasters
+  * [x] Manually delete mycuttingboard_boards table from database
+    * [x] Dev
+    * [x] Preprod
+    * [x] Prod
+  * [x] Manually delete mycuttingboard_coasters table from database
+    * [x] Dev
+    * [x] Preprod
+    * [x] Prod
