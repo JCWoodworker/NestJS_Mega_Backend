@@ -1,12 +1,12 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
 @Entity()
-export class MycuttingboardBoardsAndWoods {
+export class CbcProductAndWoods {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column()
-  board_id: string;
+  product_id: string;
 
   @Column()
   wood_id: string;
