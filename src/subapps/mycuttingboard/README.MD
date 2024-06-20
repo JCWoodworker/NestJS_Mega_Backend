@@ -5,10 +5,10 @@
   * [x] boards controller
   * [x] boards entity
   * [x] boards migration
-  * [ ] coasters service
-  * [ ] coasters controller 
-  * [ ] coasters entity
-  * [ ] coasters migration
+  * [x] coasters service
+  * [x] coasters controller 
+  * [x] coasters entity
+  * [x] coasters migration
   * [x] remove all imports for boards
   * [ ] remove all imports for coasters
 * [ ] Manually delete mycuttingboard_boards table from database
