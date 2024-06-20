@@ -1,11 +1,8 @@
 ## TODO: 
 
 * [ ] Rename mycuttingboard_boards_and_woods table to cbc_products_and_woods
-  * [ ] service
-  * [ ] controller
-  * [ ] entity
-  * [ ] migration
-  * [ ] DTOs
+  * [x] update entity
+  * [x] migration
   * [ ] Manually delete mycuttingboard_boards_and_woods table from database
     * [ ] Dev
     * [ ] Preprod
