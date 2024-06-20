@@ -1,6 +1,55 @@
 ## TODO: 
 
 * [ ] Change all other table prefixes from "mycuttingboard" to "cbc"
+  * [ ] Remove the following migrations and tables from dev, preprod, and prod DBs
+    * [ ] createWoodsTable
+    * [ ] createLinksTable 
+    * [ ] createUserLinksTable
+  * [ ] Create new migrations:
+    * [ ] create-wood-table:
+      await queryRunner.query(
+        'CREATE TABLE "cbc_wood" (
+          "id" SERIAL NOT NULL PRIMARY KEY,
+          "name" character varying NOT NULL,
+          "description" character varying,
+          "region" character varying,
+          "hardness" character varying,
+          "image_url" character varying,
+          "created_at" TIMESTAMP NOT NULL DEFAULT now(),
+          "updated_at" TIMESTAMP NOT NULL DEFAULT now()
+        )',
+      );
+    * [ ] create-link-table:
+      await queryRunner.query(
+        'CREATE TABLE "cbc_link" (
+          "id" SERIAL NOT NULL PRIMARY KEY,
+          "link_url" character varying NOT NULL,
+          "link_display_name" character varying NOT NULL,
+          "created_at" TIMESTAMP NOT NULL DEFAULT now(),
+          "updated_at" TIMESTAMP NOT NULL DEFAULT now()
+        )',
+      );
+    * [ ] create-user-link-join-table:
+      await queryRunner.query(
+      'CREATE TABLE "cbc_user_link" (
+        "id" SERIAL NOT NULL PRIMARY KEY,
+        "user_id" character varying NOT NULL,
+        "link_id" character varying NOT NULL,
+        "created_at" TIMESTAMP NOT NULL DEFAULT now(),
+        "updated_at" TIMESTAMP NOT NULL DEFAULT now()
+        )',
+      );
+  * [ ] Update entities
+    * [ ] cbcWood.entity.ts
+    * [ ] cbcLink.entity.ts
+    * [ ] cbcUserLink.entity.ts
+  * [ ] Update DTOs
+    * [ ] create-wood.dto.ts
+    * [ ] update-wood.dto.ts
+  * [ ] Run new migrations
+    * [ ] dev
+    * [ ] preprod
+    * [ ] prod
 
 ## Completed TODOs:
 
