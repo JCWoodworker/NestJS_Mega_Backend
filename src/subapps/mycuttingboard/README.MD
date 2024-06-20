@@ -1,16 +1,5 @@
 ## TODO: 
 
-* [ ] Rename mycuttingboard_boards_and_woods table to cbc_products_and_woods
-  * [x] update entity
-  * [x] migration
-  * [ ] Manually delete mycuttingboard_boards_and_woods table from database
-    * [ ] Dev
-    * [ ] Preprod
-    * [ ] Prod
-  * [ ] Run new migrations
-    * [ ] dev
-    * [ ] preprod
-    * [ ] prod
 * [ ] Change all other table prefixes from "mycuttingboard" to "cbc"
 
 ## Completed TODOs:
@@ -51,3 +40,14 @@
     * [x] Dev
     * [x] Preprod
     * [x] Prod
+* [x] Rename mycuttingboard_boards_and_woods table to cbc_products_and_woods
+  * [x] update entity
+  * [x] migration
+  * [x] Manually delete mycuttingboard_boards_and_woods table from database
+    * [x] Dev
+    * [x] Preprod
+    * [x] Prod
+  * [x] Run new migrations
+    * [x] dev
+    * [x] preprod
+    * [x] prod
