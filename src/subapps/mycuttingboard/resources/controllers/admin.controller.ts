@@ -45,4 +45,10 @@ export class AdminController {
   async getAllUsers() {
     return await this.adminService.getAllUsers();
   }
+
+  @Delete('delete-user/:userId')
+  async deleteUser(@Param('userId') id: string) {
+    const decodedUserId = decodeURIComponent(id);
+    return await this.adminService.deleteUser(decodedUserId);
+  }
 }
