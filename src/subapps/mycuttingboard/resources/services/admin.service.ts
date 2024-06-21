@@ -67,4 +67,17 @@ export class AdminService {
     );
     return filteredUsers;
   }
+
+  async deleteUser(id: string) {
+    try {
+      const user = await this.userRepository.findOneBy({ id });
+      if (!user) {
+        return { message: `User with id ${id} not found` };
+      }
+      await this.userRepository.delete({ id });
+      return { message: `Successfully deleted - ${user.email}` };
+    } catch (error) {
+      return { message: `Failed to delete - ${error}` };
+    }
+  }
 }
