@@ -24,6 +24,12 @@ export class MycuttingboardService {
 
   async userRoleSwap(userId: string, oldUserRole: string, newUserRole: string) {
     try {
+      const environment = process.env.ENVIRONMENT;
+      if (environment !== 'development' && environment !== 'preprod')
+        return {
+          message:
+            'You must be in a dev or preprod environment for this feature to work',
+        };
       const user = await this.usersRepository.findOne({
         where: { id: userId },
       });
