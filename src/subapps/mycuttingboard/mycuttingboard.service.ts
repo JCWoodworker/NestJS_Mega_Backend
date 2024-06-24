@@ -13,4 +13,8 @@ export class MycuttingboardService {
     private readonly adminService: AdminService,
     private readonly productService: ProductService,
   ) {}
+
+  async userRoleSwap() {
+    return 'testing user role swap';
+  }
 }
