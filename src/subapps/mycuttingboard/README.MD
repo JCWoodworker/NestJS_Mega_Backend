@@ -1,5 +1,11 @@
 ## TODO: 
 
+* [ ] Create all logic for user-and-products feature
+  * [x] Table = cbc_user_and_products (migration)
+  * [x] Entity = CbcUserAndProducts - cbcUserAndProducts.entity.ts
+  * [x] DTOs
+  * [ ] Controller? Probably only need the service
+  * [ ] Service
 * [ ] Change all other table prefixes from "mycuttingboard" to "cbc"
   * [ ] Remove the following migrations and tables from dev, preprod, and prod DBs
     * [ ] createWoodsTable
