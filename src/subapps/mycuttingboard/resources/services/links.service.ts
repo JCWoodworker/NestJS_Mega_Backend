@@ -13,7 +13,6 @@ export class LinksService {
   }
 
   async getUserLinks(userId) {
-    debugger;
     return await this.mycuttingboardLinksRepository.find({
       where: { user_id: userId },
     });

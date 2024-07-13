@@ -7,7 +7,6 @@ export class LinksController {
 
   @Get('')
   async getUserLinks(@Req() request: any) {
-    debugger;
     return await this.linksService.getUserLinks(request.user.sub);
   }
 }
