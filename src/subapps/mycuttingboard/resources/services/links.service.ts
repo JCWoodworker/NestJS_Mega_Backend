@@ -11,4 +11,11 @@ export class LinksService {
   async getMessage() {
     return 'Hello from links service!';
   }
+
+  async getUserLinks(userId) {
+    debugger;
+    return await this.mycuttingboardLinksRepository.find({
+      where: { user_id: userId },
+    });
+  }
 }

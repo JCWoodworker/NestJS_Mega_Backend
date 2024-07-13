@@ -6,7 +6,9 @@ export class CreateLinksTable1720838363157 implements MigrationInterface {
       `CREATE TABLE "cbc_links" (
             "id" SERIAL NOT NULL PRIMARY KEY,
             "user_id" character varying NOT NULL,
-            "link_id" character varying NOT NULL,
+            "title" character varying NOT NULL,
+            "url" character varying NOT NULL,
+            "notes" character varying,
             "created_at" TIMESTAMP NOT NULL DEFAULT now(),
             "updated_at" TIMESTAMP NOT NULL DEFAULT now()
             )`,
