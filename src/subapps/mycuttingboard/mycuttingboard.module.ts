@@ -13,7 +13,7 @@ import { WoodsService } from './resources/services/woods.service';
 import { AdminService } from './resources/services/admin.service';
 import { ProductService } from './resources/services/product.service';
 
-import { MycuttingboardLinks } from './entities/cbcLinks.entity';
+import { CbcLinks } from './entities/cbcLinks.entity';
 import { MycuttingboardWoods } from './entities/mycuttingboardWoods.entity';
 import { CbcProduct } from './entities/cbcProducts.entity';
 import { Users } from 'src/users/entities/users.entity';
@@ -22,7 +22,7 @@ import { Users } from 'src/users/entities/users.entity';
   imports: [
     TypeOrmModule.forFeature([
       Users,
-      MycuttingboardLinks,
+      CbcLinks,
       MycuttingboardWoods,
       CbcProduct,
     ]),

@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 import { IsUrl } from 'class-validator';
 @Entity()
-export class cbcLinks {
+export class CbcLinks {
   @PrimaryGeneratedColumn()
   id: number;
 

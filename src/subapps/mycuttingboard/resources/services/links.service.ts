@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { MycuttingboardLinks } from '../../entities/cbcLinks.entity';
+import { CbcLinks } from '../../entities/cbcLinks.entity';
 @Injectable()
 export class LinksService {
   constructor(
-    @InjectRepository(MycuttingboardLinks)
-    private readonly mycuttingboardLinksRepository: Repository<MycuttingboardLinks>,
+    @InjectRepository(CbcLinks)
+    private readonly mycuttingboardLinksRepository: Repository<CbcLinks>,
   ) {}
   async getMessage() {
     return 'Hello from links service!';
