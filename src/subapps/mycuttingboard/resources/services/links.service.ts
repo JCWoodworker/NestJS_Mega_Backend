@@ -17,4 +17,20 @@ export class LinksService {
       where: { user_id: userId },
     });
   }
+
+  async addNewLink(newLinkData: CbcLinks) {
+    return await this.mycuttingboardLinksRepository.save(newLinkData);
+  }
+
+  async deleteLink(id: number) {
+    return await this.mycuttingboardLinksRepository.delete(id);
+  }
+
+  async updateLink(id: number, linkUpdateData: CbcLinks) {
+    const link = await this.mycuttingboardLinksRepository.findOneBy({ id });
+    return await this.mycuttingboardLinksRepository.save({
+      ...link,
+      ...linkUpdateData,
+    });
+  }
 }
