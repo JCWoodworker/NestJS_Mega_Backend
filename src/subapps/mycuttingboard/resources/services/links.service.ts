@@ -22,12 +22,25 @@ export class LinksService {
     return await this.mycuttingboardLinksRepository.save(newLinkData);
   }
 
-  async deleteLink(id: number) {
+  async deleteLink(id: number, userId: string) {
+    const link = await this.mycuttingboardLinksRepository.findOneBy({ id });
+    if (userId !== link.user_id) {
+      return { error: "You don't have permission to delete this link" };
+    }
+
     return await this.mycuttingboardLinksRepository.delete(id);
   }
 
   async updateLink(id: number, linkUpdateData: CbcLinks) {
     const link = await this.mycuttingboardLinksRepository.findOneBy({ id });
+    if (!link) {
+      return { error: 'Link not found' };
+    }
+
+    if (link.user_id !== linkUpdateData.user_id) {
+      return { error: "You don't have permission to update this link" };
+    }
+
     return await this.mycuttingboardLinksRepository.save({
       ...link,
       ...linkUpdateData,

@@ -27,8 +27,8 @@ export class LinksController {
   }
 
   @Delete(':id')
-  async deleteLink(@Param('id') id: number) {
-    return await this.linksService.deleteLink(id);
+  async deleteLink(@Param('id') id: number, @Req() request: any) {
+    return await this.linksService.deleteLink(id, request.user.sub);
   }
 
   @Post(':id')
