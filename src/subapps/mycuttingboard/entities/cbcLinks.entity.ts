@@ -1,16 +1,22 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 import { IsUrl } from 'class-validator';
 @Entity()
-export class MycuttingboardLinks {
+export class CbcLinks {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ nullable: false })
+  user_id: string;
+
+  @Column({ nullable: false })
   @IsUrl()
-  link_url: string;
+  url: string;
+
+  @Column({ nullable: false })
+  title: string;
 
   @Column()
-  link_display_name: string;
+  notes: string;
 
   @Column()
   created_at: Date;

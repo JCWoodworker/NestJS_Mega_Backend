@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
 @Entity()
-export class MycuttingboardUserLinks {
+export class CbcUserAndProduct {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -9,7 +9,7 @@ export class MycuttingboardUserLinks {
   user_id: string;
 
   @Column()
-  link_id: string;
+  product_id: string;
 
   @Column()
   created_at: Date;
