@@ -61,6 +61,7 @@ export class AdminController {
 
   // USER-AND-PRODUCT MANAGEMENT ENDPOINTS
 
+  @Roles(Role.Admin, Role.Basic)
   @Get('user-and-product/single-user-product-list/:userId')
   async getAllUsersAndProducts() {
     return await this.adminService.getAllUsersAndProducts();
@@ -82,10 +83,10 @@ export class AdminController {
     return await this.adminService.addUserAndProduct(newUserAndProductData);
   }
 
-  @Delete('user-and-product/delete/:userId:productId')
+  @Delete('user-and-product/delete/:userId/:productId')
   async deleteUserAndProduct(
     @Param('userId') userId: string,
-    @Param('productId') productId: string,
+    @Param('productId') productId: number,
   ) {
     return await this.adminService.deleteUserAndProduct({
       user_id: userId,
