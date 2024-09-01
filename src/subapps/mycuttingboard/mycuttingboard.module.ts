@@ -17,6 +17,7 @@ import { CbcLinks } from './entities/cbcLinks.entity';
 import { MycuttingboardWoods } from './entities/mycuttingboardWoods.entity';
 import { CbcProduct } from './entities/cbcProducts.entity';
 import { Users } from 'src/users/entities/users.entity';
+import { CbcUserAndProduct } from './entities/cbcUserAndProduct.entity';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { Users } from 'src/users/entities/users.entity';
       CbcLinks,
       MycuttingboardWoods,
       CbcProduct,
+      CbcUserAndProduct,
     ]),
   ],
   controllers: [

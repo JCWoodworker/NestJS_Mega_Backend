@@ -8,7 +8,7 @@ export class CreateUserAndProductTable1719167960082
       `CREATE TABLE "cbc_user_and_product" (
             "id" SERIAL NOT NULL PRIMARY KEY,
             "user_id" character varying NOT NULL,
-            "product_id" character varying,
+            "product_id" numeric NOT NULL,
             "created_at" TIMESTAMP NOT NULL DEFAULT now(),
             "updated_at" TIMESTAMP NOT NULL DEFAULT now()
             )`,

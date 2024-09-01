@@ -9,7 +9,7 @@ export class CbcUserAndProduct {
   user_id: string;
 
   @Column()
-  product_id: string;
+  product_id: number;
 
   @Column()
   created_at: Date;

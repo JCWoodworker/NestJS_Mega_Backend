@@ -9,6 +9,7 @@ import { filterObject } from 'src/utils/filter-object';
 import { UpdateUserAndProductDto } from '../../dto/update-user-and-product.dto';
 import { CreateUserAndProductDto } from '../../dto/create-user-and-product.dto';
 import { ActiveUserData } from 'src/iam/interfaces/active-user-data.interface';
+import { CbcUserAndProduct } from '../../entities/cbcUserAndProduct.entity';
 
 @Injectable()
 export class AdminService {
@@ -17,6 +18,8 @@ export class AdminService {
     private productRepository: Repository<CbcProduct>,
     @InjectRepository(Users)
     private userRepository: Repository<Users>,
+    @InjectRepository(CbcUserAndProduct)
+    private userAndProductRepository: Repository<CbcUserAndProduct>,
   ) {}
 
   // PRODUCT MANAGEMENT SERVICES
@@ -107,11 +110,17 @@ export class AdminService {
   }
 
   async addUserAndProduct(userAndProductData: CreateUserAndProductDto) {
-    console.log(`UserId: ${userAndProductData.user_id}`);
-    console.log(`ProductId: ${userAndProductData.product_id}`);
-    console.log(`Updating user and product is not yet implemented`);
+    const product = await this.productRepository.findOneBy({
+      id: userAndProductData.product_id,
+    });
 
-    return { message: 'This feature is not implemented yet' };
+    if (!product) {
+      return { message: 'Product not found' };
+    }
+
+    product.user_id = userAndProductData.user_id;
+    await this.productRepository.save(product);
+    return { message: 'User successfully added to product' };
   }
 
   async deleteUserAndProduct(

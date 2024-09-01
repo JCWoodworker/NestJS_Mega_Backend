@@ -5,5 +5,5 @@ export class CreateUserAndProductDto {
   user_id: string;
 
   @IsNumber()
-  product_id?: string;
+  product_id?: number;
 }
