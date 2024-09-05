@@ -7,10 +7,10 @@
 * [Configurations](#configurations)
 * [CORS](#cors)
 
-
 ## This README is a work in progress, and is more of a notebook for me while I build this API
 
-* Please be patient while I construct a proper readme
+* Please be patient while I construct a more detailed README
+* Each subapp has their own README
 
 ## Current Features
 
@@ -34,6 +34,12 @@
   * All endpoints globally set to require bearer authentication
     * Guard set up to open any endpoint or an entire controller to public access
   * User role guard lets you set any endpoint or controller to "Admin" or "Basic" user access
+  * Multiple apps supported BUT
+    * Current logic to assign app IDs is terrible and does not work as intended
+    * Too much inconsistency across subapps with naming conventions, syntax and style
+    * Abandoned email and password sign up/in in later apps (CBC)
+      * Due to security concerns
+      * Only using Google Sign in for now
 
 --
 
@@ -57,7 +63,7 @@
 ```yarn add @nestjs/config @hapi/joi @Types Hapi__joi (dev)```
 
 **QUICK NOTE ABOUT .ENV FILE AND JOI VALIDATION SCHEMA:**
-When running in dev or debug mode the wathcher will not update when saving the .env file.  You'll need to update a ts file to trigger a refresh
+When running in dev or debug mode the watcher will not update when saving the .env file.  You'll need to update a ts file to trigger a refresh (or just restart the server).
 
 * Hapi/Joi is for config validation
 
@@ -76,7 +82,7 @@ When running in dev or debug mode the wathcher will not update when saving the .
 
 ### You will need to set the following variables
 
-* Create a .env file for local development
+* Create a new .env file for local development
 * Add these to your env list with whatever hosting service you are using
 
 ENVIRONMENT=development (other options are "preprod" and "prod")
@@ -106,7 +112,6 @@ DATABASE_NAME
 
 ALLOWED_ORIGINS=origin1,origin2,origin3
 
-
 ## TODOs
 
 * Fix all instances of camelCase in migrations!!
@@ -114,6 +119,7 @@ ALLOWED_ORIGINS=origin1,origin2,origin3
   * example:
     * "subappId" character varying NOT NULL,
     * "subscription_tier" character varying NOT NULL DEFAULT 'basic',
+  * We've decided on snake case for all database variables
 
 * Update README files for the following:
   * config
