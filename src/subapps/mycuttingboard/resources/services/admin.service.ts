@@ -102,8 +102,20 @@ export class AdminService {
     return { message: 'This feature is not implemented yet' };
   }
 
-  async getOneUserAndProduct(activeUser: ActiveUserData, productId: string) {
-    console.log(`ProductId: ${productId}`);
+  /* 
+  The following implementation of getOneUserAndTheirProducts is totally unnecessary!
+  THIS IS JUST A BAND AID ... quick and dirty way to achieve a goal 
+  rather than a TON of refactoring.
+
+  Instead, we should be creating relationships in the entity files they way it
+  was intended with TypeORM.  We should then be creating/running migrations with 
+  those relations to ensure that we can return any related data with each user.
+  */
+  async getOneUserAndTheirProducts(
+    activeUser: ActiveUserData,
+    productId: string,
+  ) {
+    console.log(`Active user: ${activeUser.email}, ProductId: ${productId}`);
     console.log('Getting one user and product is not yet implemented');
 
     return { message: 'This feature is not implemented yet' };
