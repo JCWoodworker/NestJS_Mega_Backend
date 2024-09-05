@@ -96,6 +96,10 @@ export class AdminService {
 
   // USER-AND-PRODUCT MANAGEMENT SERVICES
 
+  // Be prepared for some shitty code that needs refactoring
+  // Apologies to Nest.JS, TypeORM, and PostgreSQL for not
+  // using your libraries/frameworks as intended here ...
+
   async getAllUsersAndProducts() {
     console.log('Getting all users and products is not yet implemented');
 
