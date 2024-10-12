@@ -11,7 +11,7 @@ export class MrlRestaurants {
 
   @Column()
   @IsUrl()
-  logo: string;
+  logo?: string;
 
   @Column()
   domain: string;
