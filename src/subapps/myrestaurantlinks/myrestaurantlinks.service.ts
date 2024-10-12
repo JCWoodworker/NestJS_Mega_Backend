@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MrlRestaurants } from './entities/mrlRestaurants.entity';
@@ -15,11 +15,22 @@ export class MyrestaurantlinksService {
   }
 
   async findOne(incomingDomain: string) {
-    return await this.restaurantsRepository.findOne({
-      where: {
-        domain: incomingDomain,
-      },
-    });
+    try {
+      const restaurantData = await this.restaurantsRepository.findOne({
+        where: {
+          domain: incomingDomain,
+        },
+      });
+      if (!restaurantData) {
+        return new NotFoundException(
+          `Restaurant with domain ${incomingDomain} not found`,
+        );
+      } else {
+        return restaurantData;
+      }
+    } catch (error) {
+      console.error('Error finding restaurant:', error);
+    }
   }
 
   // update(id: number, updateMyrestaurantlinkDto: UpdateMyrestaurantlinkDto) {
