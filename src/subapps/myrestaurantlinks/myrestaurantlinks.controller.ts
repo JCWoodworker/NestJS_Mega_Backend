@@ -1,6 +1,6 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { CreateRestaurantDto } from './dto/create-restaurant.dto';
+import { Controller, Get, Param, Post, Body } from '@nestjs/common';
 import { MyrestaurantlinksService } from './myrestaurantlinks.service';
-// import { CreateMyrestaurantlinkDto } from './dto/create-myrestaurantlink.dto';
 // import { UpdateMyrestaurantlinkDto } from './dto/update-myrestaurantlink.dto';
 
 import { Auth } from 'src/iam/decorators/auth.decorator';
@@ -14,14 +14,15 @@ export class MyrestaurantlinksController {
 
   @Auth(AuthType.None)
   @Get(':incomingDomain')
-  findOne(@Param('incomingDomain') incomingDomain: string) {
+  async findOne(@Param('incomingDomain') incomingDomain: string) {
     return this.myrestaurantlinksService.findOne(incomingDomain);
   }
 
-  // @Post()
-  // create(@Body() createMyrestaurantlinkDto: CreateMyrestaurantlinkDto) {
-  //   return this.myrestaurantlinksService.create(createMyrestaurantlinkDto);
-  // }
+  @Auth(AuthType.None)
+  @Post()
+  async create(@Body() createNewRestaurantDto: CreateRestaurantDto) {
+    return this.myrestaurantlinksService.create(createNewRestaurantDto);
+  }
 
   // @Patch(':id')
   // update(
