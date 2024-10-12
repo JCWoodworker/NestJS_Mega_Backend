@@ -73,7 +73,10 @@ export class AdminController {
     @ActiveUser() activeUser: ActiveUserData,
     @Param('productId') productId: string,
   ) {
-    return await this.adminService.getOneUserAndProduct(activeUser, productId);
+    return await this.adminService.getOneUserAndTheirProducts(
+      activeUser,
+      productId,
+    );
   }
 
   @Post('user-and-product/add')

@@ -1,11 +1,21 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { MyrestaurantlinksService } from './myrestaurantlinks.service';
 import { CreateMyrestaurantlinkDto } from './dto/create-myrestaurantlink.dto';
 import { UpdateMyrestaurantlinkDto } from './dto/update-myrestaurantlink.dto';
 
-@Controller('myrestaurantlinks')
+@Controller('')
 export class MyrestaurantlinksController {
-  constructor(private readonly myrestaurantlinksService: MyrestaurantlinksService) {}
+  constructor(
+    private readonly myrestaurantlinksService: MyrestaurantlinksService,
+  ) {}
 
   @Post()
   create(@Body() createMyrestaurantlinkDto: CreateMyrestaurantlinkDto) {
@@ -14,7 +24,7 @@ export class MyrestaurantlinksController {
 
   @Get()
   findAll() {
-    return this.myrestaurantlinksService.findAll();
+    return { message: 'You got me' };
   }
 
   @Get(':id')
@@ -23,7 +33,10 @@ export class MyrestaurantlinksController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateMyrestaurantlinkDto: UpdateMyrestaurantlinkDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateMyrestaurantlinkDto: UpdateMyrestaurantlinkDto,
+  ) {
     return this.myrestaurantlinksService.update(+id, updateMyrestaurantlinkDto);
   }
 
