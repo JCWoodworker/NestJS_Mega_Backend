@@ -4,9 +4,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import authConfig from 'src/config/auth.config';
 
-import { BizlinksfreeModule } from './bizlinksfree/bizlinksfree.module';
-import { MyfreeinvModule } from './myfreeinv/myfreeinv.module';
 import { MycuttingboardModule } from './mycuttingboard/mycuttingboard.module';
+import { MyrestaurantlinksModule } from './myrestaurantlinks/myrestaurantlinks.module';
 
 import { SubappsService } from './subapps.service';
 import { SubappsController } from './subapps.controller';
@@ -16,9 +15,8 @@ import { UserSubappAccess } from './resources/entities/userSubappAccess.entity';
   imports: [
     TypeOrmModule.forFeature([UserSubappAccess]),
     ConfigModule.forFeature(authConfig),
-    MyfreeinvModule,
-    BizlinksfreeModule,
     MycuttingboardModule,
+    MyrestaurantlinksModule,
   ],
   controllers: [SubappsController],
   providers: [SubappsService],

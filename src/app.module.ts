@@ -9,6 +9,7 @@ import { UsersModule } from './users/users.module';
 import { IamModule } from './iam/iam.module';
 import { SubappsModule } from './subapps/subapps.module';
 import { MycuttingboardModule } from './subapps/mycuttingboard/mycuttingboard.module';
+import { MyrestaurantlinksModule } from './subapps/myrestaurantlinks/myrestaurantlinks.module';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -64,6 +65,10 @@ import { DevtoolsModule } from '@nestjs/devtools-integration';
           {
             path: 'mycuttingboard',
             module: MycuttingboardModule,
+          },
+          {
+            path: 'myrestaurantlinks',
+            module: MyrestaurantlinksModule,
           },
         ],
       },
