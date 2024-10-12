@@ -8,8 +8,6 @@ import authConfig from './config/auth.config';
 import { UsersModule } from './users/users.module';
 import { IamModule } from './iam/iam.module';
 import { SubappsModule } from './subapps/subapps.module';
-import { MyfreeinvModule } from './subapps/myfreeinv/myfreeinv.module';
-import { BizlinksfreeModule } from './subapps/bizlinksfree/bizlinksfree.module';
 import { MycuttingboardModule } from './subapps/mycuttingboard/mycuttingboard.module';
 
 import { AppController } from './app.controller';
@@ -63,14 +61,6 @@ import { DevtoolsModule } from '@nestjs/devtools-integration';
         path: 'subapps',
         module: SubappsModule,
         children: [
-          {
-            path: 'myfreeinv',
-            module: MyfreeinvModule,
-          },
-          {
-            path: 'bizlinksfree',
-            module: BizlinksfreeModule,
-          },
           {
             path: 'mycuttingboard',
             module: MycuttingboardModule,
