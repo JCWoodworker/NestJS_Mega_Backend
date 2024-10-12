@@ -1,15 +1,10 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Patch,
-  Param,
-  Delete,
-} from '@nestjs/common';
+import { Controller, Get, Param } from '@nestjs/common';
 import { MyrestaurantlinksService } from './myrestaurantlinks.service';
-import { CreateMyrestaurantlinkDto } from './dto/create-myrestaurantlink.dto';
-import { UpdateMyrestaurantlinkDto } from './dto/update-myrestaurantlink.dto';
+// import { CreateMyrestaurantlinkDto } from './dto/create-myrestaurantlink.dto';
+// import { UpdateMyrestaurantlinkDto } from './dto/update-myrestaurantlink.dto';
+
+import { Auth } from 'src/iam/decorators/auth.decorator';
+import { AuthType } from 'src/iam/enums/auth-type.enum';
 
 @Controller('')
 export class MyrestaurantlinksController {
@@ -17,31 +12,27 @@ export class MyrestaurantlinksController {
     private readonly myrestaurantlinksService: MyrestaurantlinksService,
   ) {}
 
-  @Post()
-  create(@Body() createMyrestaurantlinkDto: CreateMyrestaurantlinkDto) {
-    return this.myrestaurantlinksService.create(createMyrestaurantlinkDto);
+  @Auth(AuthType.None)
+  @Get(':incomingDomain')
+  findOne(@Param('incomingDomain') incomingDomain: string) {
+    return this.myrestaurantlinksService.findOne(incomingDomain);
   }
 
-  @Get()
-  findAll() {
-    return { message: 'You got me' };
-  }
+  // @Post()
+  // create(@Body() createMyrestaurantlinkDto: CreateMyrestaurantlinkDto) {
+  //   return this.myrestaurantlinksService.create(createMyrestaurantlinkDto);
+  // }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.myrestaurantlinksService.findOne(+id);
-  }
+  // @Patch(':id')
+  // update(
+  //   @Param('id') id: string,
+  //   @Body() updateMyrestaurantlinkDto: UpdateMyrestaurantlinkDto,
+  // ) {
+  //   return this.myrestaurantlinksService.update(+id, updateMyrestaurantlinkDto);
+  // }
 
-  @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Body() updateMyrestaurantlinkDto: UpdateMyrestaurantlinkDto,
-  ) {
-    return this.myrestaurantlinksService.update(+id, updateMyrestaurantlinkDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.myrestaurantlinksService.remove(+id);
-  }
+  // @Delete(':id')
+  // remove(@Param('id') id: string) {
+  //   return this.myrestaurantlinksService.remove(+id);
+  // }
 }
