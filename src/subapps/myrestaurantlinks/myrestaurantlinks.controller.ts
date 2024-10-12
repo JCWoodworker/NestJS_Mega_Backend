@@ -11,6 +11,9 @@ import { MyrestaurantlinksService } from './myrestaurantlinks.service';
 import { CreateMyrestaurantlinkDto } from './dto/create-myrestaurantlink.dto';
 import { UpdateMyrestaurantlinkDto } from './dto/update-myrestaurantlink.dto';
 
+import { Auth } from 'src/iam/decorators/auth.decorator';
+import { AuthType } from 'src/iam/enums/auth-type.enum';
+
 @Controller('')
 export class MyrestaurantlinksController {
   constructor(
@@ -22,6 +25,7 @@ export class MyrestaurantlinksController {
     return this.myrestaurantlinksService.create(createMyrestaurantlinkDto);
   }
 
+  @Auth(AuthType.None)
   @Get()
   findAll() {
     return { message: 'You got me' };
