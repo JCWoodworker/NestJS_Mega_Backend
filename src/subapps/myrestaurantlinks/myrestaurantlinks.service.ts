@@ -16,7 +16,6 @@ export class MyrestaurantlinksService {
 
   async findOne(incomingDomain: string): Promise<MrlRestaurants> {
     try {
-      debugger;
       const restaurantData = await this.restaurantsRepository.findOneBy({
         domain: incomingDomain,
       });
