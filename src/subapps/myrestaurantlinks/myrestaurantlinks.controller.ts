@@ -1,11 +1,11 @@
 import { CreateRestaurantDto } from './dto/create-restaurant.dto';
 import { Controller, Get, Param, Post, Body } from '@nestjs/common';
 import { MyrestaurantlinksService } from './myrestaurantlinks.service';
-// import { UpdateMyrestaurantlinkDto } from './dto/update-myrestaurantlink.dto';
 
 import { Auth } from 'src/iam/decorators/auth.decorator';
 import { AuthType } from 'src/iam/enums/auth-type.enum';
 import { CreateCustomLinkDto } from './dto/create-custom-link.dto';
+import { CreateSocialLinkDto } from './dto/create-social-link.dto';
 
 @Controller('')
 export class MyrestaurantlinksController {
@@ -30,6 +30,13 @@ export class MyrestaurantlinksController {
   @Post('add_custom_link')
   async createCustomLink(@Body() newCustomLink: CreateCustomLinkDto) {
     return await this.myrestaurantlinksService.createCustomLink(newCustomLink);
+  }
+
+  // TODO: THIS WILL REQUIRE AUTH!!  DO NOT FORGET!!
+  @Auth(AuthType.None)
+  @Post('add_social_link')
+  async createSocialLink(@Body() newSocialLink: CreateSocialLinkDto) {
+    return await this.myrestaurantlinksService.createSocialLink(newSocialLink);
   }
 
   // @Patch(':id')
