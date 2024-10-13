@@ -14,22 +14,25 @@ export class MyrestaurantlinksService {
     return await this.restaurantsRepository.save(createNewRestaurantDto);
   }
 
-  async findOne(incomingDomain: string) {
+  async findOne(incomingDomain: string): Promise<MrlRestaurants> {
     try {
-      const restaurantData = await this.restaurantsRepository.findOne({
-        where: {
-          domain: incomingDomain,
-        },
+      debugger;
+      const restaurantData = await this.restaurantsRepository.findOneBy({
+        domain: incomingDomain,
       });
+
       if (!restaurantData) {
-        return new NotFoundException(
+        throw new NotFoundException(
           `Restaurant with domain ${incomingDomain} not found`,
         );
-      } else {
-        return restaurantData;
       }
+
+      return restaurantData;
     } catch (error) {
-      console.error('Error finding restaurant:', error);
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new Error(`Error finding restaurant: ${error.message}`);
     }
   }
 

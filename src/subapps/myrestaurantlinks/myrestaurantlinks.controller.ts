@@ -15,6 +15,7 @@ export class MyrestaurantlinksController {
   @Auth(AuthType.None)
   @Get(':incomingDomain')
   async findOne(@Param('incomingDomain') incomingDomain: string) {
+    debugger;
     return this.myrestaurantlinksService.findOne(incomingDomain);
   }
 
