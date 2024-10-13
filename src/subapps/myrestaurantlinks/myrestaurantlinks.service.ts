@@ -28,7 +28,7 @@ export class MyrestaurantlinksService {
     try {
       const restaurantData = await this.restaurantsRepository.findOne({
         where: { domain: incomingDomain },
-        relations: ['customLinks'],
+        relations: ['customLinks', 'socialLinks'],
       });
 
       if (!restaurantData) {
