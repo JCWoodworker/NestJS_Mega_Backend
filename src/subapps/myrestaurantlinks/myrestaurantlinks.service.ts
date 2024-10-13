@@ -22,8 +22,9 @@ export class MyrestaurantlinksService {
 
   async findOne(incomingDomain: string): Promise<MrlRestaurants> {
     try {
-      const restaurantData = await this.restaurantsRepository.findOneBy({
-        domain: incomingDomain,
+      const restaurantData = await this.restaurantsRepository.findOne({
+        where: { domain: incomingDomain },
+        relations: ['customLinks'],
       });
 
       if (!restaurantData) {
@@ -43,10 +44,23 @@ export class MyrestaurantlinksService {
 
   async createCustomLink(newCustomLink: CreateCustomLinkDto) {
     try {
+      const restaurant = await this.restaurantsRepository.findOne({
+        where: { id: newCustomLink.restaurant_id },
+      });
+
+      if (!restaurant) {
+        throw new NotFoundException(
+          `Restaurant with id ${newCustomLink.restaurant_id} not found`,
+        );
+      }
+
       const createdCustomLink =
         await this.customLinksRepository.save(newCustomLink);
       return createdCustomLink;
     } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
       throw new Error(`Error creating custom link: ${error.message}`);
     }
   }

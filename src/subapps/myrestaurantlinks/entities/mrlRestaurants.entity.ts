@@ -7,6 +7,9 @@ export class MrlRestaurants {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({ unique: true })
+  domain: string;
+
   @Column()
   name: string;
 
@@ -14,9 +17,6 @@ export class MrlRestaurants {
   @IsUrl()
   logo?: string;
 
-  @Column()
-  domain: string;
-
-  @OneToMany(() => MrlCustomLinks, (customLink) => customLink.restaurant_id)
+  @OneToMany(() => MrlCustomLinks, (customLink) => customLink.restaurant)
   customLinks: MrlCustomLinks[];
 }

@@ -18,7 +18,8 @@ export class MrlCustomLinks {
   restaurant: MrlRestaurants;
 
   @Column()
-  restaurant_id: MrlRestaurants['id'];
+  restaurant_id: number;
+
   @Column()
   title: string;
 
