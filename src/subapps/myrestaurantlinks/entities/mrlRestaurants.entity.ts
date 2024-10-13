@@ -17,6 +17,6 @@ export class MrlRestaurants {
   @Column()
   domain: string;
 
-  @OneToMany(() => MrlCustomLinks, (customLink) => customLink.restaurant)
+  @OneToMany(() => MrlCustomLinks, (customLink) => customLink.restaurant_id)
   customLinks: MrlCustomLinks[];
 }
