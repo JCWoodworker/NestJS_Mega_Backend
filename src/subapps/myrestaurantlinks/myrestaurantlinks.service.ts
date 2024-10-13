@@ -3,10 +3,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { MrlRestaurants } from './entities/mrlRestaurants.entity';
+import { MrlCustomLinks } from './entities/mrlCustomLinks.entity';
+import { MrlSocialLinks } from './entities/mrlSocialLinks.entity';
 
 import { CreateRestaurantDto } from './dto/create-restaurant.dto';
 import { CreateCustomLinkDto } from './dto/create-custom-link.dto';
-import { MrlCustomLinks } from './entities/mrlCustomLinks.entity';
+import { CreateSocialLinkDto } from './dto/create-social-link.dto';
 @Injectable()
 export class MyrestaurantlinksService {
   constructor(
@@ -14,6 +16,8 @@ export class MyrestaurantlinksService {
     private readonly restaurantsRepository: Repository<MrlRestaurants>,
     @InjectRepository(MrlCustomLinks)
     private readonly customLinksRepository: Repository<MrlCustomLinks>,
+    @InjectRepository(MrlSocialLinks)
+    private readonly socialLinksRepository: Repository<MrlSocialLinks>,
   ) {}
 
   async create(createNewRestaurantDto: CreateRestaurantDto) {
@@ -62,6 +66,30 @@ export class MyrestaurantlinksService {
         throw error;
       }
       throw new Error(`Error creating custom link: ${error.message}`);
+    }
+  }
+
+  async createSocialLink(newSocialLink: CreateSocialLinkDto) {
+    try {
+      const restaurant = await this.restaurantsRepository.findOne({
+        where: { id: newSocialLink.restaurant_id },
+      });
+
+      if (!restaurant) {
+        throw new NotFoundException(
+          `Restaurant with id ${newSocialLink.restaurant_id} not found`,
+        );
+      }
+
+      const createdSocialLink =
+        await this.socialLinksRepository.save(newSocialLink);
+      return createdSocialLink;
+    } catch (error) {
+      debugger;
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new Error(`Error creating social link: ${error.message}`);
     }
   }
 

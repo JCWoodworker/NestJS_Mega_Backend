@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 import { MrlRestaurants } from './mrlRestaurants.entity';
 
-enum SocialMediaPlatform {
+export enum SocialMediaPlatform {
   FACEBOOK = 'facebook',
   INSTAGRAM = 'instagram',
   X = 'x',

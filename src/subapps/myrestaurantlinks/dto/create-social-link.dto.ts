@@ -1,10 +1,11 @@
 import {
   IsNumber,
   IsOptional,
-  IsString,
+  IsEnum,
   IsUrl,
   IsBoolean,
 } from 'class-validator';
+import { SocialMediaPlatform } from '../entities/mrlSocialLinks.entity'; // Make sure to import the enum
 
 export class CreateSocialLinkDto {
   @IsNumber()
@@ -13,8 +14,8 @@ export class CreateSocialLinkDto {
   @IsUrl()
   url: string;
 
-  @IsString()
-  social_media_platform: string;
+  @IsEnum(SocialMediaPlatform)
+  social_media_platform: SocialMediaPlatform;
 
   @IsOptional()
   @IsBoolean()
