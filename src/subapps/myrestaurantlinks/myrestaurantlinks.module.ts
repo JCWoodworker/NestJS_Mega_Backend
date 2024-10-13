@@ -5,9 +5,12 @@ import { MyrestaurantlinksController } from './myrestaurantlinks.controller';
 
 import { MrlRestaurants } from './entities/mrlRestaurants.entity';
 import { MrlCustomLinks } from './entities/mrlCustomLinks.entity';
+import { MrlSocialLinks } from './entities/mrlSocialLinks.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([MrlRestaurants, MrlCustomLinks])],
+  imports: [
+    TypeOrmModule.forFeature([MrlRestaurants, MrlCustomLinks, MrlSocialLinks]),
+  ],
   controllers: [MyrestaurantlinksController],
   providers: [MyrestaurantlinksService],
 })
