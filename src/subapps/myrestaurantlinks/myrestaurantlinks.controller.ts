@@ -5,6 +5,7 @@ import { MyrestaurantlinksService } from './myrestaurantlinks.service';
 
 import { Auth } from 'src/iam/decorators/auth.decorator';
 import { AuthType } from 'src/iam/enums/auth-type.enum';
+import { CreateCustomLinkDto } from './dto/create-custom-link.dto';
 
 @Controller('')
 export class MyrestaurantlinksController {
@@ -19,9 +20,16 @@ export class MyrestaurantlinksController {
   }
 
   @Auth(AuthType.None)
-  @Post()
+  @Post('add_restaurant')
   async create(@Body() createNewRestaurantDto: CreateRestaurantDto) {
     return this.myrestaurantlinksService.create(createNewRestaurantDto);
+  }
+
+  // TODO: THIS WILL REQUIRE AUTH!!  DO NOT FORGET!!
+  @Auth(AuthType.None)
+  @Post('add_custom_link')
+  async createCustomLink(@Body() newCustomLink: CreateCustomLinkDto) {
+    return await this.myrestaurantlinksService.createCustomLink(newCustomLink);
   }
 
   // @Patch(':id')

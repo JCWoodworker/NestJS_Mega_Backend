@@ -1,5 +1,6 @@
 import { IsUrl } from 'class-validator';
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import { MrlCustomLinks } from './mrlCustomLinks.entity';
 
 @Entity()
 export class MrlRestaurants {
@@ -15,4 +16,7 @@ export class MrlRestaurants {
 
   @Column()
   domain: string;
+
+  @OneToMany(() => MrlCustomLinks, (customLink) => customLink.restaurant_id)
+  customLinks: MrlCustomLinks[];
 }

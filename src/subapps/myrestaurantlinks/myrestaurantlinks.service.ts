@@ -1,13 +1,19 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+
 import { MrlRestaurants } from './entities/mrlRestaurants.entity';
+
 import { CreateRestaurantDto } from './dto/create-restaurant.dto';
+import { CreateCustomLinkDto } from './dto/create-custom-link.dto';
+import { MrlCustomLinks } from './entities/mrlCustomLinks.entity';
 @Injectable()
 export class MyrestaurantlinksService {
   constructor(
     @InjectRepository(MrlRestaurants)
     private readonly restaurantsRepository: Repository<MrlRestaurants>,
+    @InjectRepository(MrlCustomLinks)
+    private readonly customLinksRepository: Repository<MrlCustomLinks>,
   ) {}
 
   async create(createNewRestaurantDto: CreateRestaurantDto) {
@@ -32,6 +38,16 @@ export class MyrestaurantlinksService {
         throw error;
       }
       throw new Error(`Error finding restaurant: ${error.message}`);
+    }
+  }
+
+  async createCustomLink(newCustomLink: CreateCustomLinkDto) {
+    try {
+      const createdCustomLink =
+        await this.customLinksRepository.save(newCustomLink);
+      return createdCustomLink;
+    } catch (error) {
+      throw new Error(`Error creating custom link: ${error.message}`);
     }
   }
 
