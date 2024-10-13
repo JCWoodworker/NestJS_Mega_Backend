@@ -7,7 +7,9 @@ export class CreateRestaurantsTable1728699473766 implements MigrationInterface {
             "id" SERIAL NOT NULL PRIMARY KEY,
             "name" character varying NOT NULL,
             "logo" character varying,
-            "domain" character varying
+            "domain" character varying,
+            "created_at" TIMESTAMP NOT NULL DEFAULT now(),
+            "updated_at" TIMESTAMP NOT NULL DEFAULT now()
         )`,
     );
   }
