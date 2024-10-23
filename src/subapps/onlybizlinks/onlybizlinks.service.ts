@@ -6,11 +6,11 @@ import { MrlRestaurants } from './entities/mrlRestaurants.entity';
 import { MrlCustomLinks } from './entities/mrlCustomLinks.entity';
 import { MrlSocialLinks } from './entities/mrlSocialLinks.entity';
 
-import { CreateRestaurantDto } from './dto/create-restaurant.dto';
+import { CreateBusinessDto } from './dto/create-business.dto';
 import { CreateCustomLinkDto } from './dto/create-custom-link.dto';
 import { CreateSocialLinkDto } from './dto/create-social-link.dto';
 @Injectable()
-export class MyrestaurantlinksService {
+export class OnlyBizlinksService {
   constructor(
     @InjectRepository(MrlRestaurants)
     private readonly restaurantsRepository: Repository<MrlRestaurants>,
@@ -20,7 +20,7 @@ export class MyrestaurantlinksService {
     private readonly socialLinksRepository: Repository<MrlSocialLinks>,
   ) {}
 
-  async create(createNewRestaurantDto: CreateRestaurantDto) {
+  async create(createNewRestaurantDto: CreateBusinessDto) {
     return await this.restaurantsRepository.save(createNewRestaurantDto);
   }
 

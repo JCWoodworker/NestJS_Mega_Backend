@@ -1,6 +1,6 @@
 import { IsOptional, IsString, IsUrl } from 'class-validator';
 
-export class CreateRestaurantDto {
+export class CreateBusinessDto {
   @IsString()
   name: string;
 
