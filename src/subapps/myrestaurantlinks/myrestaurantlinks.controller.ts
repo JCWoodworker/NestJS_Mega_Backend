@@ -19,22 +19,16 @@ export class MyrestaurantlinksController {
     return this.myrestaurantlinksService.findOne(incomingDomain);
   }
 
-  // TODO: THIS WILL REQUIRE AUTH!!  DO NOT FORGET!!
-  @Auth(AuthType.None)
   @Post('add_restaurant')
   async create(@Body() createNewRestaurantDto: CreateRestaurantDto) {
     return this.myrestaurantlinksService.create(createNewRestaurantDto);
   }
 
-  // TODO: THIS WILL REQUIRE AUTH!!  DO NOT FORGET!!
-  @Auth(AuthType.None)
   @Post('add_custom_link')
   async createCustomLink(@Body() newCustomLink: CreateCustomLinkDto) {
     return await this.myrestaurantlinksService.createCustomLink(newCustomLink);
   }
 
-  // TODO: THIS WILL REQUIRE AUTH!!  DO NOT FORGET!!
-  @Auth(AuthType.None)
   @Post('add_social_link')
   async createSocialLink(@Body() newSocialLink: CreateSocialLinkDto) {
     return await this.myrestaurantlinksService.createSocialLink(newSocialLink);
