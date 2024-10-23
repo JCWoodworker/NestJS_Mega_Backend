@@ -8,5 +8,5 @@ export class CreateCustomLinkDto {
   url: string;
 
   @IsNumber()
-  restaurant_id: number;
+  business_id: number;
 }

@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { MrlRestaurants } from './entities/mrlRestaurants.entity';
+import { MrlBusinesses } from './entities/mrlBusinesses.entity';
 import { MrlCustomLinks } from './entities/mrlCustomLinks.entity';
 import { MrlSocialLinks } from './entities/mrlSocialLinks.entity';
 
@@ -12,49 +12,49 @@ import { CreateSocialLinkDto } from './dto/create-social-link.dto';
 @Injectable()
 export class OnlyBizlinksService {
   constructor(
-    @InjectRepository(MrlRestaurants)
-    private readonly restaurantsRepository: Repository<MrlRestaurants>,
+    @InjectRepository(MrlBusinesses)
+    private readonly businessesRepository: Repository<MrlBusinesses>,
     @InjectRepository(MrlCustomLinks)
     private readonly customLinksRepository: Repository<MrlCustomLinks>,
     @InjectRepository(MrlSocialLinks)
     private readonly socialLinksRepository: Repository<MrlSocialLinks>,
   ) {}
 
-  async create(createNewRestaurantDto: CreateBusinessDto) {
-    return await this.restaurantsRepository.save(createNewRestaurantDto);
+  async create(createNewBusinessDto: CreateBusinessDto) {
+    return await this.businessesRepository.save(createNewBusinessDto);
   }
 
-  async findOne(incomingDomain: string): Promise<MrlRestaurants> {
+  async findOne(incomingDomain: string): Promise<MrlBusinesses> {
     try {
-      const restaurantData = await this.restaurantsRepository.findOne({
+      const businessData = await this.businessesRepository.findOne({
         where: { domain: incomingDomain },
         relations: ['customLinks', 'socialLinks'],
       });
 
-      if (!restaurantData) {
+      if (!businessData) {
         throw new NotFoundException(
-          `Restaurant with domain ${incomingDomain} not found`,
+          `Business with domain ${incomingDomain} not found`,
         );
       }
 
-      return restaurantData;
+      return businessData;
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new Error(`Error finding restaurant: ${error.message}`);
+      throw new Error(`Error finding business: ${error.message}`);
     }
   }
 
   async createCustomLink(newCustomLink: CreateCustomLinkDto) {
     try {
-      const restaurant = await this.restaurantsRepository.findOne({
-        where: { id: newCustomLink.restaurant_id },
+      const business = await this.businessesRepository.findOne({
+        where: { id: newCustomLink.business_id },
       });
 
-      if (!restaurant) {
+      if (!business) {
         throw new NotFoundException(
-          `Restaurant with id ${newCustomLink.restaurant_id} not found`,
+          `Business with id ${newCustomLink.business_id} not found`,
         );
       }
 
@@ -71,13 +71,13 @@ export class OnlyBizlinksService {
 
   async createSocialLink(newSocialLink: CreateSocialLinkDto) {
     try {
-      const restaurant = await this.restaurantsRepository.findOne({
-        where: { id: newSocialLink.restaurant_id },
+      const business = await this.businessesRepository.findOne({
+        where: { id: newSocialLink.business_id },
       });
 
-      if (!restaurant) {
+      if (!business) {
         throw new NotFoundException(
-          `Restaurant with id ${newSocialLink.restaurant_id} not found`,
+          `Business with id ${newSocialLink.business_id} not found`,
         );
       }
 
@@ -92,12 +92,4 @@ export class OnlyBizlinksService {
       throw new Error(`Error creating social link: ${error.message}`);
     }
   }
-
-  // update(id: number, updateMyrestaurantlinkDto: UpdateMyrestaurantlinkDto) {
-  //   return `This action updates a #${id} myrestaurantlink`;
-  // }
-
-  // remove(id: number) {
-  //   return `This action removes a #${id} myrestaurantlink`;
-  // }
 }

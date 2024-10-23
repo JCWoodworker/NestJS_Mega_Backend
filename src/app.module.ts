@@ -67,7 +67,7 @@ import { DevtoolsModule } from '@nestjs/devtools-integration';
             module: MycuttingboardModule,
           },
           {
-            path: 'myrestaurantlinks',
+            path: 'onlybizlinks',
             module: OnlyBizlinksModule,
           },
         ],

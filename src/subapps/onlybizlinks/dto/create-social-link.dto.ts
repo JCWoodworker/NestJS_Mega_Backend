@@ -9,7 +9,7 @@ import { SocialMediaPlatform } from '../entities/mrlSocialLinks.entity'; // Make
 
 export class CreateSocialLinkDto {
   @IsNumber()
-  restaurant_id: number;
+  business_id: number;
 
   @IsUrl()
   url: string;

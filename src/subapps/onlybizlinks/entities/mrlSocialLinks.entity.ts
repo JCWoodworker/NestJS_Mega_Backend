@@ -6,15 +6,15 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { MrlRestaurants } from './mrlRestaurants.entity';
+import { MrlBusinesses } from './mrlBusinesses.entity';
 
 export enum SocialMediaPlatform {
   FACEBOOK = 'facebook',
   INSTAGRAM = 'instagram',
-  X = 'x',
   LINKEDIN = 'linkedin',
-  YOUTUBE = 'youtube',
   PINTEREST = 'pinterest',
+  X = 'x',
+  YOUTUBE = 'youtube',
 }
 
 @Entity()
@@ -22,12 +22,12 @@ export class MrlSocialLinks {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => MrlRestaurants, (restaurant) => restaurant.socialLinks)
+  @ManyToOne(() => MrlBusinesses, (business) => business.socialLinks)
   @JoinColumn({ name: 'restaurant_id' })
-  restaurant: MrlRestaurants;
+  business: MrlBusinesses;
 
   @Column()
-  restaurant_id: number;
+  business_id: number;
 
   @Column()
   @IsEnum(SocialMediaPlatform)

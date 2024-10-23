@@ -1,4 +1,3 @@
-import { CreateRestaurantDto } from './dto/create-business.dto';
 import { Controller, Get, Param, Post, Body } from '@nestjs/common';
 import { OnlyBizlinksService } from './onlybizlinks.service';
 
@@ -6,6 +5,7 @@ import { Auth } from 'src/iam/decorators/auth.decorator';
 import { AuthType } from 'src/iam/enums/auth-type.enum';
 import { CreateCustomLinkDto } from './dto/create-custom-link.dto';
 import { CreateSocialLinkDto } from './dto/create-social-link.dto';
+import { CreateBusinessDto } from './dto/create-business.dto';
 
 @Controller('')
 export class OnlyBizlinks {
@@ -17,9 +17,9 @@ export class OnlyBizlinks {
     return this.onlyBizlinksService.findOne(incomingDomain);
   }
 
-  @Post('add_restaurant')
-  async create(@Body() createNewRestaurantDto: CreateRestaurantDto) {
-    return this.onlyBizlinksService.create(createNewRestaurantDto);
+  @Post('add_business')
+  async create(@Body() createNewBusiness: CreateBusinessDto) {
+    return this.onlyBizlinksService.create(createNewBusiness);
   }
 
   @Post('add_custom_link')
