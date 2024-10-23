@@ -19,6 +19,7 @@ export class MyrestaurantlinksController {
     return this.myrestaurantlinksService.findOne(incomingDomain);
   }
 
+  // TODO: THIS WILL REQUIRE AUTH!!  DO NOT FORGET!!
   @Auth(AuthType.None)
   @Post('add_restaurant')
   async create(@Body() createNewRestaurantDto: CreateRestaurantDto) {
