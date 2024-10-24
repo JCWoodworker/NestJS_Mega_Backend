@@ -1,13 +1,13 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateRestaurantsTable1728699473766 implements MigrationInterface {
+export class CreateCustomLinksTable1728699473767 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `CREATE TABLE "mrl_restaurants" (
+      `CREATE TABLE "obl_custom_links" (
             "id" SERIAL NOT NULL PRIMARY KEY,
-            "name" character varying NOT NULL,
-            "logo" character varying,
-            "domain" character varying,
+            "business_id" integer NOT NULL REFERENCES "obl_businesses" ("id") ON DELETE CASCADE,
+            "title" character varying NOT NULL,
+            "url" character varying NOT NULL,
             "created_at" TIMESTAMP NOT NULL DEFAULT now(),
             "updated_at" TIMESTAMP NOT NULL DEFAULT now()
         )`,
@@ -15,6 +15,6 @@ export class CreateRestaurantsTable1728699473766 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE IF EXISTS "mrl_restaurants"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "obl_custom_links"`);
   }
 }

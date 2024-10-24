@@ -6,19 +6,19 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { MrlRestaurants } from './mrlRestaurants.entity';
+import { OblBusinesses } from './oblBusinesses.entity';
 
 @Entity()
-export class MrlCustomLinks {
+export class OblCustomLinks {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => MrlRestaurants, (restaurant) => restaurant.customLinks)
-  @JoinColumn({ name: 'restaurant_id' })
-  restaurant: MrlRestaurants;
+  @ManyToOne(() => OblBusinesses, (business) => business.customLinks)
+  @JoinColumn({ name: 'business_id' })
+  business: OblBusinesses;
 
   @Column()
-  restaurant_id: number;
+  business_id: number;
 
   @Column()
   title: string;
