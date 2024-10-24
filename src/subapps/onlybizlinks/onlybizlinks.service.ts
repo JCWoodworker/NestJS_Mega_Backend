@@ -78,6 +78,12 @@ export class OnlyBizlinksService {
     }
   }
 
+  async findAll() {
+    return await this.businessesRepository.find({
+      select: ['name', 'domain'],
+    });
+  }
+
   async createCustomLink(newCustomLink: CreateCustomLinkDto) {
     try {
       const business = await this.businessesRepository.findOne({

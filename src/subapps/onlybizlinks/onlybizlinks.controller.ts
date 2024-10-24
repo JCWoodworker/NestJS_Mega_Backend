@@ -17,6 +17,12 @@ export class OnlyBizlinksController {
     return this.onlyBizlinksService.findOne(incomingDomain);
   }
 
+  @Auth(AuthType.None)
+  @Get('all_businesses')
+  async findAll() {
+    return this.onlyBizlinksService.findAll();
+  }
+
   @Post('add_business')
   async create(@Body() createNewBusiness: CreateBusinessDto) {
     return this.onlyBizlinksService.create(createNewBusiness);
