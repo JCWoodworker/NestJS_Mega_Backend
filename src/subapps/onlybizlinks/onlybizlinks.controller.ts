@@ -7,6 +7,7 @@ import { CreateCustomLinkDto } from './dto/create-custom-link.dto';
 import { CreateSocialLinkDto } from './dto/create-social-link.dto';
 import { CreateBusinessDto } from './dto/create-business.dto';
 
+@Auth(AuthType.None)
 @Controller('')
 export class OnlyBizlinks {
   constructor(private readonly onlyBizlinksService: OnlyBizlinksService) {}
@@ -31,17 +32,4 @@ export class OnlyBizlinks {
   async createSocialLink(@Body() newSocialLink: CreateSocialLinkDto) {
     return await this.onlyBizlinksService.createSocialLink(newSocialLink);
   }
-
-  // @Patch(':id')
-  // update(
-  //   @Param('id') id: string,
-  //   @Body() updateMyrestaurantlinkDto: UpdateMyrestaurantlinkDto,
-  // ) {
-  //   return this.myrestaurantlinksService.update(+id, updateMyrestaurantlinkDto);
-  // }
-
-  // @Delete(':id')
-  // remove(@Param('id') id: string) {
-  //   return this.myrestaurantlinksService.remove(+id);
-  // }
 }

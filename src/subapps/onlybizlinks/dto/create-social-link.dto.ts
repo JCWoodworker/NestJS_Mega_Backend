@@ -5,7 +5,7 @@ import {
   IsUrl,
   IsBoolean,
 } from 'class-validator';
-import { SocialMediaPlatform } from '../entities/mrlSocialLinks.entity'; // Make sure to import the enum
+import { SocialMediaPlatform } from '../entities/oblSocialLinks.entity'; // Make sure to import the enum
 
 export class CreateSocialLinkDto {
   @IsNumber()

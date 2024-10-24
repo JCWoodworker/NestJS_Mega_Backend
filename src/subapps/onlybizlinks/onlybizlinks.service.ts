@@ -2,9 +2,9 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { MrlBusinesses } from './entities/mrlBusinesses.entity';
-import { MrlCustomLinks } from './entities/mrlCustomLinks.entity';
-import { MrlSocialLinks } from './entities/mrlSocialLinks.entity';
+import { OblBusinesses } from './entities/oblBusinesses.entity';
+import { OblCustomLinks } from './entities/oblCustomLinks.entity';
+import { OblSocialLinks } from './entities/oblSocialLinks.entity';
 
 import { CreateBusinessDto } from './dto/create-business.dto';
 import { CreateCustomLinkDto } from './dto/create-custom-link.dto';
@@ -12,19 +12,19 @@ import { CreateSocialLinkDto } from './dto/create-social-link.dto';
 @Injectable()
 export class OnlyBizlinksService {
   constructor(
-    @InjectRepository(MrlBusinesses)
-    private readonly businessesRepository: Repository<MrlBusinesses>,
-    @InjectRepository(MrlCustomLinks)
-    private readonly customLinksRepository: Repository<MrlCustomLinks>,
-    @InjectRepository(MrlSocialLinks)
-    private readonly socialLinksRepository: Repository<MrlSocialLinks>,
+    @InjectRepository(OblBusinesses)
+    private readonly businessesRepository: Repository<OblBusinesses>,
+    @InjectRepository(OblCustomLinks)
+    private readonly customLinksRepository: Repository<OblCustomLinks>,
+    @InjectRepository(OblSocialLinks)
+    private readonly socialLinksRepository: Repository<OblSocialLinks>,
   ) {}
 
   async create(createNewBusinessDto: CreateBusinessDto) {
     return await this.businessesRepository.save(createNewBusinessDto);
   }
 
-  async findOne(incomingDomain: string): Promise<MrlBusinesses> {
+  async findOne(incomingDomain: string): Promise<OblBusinesses> {
     try {
       const businessData = await this.businessesRepository.findOne({
         where: { domain: incomingDomain },

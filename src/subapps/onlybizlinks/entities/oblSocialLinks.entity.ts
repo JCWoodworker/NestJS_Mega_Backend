@@ -6,7 +6,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { MrlBusinesses } from './mrlBusinesses.entity';
+import { OblBusinesses } from './oblBusinesses.entity';
 
 export enum SocialMediaPlatform {
   FACEBOOK = 'facebook',
@@ -18,13 +18,13 @@ export enum SocialMediaPlatform {
 }
 
 @Entity()
-export class MrlSocialLinks {
+export class OblSocialLinks {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => MrlBusinesses, (business) => business.socialLinks)
-  @JoinColumn({ name: 'restaurant_id' })
-  business: MrlBusinesses;
+  @ManyToOne(() => OblBusinesses, (business) => business.socialLinks)
+  @JoinColumn({ name: 'business_id' })
+  business: OblBusinesses;
 
   @Column()
   business_id: number;

@@ -6,16 +6,16 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { MrlBusinesses } from './mrlBusinesses.entity';
+import { OblBusinesses } from './oblBusinesses.entity';
 
 @Entity()
-export class MrlCustomLinks {
+export class OblCustomLinks {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => MrlBusinesses, (business) => business.customLinks)
+  @ManyToOne(() => OblBusinesses, (business) => business.customLinks)
   @JoinColumn({ name: 'business_id' })
-  business: MrlBusinesses;
+  business: OblBusinesses;
 
   @Column()
   business_id: number;
