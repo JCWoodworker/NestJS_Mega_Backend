@@ -9,7 +9,7 @@ import { CreateBusinessDto } from './dto/create-business.dto';
 
 @Auth(AuthType.None)
 @Controller('')
-export class OnlyBizlinks {
+export class OnlyBizlinksController {
   constructor(private readonly onlyBizlinksService: OnlyBizlinksService) {}
 
   @Auth(AuthType.None)

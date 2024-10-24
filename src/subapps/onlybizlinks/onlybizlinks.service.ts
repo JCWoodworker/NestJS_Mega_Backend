@@ -9,6 +9,7 @@ import { OblSocialLinks } from './entities/oblSocialLinks.entity';
 import { CreateBusinessDto } from './dto/create-business.dto';
 import { CreateCustomLinkDto } from './dto/create-custom-link.dto';
 import { CreateSocialLinkDto } from './dto/create-social-link.dto';
+
 @Injectable()
 export class OnlyBizlinksService {
   constructor(
