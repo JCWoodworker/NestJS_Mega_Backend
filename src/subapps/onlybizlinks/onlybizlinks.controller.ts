@@ -7,7 +7,6 @@ import { CreateCustomLinkDto } from './dto/create-custom-link.dto';
 import { CreateSocialLinkDto } from './dto/create-social-link.dto';
 import { CreateBusinessDto } from './dto/create-business.dto';
 
-@Auth(AuthType.None)
 @Controller('')
 export class OnlyBizlinksController {
   constructor(private readonly onlyBizlinksService: OnlyBizlinksService) {}

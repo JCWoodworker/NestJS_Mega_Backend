@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -22,7 +26,34 @@ export class OnlyBizlinksService {
   ) {}
 
   async create(createNewBusinessDto: CreateBusinessDto) {
-    return await this.businessesRepository.save(createNewBusinessDto);
+    try {
+      const existingBusinessByName = await this.businessesRepository.findOne({
+        where: { name: createNewBusinessDto.name },
+      });
+      const existingBusinessByDomain = await this.businessesRepository.findOne({
+        where: { domain: createNewBusinessDto.domain },
+      });
+      if (existingBusinessByName && existingBusinessByDomain) {
+        throw new ConflictException(
+          `A business with both that name and domain already exists.`,
+        );
+      } else if (existingBusinessByName) {
+        throw new ConflictException(
+          `A business with that name already exists.`,
+        );
+      } else if (existingBusinessByDomain) {
+        throw new ConflictException(
+          `A business with that domain already exists.`,
+        );
+      }
+
+      return await this.businessesRepository.save(createNewBusinessDto);
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        throw error;
+      }
+      throw new Error(`Error creating business: ${error.message}`);
+    }
   }
 
   async findOne(incomingDomain: string): Promise<OblBusinesses> {
