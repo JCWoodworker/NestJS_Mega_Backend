@@ -1,4 +1,6 @@
 // TODO: Remove all commented out code!!
+// TODO: Check all apps that use AUTH and make sure they are not using token.token anymore
+// TODO: we are now returning authData - authData.tokens & authData.userInfo
 
 import {
   ConflictException,
@@ -83,7 +85,6 @@ export class AuthenticationService {
     //   };
     // }
     const authData = await this.generateTokens(user);
-    debugger;
     return { authData };
   }
 
