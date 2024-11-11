@@ -1,3 +1,5 @@
+// TODO: Remove all commented out code!!
+
 import { Controller, Post, Body } from '@nestjs/common';
 import { GoogleAuthenticationService } from './google-authentication.service';
 import { GoogleTokenDto } from '../dto/google-token.dto';
@@ -15,9 +17,9 @@ export class GoogleAuthenticationController {
   async authenticate(@Body() tokenDto: GoogleTokenDto) {
     return this.googleAuthService.authenticate(
       tokenDto.token,
-      tokenDto.subappId,
-      tokenDto.signUpOrIn,
-      tokenDto.subscriptionTier,
+      // tokenDto.subappId,
+      // tokenDto.signUpOrIn,
+      // tokenDto.subscriptionTier,
     );
   }
 }

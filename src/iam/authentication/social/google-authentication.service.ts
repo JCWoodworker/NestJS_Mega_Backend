@@ -1,3 +1,5 @@
+// TODO: Remove all commented out code!!
+
 import {
   ConflictException,
   Injectable,
@@ -32,9 +34,9 @@ export class GoogleAuthenticationService implements OnModuleInit {
 
   async authenticate(
     token: string,
-    subappId: string,
-    signUpOrIn: string,
-    subscription_tier?: string,
+    // subappId: string,
+    // signUpOrIn: string,
+    // subscription_tier?: string,
   ) {
     try {
       const loginTicket = await this.oauthClient.verifyIdToken({
@@ -53,30 +55,31 @@ export class GoogleAuthenticationService implements OnModuleInit {
         imageUrl: picture,
       };
       const user = await this.usersRepository.findOneBy({ googleId });
-      if (user) {
-        const userId = user.id.toString();
-        const userSubappAccessExists =
-          await this.subappsService.findOneByUserIdAndSubappId(
-            userId,
-            subappId,
-          );
-        if (!userSubappAccessExists && signUpOrIn === 'signup') {
-          await this.subappsService.addSubappUserData(
-            userId,
-            subappId,
-            subscription_tier,
-          );
-        } else if (!userSubappAccessExists && signUpOrIn === 'signin') {
-          // instead, just add this app to their list of subapps they can access
-          return {
-            status: 403,
-            message:
-              'You have authenticated successfully, but you do not have access to this specific subapp.  Please sign up for this subapp first',
-          };
-        }
-        const userAndTokens = await this.authService.generateTokens(user);
-        return { userAndTokens };
-      } else {
+      // if (user) {
+      //   const userId = user.id.toString();
+      //   const userSubappAccessExists =
+      //     await this.subappsService.findOneByUserIdAndSubappId(
+      //       userId,
+      //       subappId,
+      //     );
+      //   if (!userSubappAccessExists && signUpOrIn === 'signup') {
+      //     await this.subappsService.addSubappUserData(
+      //       userId,
+      //       subappId,
+      //       subscription_tier,
+      //     );
+      //   } else if (!userSubappAccessExists && signUpOrIn === 'signin') {
+      //     // instead, just add this app to their list of subapps they can access
+      //     return {
+      //       status: 403,
+      //       message:
+      //         'You have authenticated successfully, but you do not have access to this specific subapp.  Please sign up for this subapp first',
+      //     };
+      //   }
+      //   const userAndTokens = await this.authService.generateTokens(user);
+      //   return { userAndTokens };
+      // } else {
+      if (!user) {
         const newUser = await this.usersRepository.save({
           email,
           googleId,
@@ -84,11 +87,11 @@ export class GoogleAuthenticationService implements OnModuleInit {
           last_name: userNameAndImage.lastName,
           image_url: userNameAndImage.imageUrl,
         });
-        await this.subappsService.addSubappUserData(
-          newUser.id,
-          subappId,
-          subscription_tier,
-        );
+        // await this.subappsService.addSubappUserData(
+        //   newUser.id,
+        //   subappId,
+        //   subscription_tier,
+        // );
         const userAndTokens = await this.authService.generateTokens(newUser);
         return { userAndTokens };
       }

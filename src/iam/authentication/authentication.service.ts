@@ -1,3 +1,5 @@
+// TODO: Remove all commented out code!!
+
 import {
   ConflictException,
   Inject,
@@ -18,7 +20,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RefreshTokensService } from './refresh-token-storage/refresh-token-storage.service';
 import { randomUUID } from 'crypto';
 import { InvalidateRefreshTokenError } from './refresh-token-storage/invalidate-refresh-token-error';
-import { SubappsService } from 'src/subapps/subapps.service';
+// import { SubappsService } from 'src/subapps/subapps.service';
 
 @Injectable()
 export class AuthenticationService {
@@ -30,7 +32,7 @@ export class AuthenticationService {
     private readonly jwtService: JwtService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
-    private readonly subappsService: SubappsService,
+    // private readonly subappsService: SubappsService,
   ) {}
 
   async signUp(signUpDto: SignUpDto) {
@@ -39,11 +41,11 @@ export class AuthenticationService {
       user.email = signUpDto.email.toLowerCase();
       user.password = await this.hashingService.hash(signUpDto.password);
       await this.usersRepository.save(user);
-      await this.subappsService.addSubappUserData(
-        user.id,
-        signUpDto.subappId,
-        signUpDto.subscriptionTier,
-      );
+      // await this.subappsService.addSubappUserData(
+      //   user.id,
+      //   signUpDto.subappId,
+      //   signUpDto.subscriptionTier,
+      // );
       return `User ${signUpDto.email} created successfully`;
     } catch (err) {
       const pgUniqueViolationErrorCode = '23505';
@@ -69,19 +71,20 @@ export class AuthenticationService {
     if (!isEqual) {
       throw new UnauthorizedException('Password does not match');
     }
-    const userSubappAccessExists =
-      await this.subappsService.findOneByUserIdAndSubappId(
-        user.id,
-        signInDto.subappId,
-      );
-    if (!userSubappAccessExists) {
-      return {
-        message:
-          'User does not have access to this subapp.  Please sign up for this subapp first',
-      };
-    }
-    const tokens = await this.generateTokens(user);
-    return { tokens };
+    // const userSubappAccessExists =
+    //   await this.subappsService.findOneByUserIdAndSubappId(
+    //     user.id,
+    //     signInDto.subappId,
+    //   );
+    // if (!userSubappAccessExists) {
+    //   return {
+    //     message:
+    //       'User does not have access to this subapp.  Please sign up for this subapp first',
+    //   };
+    // }
+    const authData = await this.generateTokens(user);
+    debugger;
+    return { authData };
   }
 
   async generateTokens(user: Users) {
