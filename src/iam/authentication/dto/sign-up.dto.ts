@@ -1,5 +1,3 @@
-// TODO: Remove all commented out code!!
-
 import { IsEmail, IsStrongPassword, IsEnum } from 'class-validator';
 import { AuthActionType } from './dto.enum';
 
@@ -12,10 +10,4 @@ export class SignUpDto {
 
   @IsEnum(AuthActionType)
   signUpOrIn: string;
-
-  // @IsString()
-  // subappId: string;
-
-  // @IsString()
-  // subscriptionTier: string;
 }
