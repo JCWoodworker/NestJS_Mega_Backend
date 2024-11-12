@@ -13,11 +13,6 @@ export class GoogleAuthenticationController {
 
   @Post()
   async authenticate(@Body() tokenDto: GoogleTokenDto) {
-    return this.googleAuthService.authenticate(
-      tokenDto.token,
-      tokenDto.subappId,
-      tokenDto.signUpOrIn,
-      tokenDto.subscriptionTier,
-    );
+    return this.googleAuthService.authenticate(tokenDto.token);
   }
 }

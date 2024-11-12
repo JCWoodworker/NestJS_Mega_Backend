@@ -123,7 +123,6 @@ export class OnlyBizlinksService {
         await this.socialLinksRepository.save(newSocialLink);
       return createdSocialLink;
     } catch (error) {
-      debugger;
       if (error instanceof NotFoundException) {
         throw error;
       }

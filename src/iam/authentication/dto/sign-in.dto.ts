@@ -1,10 +1,4 @@
-import {
-  IsEmail,
-  IsOptional,
-  IsStrongPassword,
-  IsString,
-  IsEnum,
-} from 'class-validator';
+import { IsEmail, IsStrongPassword, IsEnum } from 'class-validator';
 import { AuthActionType } from '../dto/dto.enum';
 
 export class SignInDto {
@@ -16,10 +10,4 @@ export class SignInDto {
 
   @IsEnum(AuthActionType)
   signUpOrIn: string;
-
-  @IsString()
-  subappId: string;
-
-  @IsOptional()
-  subscriptionTier?: string;
 }

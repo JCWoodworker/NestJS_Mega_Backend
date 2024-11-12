@@ -1,3 +1,6 @@
+// TODO: Check all apps that use AUTH and make sure they are not using token.token anymore
+// TODO: we are now returning authData - authData.tokens & authData.userInfo
+
 import {
   ConflictException,
   Inject,
@@ -18,7 +21,6 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RefreshTokensService } from './refresh-token-storage/refresh-token-storage.service';
 import { randomUUID } from 'crypto';
 import { InvalidateRefreshTokenError } from './refresh-token-storage/invalidate-refresh-token-error';
-import { SubappsService } from 'src/subapps/subapps.service';
 
 @Injectable()
 export class AuthenticationService {
@@ -30,7 +32,6 @@ export class AuthenticationService {
     private readonly jwtService: JwtService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
-    private readonly subappsService: SubappsService,
   ) {}
 
   async signUp(signUpDto: SignUpDto) {
@@ -38,13 +39,10 @@ export class AuthenticationService {
       const user = new Users();
       user.email = signUpDto.email.toLowerCase();
       user.password = await this.hashingService.hash(signUpDto.password);
-      await this.usersRepository.save(user);
-      await this.subappsService.addSubappUserData(
-        user.id,
-        signUpDto.subappId,
-        signUpDto.subscriptionTier,
-      );
-      return `User ${signUpDto.email} created successfully`;
+      debugger;
+      const newUser = await this.usersRepository.save(user);
+      debugger;
+      return { message: `User ${newUser.email} created successfully` };
     } catch (err) {
       const pgUniqueViolationErrorCode = '23505';
       if (err.code === pgUniqueViolationErrorCode) {
@@ -69,19 +67,8 @@ export class AuthenticationService {
     if (!isEqual) {
       throw new UnauthorizedException('Password does not match');
     }
-    const userSubappAccessExists =
-      await this.subappsService.findOneByUserIdAndSubappId(
-        user.id,
-        signInDto.subappId,
-      );
-    if (!userSubappAccessExists) {
-      return {
-        message:
-          'User does not have access to this subapp.  Please sign up for this subapp first',
-      };
-    }
-    const tokens = await this.generateTokens(user);
-    return { tokens };
+    const authData = await this.generateTokens(user);
+    return { authData };
   }
 
   async generateTokens(user: Users) {
