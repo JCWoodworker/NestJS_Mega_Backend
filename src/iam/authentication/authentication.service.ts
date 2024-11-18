@@ -21,12 +21,15 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RefreshTokensService } from './refresh-token-storage/refresh-token-storage.service';
 import { randomUUID } from 'crypto';
 import { InvalidateRefreshTokenError } from './refresh-token-storage/invalidate-refresh-token-error';
+import { OblUsersAndBusinesses } from 'src/subapps/onlybizlinks/entities/oblUsersAndBusinesses.entity';
 
 @Injectable()
 export class AuthenticationService {
   constructor(
     @InjectRepository(Users)
     private readonly usersRepository: Repository<Users>,
+    @InjectRepository(OblUsersAndBusinesses)
+    private readonly usersAndBusinessesRepository: Repository<OblUsersAndBusinesses>,
     private readonly refreshTokenStorageService: RefreshTokensService,
     private readonly hashingService: HashingService,
     private readonly jwtService: JwtService,
@@ -39,9 +42,7 @@ export class AuthenticationService {
       const user = new Users();
       user.email = signUpDto.email.toLowerCase();
       user.password = await this.hashingService.hash(signUpDto.password);
-      debugger;
       const newUser = await this.usersRepository.save(user);
-      debugger;
       return { message: `User ${newUser.email} created successfully` };
     } catch (err) {
       const pgUniqueViolationErrorCode = '23505';
@@ -68,7 +69,12 @@ export class AuthenticationService {
       throw new UnauthorizedException('Password does not match');
     }
     const authData = await this.generateTokens(user);
-    return { authData };
+    // TODO: check if this is the best way to get user business access
+    const userBusinessAccess = await this.usersAndBusinessesRepository.find({
+      where: { user_id: user.id },
+    });
+
+    return { authData, userBusinessAccess };
   }
 
   async generateTokens(user: Users) {

@@ -6,6 +6,7 @@ import { AuthType } from 'src/iam/enums/auth-type.enum';
 import { CreateCustomLinkDto } from './dto/create-custom-link.dto';
 import { CreateSocialLinkDto } from './dto/create-social-link.dto';
 import { CreateBusinessDto } from './dto/create-business.dto';
+import { CreateUserAndBusinessDto } from './dto/create-user-and-business.dto';
 
 @Controller('')
 export class OnlyBizlinksController {
@@ -36,5 +37,16 @@ export class OnlyBizlinksController {
   @Post('add_social_link')
   async createSocialLink(@Body() newSocialLink: CreateSocialLinkDto) {
     return await this.onlyBizlinksService.createSocialLink(newSocialLink);
+  }
+
+  // TODO: REMOVE AuthType.None in production !!
+  @Auth(AuthType.None)
+  @Post('add_user_and_business')
+  async createUserAndBusiness(
+    @Body() newUserAndBusiness: CreateUserAndBusinessDto,
+  ) {
+    return await this.onlyBizlinksService.createUserAndBusiness(
+      newUserAndBusiness,
+    );
   }
 }

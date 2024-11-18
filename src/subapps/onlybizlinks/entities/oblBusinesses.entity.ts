@@ -3,6 +3,7 @@ import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
 
 import { OblCustomLinks } from './oblCustomLinks.entity';
 import { OblSocialLinks } from './oblSocialLinks.entity';
+import { OblUsersAndBusinesses } from './oblUsersAndBusinesses.entity';
 
 @Entity()
 export class OblBusinesses {
@@ -24,4 +25,10 @@ export class OblBusinesses {
 
   @OneToMany(() => OblSocialLinks, (socialLink) => socialLink.business)
   socialLinks: OblSocialLinks[];
+
+  @OneToMany(
+    () => OblUsersAndBusinesses,
+    (usersAndBusinesses) => usersAndBusinesses.business,
+  )
+  usersAndBusinesses: OblUsersAndBusinesses[];
 }

@@ -16,6 +16,7 @@ import { GoogleAuthenticationService } from './authentication/social/google-auth
 import { GoogleAuthenticationController } from './authentication/social/google-authentication.controller';
 import { SubappsService } from 'src/subapps/subapps.service';
 import { UserSubappAccess } from 'src/subapps/resources/entities/userSubappAccess.entity';
+import { OblUsersAndBusinesses } from 'src/subapps/onlybizlinks/entities/oblUsersAndBusinesses.entity';
 
 @Module({
   providers: [
@@ -30,7 +31,12 @@ import { UserSubappAccess } from 'src/subapps/resources/entities/userSubappAcces
     SubappsService,
   ],
   imports: [
-    TypeOrmModule.forFeature([Users, RefreshTokens, UserSubappAccess]),
+    TypeOrmModule.forFeature([
+      Users,
+      RefreshTokens,
+      UserSubappAccess,
+      OblUsersAndBusinesses,
+    ]),
     JwtModule.registerAsync(jwtConfig.asProvider()),
     ConfigModule.forFeature(jwtConfig),
     RefreshTokensModule,

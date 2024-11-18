@@ -13,6 +13,8 @@ import { OblSocialLinks } from './entities/oblSocialLinks.entity';
 import { CreateBusinessDto } from './dto/create-business.dto';
 import { CreateCustomLinkDto } from './dto/create-custom-link.dto';
 import { CreateSocialLinkDto } from './dto/create-social-link.dto';
+import { CreateUserAndBusinessDto } from './dto/create-user-and-business.dto';
+import { OblUsersAndBusinesses } from './entities/oblUsersAndBusinesses.entity';
 
 @Injectable()
 export class OnlyBizlinksService {
@@ -23,6 +25,8 @@ export class OnlyBizlinksService {
     private readonly customLinksRepository: Repository<OblCustomLinks>,
     @InjectRepository(OblSocialLinks)
     private readonly socialLinksRepository: Repository<OblSocialLinks>,
+    @InjectRepository(OblUsersAndBusinesses)
+    private readonly usersAndBusinessesRepository: Repository<OblUsersAndBusinesses>,
   ) {}
 
   async create(createNewBusinessDto: CreateBusinessDto) {
@@ -128,5 +132,9 @@ export class OnlyBizlinksService {
       }
       throw new Error(`Error creating social link: ${error.message}`);
     }
+  }
+
+  async createUserAndBusiness(newUserAndBusiness: CreateUserAndBusinessDto) {
+    return await this.usersAndBusinessesRepository.save(newUserAndBusiness);
   }
 }
