@@ -8,7 +8,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Users } from 'src/users/entities/users.entity';
 import { HashingService } from '../hashing/hashing.service';
 import { SignUpDto } from './dto/sign-up.dto';
@@ -22,6 +22,7 @@ import { RefreshTokensService } from './refresh-token-storage/refresh-token-stor
 import { randomUUID } from 'crypto';
 import { InvalidateRefreshTokenError } from './refresh-token-storage/invalidate-refresh-token-error';
 import { OblUsersAndBusinesses } from 'src/subapps/onlybizlinks/entities/oblUsersAndBusinesses.entity';
+import { OblBusinesses } from 'src/subapps/onlybizlinks/entities/oblBusinesses.entity';
 
 @Injectable()
 export class AuthenticationService {
@@ -30,6 +31,8 @@ export class AuthenticationService {
     private readonly usersRepository: Repository<Users>,
     @InjectRepository(OblUsersAndBusinesses)
     private readonly usersAndBusinessesRepository: Repository<OblUsersAndBusinesses>,
+    @InjectRepository(OblBusinesses)
+    private readonly businessesRepository: Repository<OblBusinesses>,
     private readonly refreshTokenStorageService: RefreshTokensService,
     private readonly hashingService: HashingService,
     private readonly jwtService: JwtService,
@@ -69,12 +72,21 @@ export class AuthenticationService {
       throw new UnauthorizedException('Password does not match');
     }
     const authData = await this.generateTokens(user);
-    // TODO: check if this is the best way to get user business access
+
+    // Here we are checking if the user is connected with any businesses in OnlyBizLinks
+    // If they are we are returning an extra field with the user's business access
     const userBusinessAccess = await this.usersAndBusinessesRepository.find({
       where: { user_id: user.id },
     });
+    const businessIds = userBusinessAccess.map((access) => access.business_id);
+    if (userBusinessAccess.length === 0) {
+      return { authData };
+    }
+    const businesses = await this.businessesRepository.findBy({
+      id: In(businessIds),
+    });
 
-    return { authData, userBusinessAccess };
+    return { authData, businesses };
   }
 
   async generateTokens(user: Users) {
