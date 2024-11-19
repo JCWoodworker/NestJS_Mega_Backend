@@ -8,7 +8,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Users } from 'src/users/entities/users.entity';
 import { HashingService } from '../hashing/hashing.service';
 import { SignUpDto } from './dto/sign-up.dto';
@@ -79,12 +79,20 @@ export class AuthenticationService {
       where: { user_id: user.id },
     });
     const businessIds = userBusinessAccess.map((access) => access.business_id);
+
     if (userBusinessAccess.length === 0) {
       return { authData };
     }
-    const businesses = await this.businessesRepository.findBy({
-      id: In(businessIds),
-    });
+
+    const businesses = await Promise.all(
+      businessIds.map(async (businessId) => {
+        const business = await this.businessesRepository.findOne({
+          where: { id: businessId },
+          relations: ['customLinks', 'socialLinks'],
+        });
+        return business;
+      }),
+    );
 
     return { authData, businesses };
   }
