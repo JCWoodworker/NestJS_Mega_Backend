@@ -169,7 +169,30 @@ export class AuthenticationService {
       } else {
         throw new Error('Invalid refresh token');
       }
-      return await this.generateTokens(user);
+      const authData = await this.generateTokens(user);
+
+      const userBusinessAccess = await this.usersAndBusinessesRepository.find({
+        where: { user_id: user.id },
+      });
+      const businessIds = userBusinessAccess.map(
+        (access) => access.business_id,
+      );
+
+      if (userBusinessAccess.length === 0) {
+        return { authData };
+      }
+
+      const businesses = await Promise.all(
+        businessIds.map(async (businessId) => {
+          const business = await this.businessesRepository.findOne({
+            where: { id: businessId },
+            relations: ['customLinks', 'socialLinks'],
+          });
+          return business;
+        }),
+      );
+
+      return { authData, businesses };
     } catch (err) {
       if (err instanceof InvalidateRefreshTokenError) {
         throw new UnauthorizedException('Access denied');
