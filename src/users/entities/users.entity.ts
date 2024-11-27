@@ -1,5 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
 import { Role } from '../enums/role.enum';
+import { OblUsersAndBusinesses } from 'src/subapps/onlybizlinks/entities/oblUsersAndBusinesses.entity';
 
 @Entity()
 export class Users {
@@ -32,4 +33,10 @@ export class Users {
 
   @Column()
   updated_at: Date;
+
+  @OneToMany(
+    () => OblUsersAndBusinesses,
+    (usersAndBusinesses) => usersAndBusinesses.user,
+  )
+  usersAndBusinesses: OblUsersAndBusinesses[];
 }

@@ -21,12 +21,18 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RefreshTokensService } from './refresh-token-storage/refresh-token-storage.service';
 import { randomUUID } from 'crypto';
 import { InvalidateRefreshTokenError } from './refresh-token-storage/invalidate-refresh-token-error';
+import { OblUsersAndBusinesses } from 'src/subapps/onlybizlinks/entities/oblUsersAndBusinesses.entity';
+import { OblBusinesses } from 'src/subapps/onlybizlinks/entities/oblBusinesses.entity';
 
 @Injectable()
 export class AuthenticationService {
   constructor(
     @InjectRepository(Users)
     private readonly usersRepository: Repository<Users>,
+    @InjectRepository(OblUsersAndBusinesses)
+    private readonly usersAndBusinessesRepository: Repository<OblUsersAndBusinesses>,
+    @InjectRepository(OblBusinesses)
+    private readonly businessesRepository: Repository<OblBusinesses>,
     private readonly refreshTokenStorageService: RefreshTokensService,
     private readonly hashingService: HashingService,
     private readonly jwtService: JwtService,
@@ -39,9 +45,7 @@ export class AuthenticationService {
       const user = new Users();
       user.email = signUpDto.email.toLowerCase();
       user.password = await this.hashingService.hash(signUpDto.password);
-      debugger;
       const newUser = await this.usersRepository.save(user);
-      debugger;
       return { message: `User ${newUser.email} created successfully` };
     } catch (err) {
       const pgUniqueViolationErrorCode = '23505';
@@ -68,7 +72,29 @@ export class AuthenticationService {
       throw new UnauthorizedException('Password does not match');
     }
     const authData = await this.generateTokens(user);
-    return { authData };
+
+    // Here we are checking if the user is connected with any businesses in OnlyBizLinks
+    // If they are we are returning an extra field with the user's business access
+    const userBusinessAccess = await this.usersAndBusinessesRepository.find({
+      where: { user_id: user.id },
+    });
+    const businessIds = userBusinessAccess.map((access) => access.business_id);
+
+    if (userBusinessAccess.length === 0) {
+      return { authData };
+    }
+
+    const businesses = await Promise.all(
+      businessIds.map(async (businessId) => {
+        const business = await this.businessesRepository.findOne({
+          where: { id: businessId },
+          relations: ['customLinks', 'socialLinks'],
+        });
+        return business;
+      }),
+    );
+
+    return { authData, businesses };
   }
 
   async generateTokens(user: Users) {
@@ -143,7 +169,30 @@ export class AuthenticationService {
       } else {
         throw new Error('Invalid refresh token');
       }
-      return await this.generateTokens(user);
+      const authData = await this.generateTokens(user);
+
+      const userBusinessAccess = await this.usersAndBusinessesRepository.find({
+        where: { user_id: user.id },
+      });
+      const businessIds = userBusinessAccess.map(
+        (access) => access.business_id,
+      );
+
+      if (userBusinessAccess.length === 0) {
+        return { authData };
+      }
+
+      const businesses = await Promise.all(
+        businessIds.map(async (businessId) => {
+          const business = await this.businessesRepository.findOne({
+            where: { id: businessId },
+            relations: ['customLinks', 'socialLinks'],
+          });
+          return business;
+        }),
+      );
+
+      return { authData, businesses };
     } catch (err) {
       if (err instanceof InvalidateRefreshTokenError) {
         throw new UnauthorizedException('Access denied');
