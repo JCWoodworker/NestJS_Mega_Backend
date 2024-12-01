@@ -84,15 +84,7 @@ export class AuthenticationService {
       return { authData };
     }
 
-    const businesses = await Promise.all(
-      businessIds.map(async (businessId) => {
-        const business = await this.businessesRepository.findOne({
-          where: { id: businessId },
-          relations: ['customLinks', 'socialLinks'],
-        });
-        return business;
-      }),
-    );
+    const businesses = await this.getUserBusinessesAndRelations(businessIds);
 
     return { authData, businesses };
   }
@@ -118,6 +110,7 @@ export class AuthenticationService {
       refreshTokenId,
     );
 
+    // TODO: return user's business access as well?
     return {
       userInfo: {
         firstName: user.first_name,
@@ -182,15 +175,7 @@ export class AuthenticationService {
         return { authData };
       }
 
-      const businesses = await Promise.all(
-        businessIds.map(async (businessId) => {
-          const business = await this.businessesRepository.findOne({
-            where: { id: businessId },
-            relations: ['customLinks', 'socialLinks'],
-          });
-          return business;
-        }),
-      );
+      const businesses = await this.getUserBusinessesAndRelations(businessIds);
 
       return { authData, businesses };
     } catch (err) {
@@ -199,5 +184,24 @@ export class AuthenticationService {
       }
       throw new UnauthorizedException();
     }
+  }
+
+  async getUserBusinessesAndRelations(businessIds: number[]) {
+    let businesses: OblBusinesses[];
+    try {
+      businesses = await Promise.all(
+        businessIds.map(async (businessId) => {
+          const business = await this.businessesRepository.findOne({
+            where: { id: businessId },
+            relations: ['customLinks', 'socialLinks'],
+          });
+          return business;
+        }),
+      );
+    } catch (err) {
+      console.log(err);
+    }
+    debugger;
+    return businesses;
   }
 }
