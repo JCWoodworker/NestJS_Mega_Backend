@@ -7,7 +7,7 @@
 * [Configurations](#configurations)
 * [CORS](#cors)
 
-## This README is a work in progress, and is more of a notebook for me while I build this API
+## This README is a work in progress, and is more of a notebook for me while I build this API - LOTS of new work has been done as of 12/01/2024 that needs to be documented and has NOT been written down yet
 
 * Please be patient while I construct a more detailed README
 * Each subapp has their own README
