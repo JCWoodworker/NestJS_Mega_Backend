@@ -201,7 +201,7 @@ export class AuthenticationService {
     } catch (err) {
       console.log(err);
     }
-    debugger;
+
     return businesses;
   }
 }
