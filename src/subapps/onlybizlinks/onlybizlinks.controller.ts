@@ -39,8 +39,6 @@ export class OnlyBizlinksController {
     return await this.onlyBizlinksService.createSocialLink(newSocialLink);
   }
 
-  // TODO: REMOVE AuthType.None in production !!
-  @Auth(AuthType.None)
   @Post('add_user_and_business')
   async createUserAndBusiness(
     @Body() newUserAndBusiness: CreateUserAndBusinessDto,
