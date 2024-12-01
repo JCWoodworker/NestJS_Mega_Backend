@@ -78,7 +78,7 @@ When running in dev or debug mode the watcher will not update when saving the .e
 ### CORS
 
 * CORS is enabled in main.ts and looks for an array of allowed origins
-  * Store your allowed orgins in .env under ALLOWED_ORIGINS
+  * Store your allowed origins in .env under ALLOWED_ORIGINS
 
 ### You will need to set the following variables
 
