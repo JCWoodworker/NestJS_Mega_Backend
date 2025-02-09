@@ -38,43 +38,4 @@ export class SubappsService {
       };
     }
   }
-
-  // This is only used by authentication service to add subapp user data on sign up
-  // async addSubappUserData(
-  //   userId: string,
-  //   subappId: string,
-  //   subscriptionTier: string,
-  // ) {
-  //   try {
-  //     const userSubappData = new UserSubappAccess();
-  //     userSubappData.userId = userId;
-  //     userSubappData.subappId = subappId;
-  //     userSubappData.subscription_tier = subscriptionTier;
-  //     await this.userSubappAccessRepository.save(userSubappData);
-  //     return { message: 'Subapp user data added successfully' };
-  //   } catch (err) {
-  //     console.log(JSON.stringify(err));
-  //     const pgUniqueViolationErrorCode = '23505';
-  //     if (err.code === pgUniqueViolationErrorCode) {
-  //       throw new ConflictException();
-  //     }
-  //     throw err;
-  //   }
-  // }
-
-  // async findOneByUserIdAndSubappId(userId: string, subappId: string) {
-  //   try {
-  //     await this.userSubappAccessRepository.findOneByOrFail({
-  //       userId,
-  //       subappId,
-  //     });
-  //     return true;
-  //   } catch (err) {
-  //     if (err.message.includes('Could not find any entity of type')) {
-  //       return false;
-  //     } else {
-  //       throw err;
-  //     }
-  //   }
-  // }
 }

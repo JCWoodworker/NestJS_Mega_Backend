@@ -15,7 +15,6 @@ import { RefreshTokens } from './authentication/refresh-token-storage/refresh-to
 import { GoogleAuthenticationService } from './authentication/social/google-authentication.service';
 import { GoogleAuthenticationController } from './authentication/social/google-authentication.controller';
 import { SubappsService } from 'src/subapps/subapps.service';
-import { UserSubappAccess } from 'src/subapps/resources/entities/userSubappAccess.entity';
 import { OblUsersAndBusinesses } from 'src/subapps/onlybizlinks/entities/oblUsersAndBusinesses.entity';
 import { OblBusinesses } from 'src/subapps/onlybizlinks/entities/oblBusinesses.entity';
 
@@ -35,7 +34,6 @@ import { OblBusinesses } from 'src/subapps/onlybizlinks/entities/oblBusinesses.e
     TypeOrmModule.forFeature([
       Users,
       RefreshTokens,
-      UserSubappAccess,
       OblUsersAndBusinesses,
       OblBusinesses,
     ]),
