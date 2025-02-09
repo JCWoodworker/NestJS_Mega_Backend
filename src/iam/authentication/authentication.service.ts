@@ -46,6 +46,7 @@ export class AuthenticationService {
       user.email = signUpDto.email.toLowerCase();
       user.password = await this.hashingService.hash(signUpDto.password);
       const newUser = await this.usersRepository.save(user);
+      debugger;
       return { message: `User ${newUser.email} created successfully` };
     } catch (err) {
       const pgUniqueViolationErrorCode = '23505';
