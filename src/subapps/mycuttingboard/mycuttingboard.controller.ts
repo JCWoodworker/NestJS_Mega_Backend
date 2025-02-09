@@ -1,17 +1,19 @@
 import {
-  Body,
+  // Body,
   Controller,
-  // Get,
+  Get,
   // Param,
-  Post,
+  // Post,
   // Body,
   // Patch,
   // Param,
   // Delete,
 } from '@nestjs/common';
 import { MycuttingboardService } from './mycuttingboard.service';
-import { ActiveUser } from 'src/iam/decorators/active-user.decorator';
-import { ActiveUserData } from 'src/iam/interfaces/active-user-data.interface';
+// import { ActiveUser } from 'src/iam/decorators/active-user.decorator';
+// import { ActiveUserData } from 'src/iam/interfaces/active-user-data.interface';
+// import { Auth } from 'src/iam/decorators/auth.decorator';
+// import { AuthType } from 'src/iam/enums/auth-type.enum';
 
 export type NewUserRole = {
   role: string;
@@ -21,15 +23,21 @@ export type NewUserRole = {
 export class MycuttingboardController {
   constructor(private readonly mycuttingboardService: MycuttingboardService) {}
 
-  @Post('user-role-swap')
-  async userRoleSwap(
-    @Body() newUserRole: NewUserRole,
-    @ActiveUser() user: ActiveUserData,
-  ) {
-    return this.mycuttingboardService.userRoleSwap(
-      user.sub,
-      user.role,
-      newUserRole.role,
-    );
+  // @Auth(AuthType.None)
+  @Get('test-message')
+  testMessage() {
+    return 'Hello this is a test';
   }
+
+  // @Post('user-role-swap')
+  // async userRoleSwap(
+  //   @Body() newUserRole: NewUserRole,
+  //   @ActiveUser() user: ActiveUserData,
+  // ) {
+  //   return this.mycuttingboardService.userRoleSwap(
+  //     user.sub,
+  //     user.role,
+  //     newUserRole.role,
+  //   );
+  // }
 }

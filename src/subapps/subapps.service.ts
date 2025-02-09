@@ -1,15 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { InjectRepository } from '@nestjs/typeorm';
-import { UserSubappAccess } from './resources/entities/userSubappAccess.entity';
-import { Repository } from 'typeorm';
 
 @Injectable()
 export class SubappsService {
-  constructor(
-    @InjectRepository(UserSubappAccess)
-    private readonly userSubappAccessRepository: Repository<UserSubappAccess>,
-  ) {}
+  constructor() {}
 
   async imageUpload(file: Express.Multer.File) {
     const s3Bucket = process.env.AWS_S3_BUCKET_NAME;
