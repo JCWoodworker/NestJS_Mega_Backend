@@ -10,7 +10,6 @@ import { OAuth2Client } from 'google-auth-library';
 import { Repository } from 'typeorm';
 import { Users } from '../../../users/entities/users.entity';
 import { AuthenticationService } from '../authentication.service';
-import { SubappsService } from 'src/subapps/subapps.service';
 
 @Injectable()
 export class GoogleAuthenticationService implements OnModuleInit {
@@ -21,7 +20,6 @@ export class GoogleAuthenticationService implements OnModuleInit {
     private readonly authService: AuthenticationService,
     @InjectRepository(Users)
     private readonly usersRepository: Repository<Users>,
-    private readonly subappsService: SubappsService,
   ) {}
 
   onModuleInit() {
