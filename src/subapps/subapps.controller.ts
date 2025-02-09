@@ -17,10 +17,15 @@ import {
   UploadedFile,
 } from '@nestjs/common';
 import { SubappsService } from './subapps.service';
-import { FileInterceptor } from '@nestjs/platform-express';
+
+import { Auth } from 'src/iam/decorators/auth.decorator';
+import { AuthType } from 'src/iam/enums/auth-type.enum';
 import { Role } from 'src/users/enums/role.enum';
 import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
 
+import { FileInterceptor } from '@nestjs/platform-express';
+
+@Auth(AuthType.Bearer)
 @Controller()
 export class SubappsController {
   constructor(private readonly subappsService: SubappsService) {}
