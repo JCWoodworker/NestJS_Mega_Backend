@@ -12,9 +12,12 @@ import {
 
 import { GeminiService } from './gemini.service';
 
-import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
-import { Role } from 'src/users/enums/role.enum';
+// import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
+// import { Role } from 'src/users/enums/role.enum';
+import { AuthType } from 'src/iam/enums/auth-type.enum';
+import { Auth } from 'src/iam/decorators/auth.decorator';
 
+@Auth(AuthType.None)
 @Controller()
 export class GeminiController {
   constructor(private readonly geminiService: GeminiService) {}
@@ -24,9 +27,8 @@ export class GeminiController {
   //   return this.geminiService.create(createGeminiDto);
   // }
 
-  @Roles(Role.Admin, Role.Basic)
   @Get()
-  findAll() {
+  async findAll() {
     return this.geminiService.findAll();
   }
 

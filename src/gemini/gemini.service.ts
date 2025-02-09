@@ -8,7 +8,7 @@ export class GeminiService {
   //   return 'This action adds a new gemini';
   // }
 
-  findAll() {
+  async findAll() {
     return `This action returns all gemini`;
   }
 

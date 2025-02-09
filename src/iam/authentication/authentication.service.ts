@@ -157,6 +157,7 @@ export class AuthenticationService {
           user.id,
           refreshTokenId,
         );
+
       if (isValid) {
         await this.refreshTokenStorageService.invalidateRefreshToken(user.id);
       } else {
@@ -179,6 +180,7 @@ export class AuthenticationService {
 
       return { authData, businesses };
     } catch (err) {
+      debugger;
       if (err instanceof InvalidateRefreshTokenError) {
         throw new UnauthorizedException('Access denied');
       }
