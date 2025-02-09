@@ -10,6 +10,8 @@ import { IamModule } from './iam/iam.module';
 import { SubappsModule } from './subapps/subapps.module';
 import { MycuttingboardModule } from './subapps/mycuttingboard/mycuttingboard.module';
 import { OnlyBizlinksModule } from './subapps/onlybizlinks/onlybizlinks.module';
+import { GeminiModule } from './gemini/gemini.module';
+import { DevtoolsModule } from '@nestjs/devtools-integration';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -23,7 +25,6 @@ import { APP_GUARD, RouterModule } from '@nestjs/core';
 import { RolesGuard } from './iam/authorization/guards/roles.guard';
 import { AuthenticationGuard } from './iam/authentication/guards/authentication/authentication.guard';
 import { AccessTokenGuard } from './iam/authentication/guards/access-token/access-token.guard';
-import { DevtoolsModule } from '@nestjs/devtools-integration';
 @Module({
   imports: [
     DevtoolsModule.register({
@@ -48,6 +49,7 @@ import { DevtoolsModule } from '@nestjs/devtools-integration';
     JwtModule.registerAsync(jwtConfig.asProvider()),
     UsersModule,
     IamModule,
+    GeminiModule,
     SubappsModule,
     RouterModule.register([
       {
@@ -57,6 +59,10 @@ import { DevtoolsModule } from '@nestjs/devtools-integration';
       {
         path: 'authentication',
         module: IamModule,
+      },
+      {
+        path: 'ai',
+        module: GeminiModule,
       },
       {
         path: 'subapps',
