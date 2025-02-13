@@ -14,6 +14,7 @@ describe('GeminiController', () => {
           provide: GeminiService,
           useValue: {
             getTestMessage: jest.fn(),
+            sendGeminiPrompt: jest.fn(),
           },
         },
       ],
@@ -27,10 +28,16 @@ describe('GeminiController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('should return a test message', async () => {
+  it('should return a test message on a get request', async () => {
     const result = 'This action returns all gemini';
     jest.spyOn(service, 'getTestMessage').mockResolvedValue(result);
 
     expect(await controller.getTestMessage()).toBe(result);
+  });
+
+  it('should return a test response on a post request', async () => {
+    const result = 'This is a test response to your prompt: test';
+    jest.spyOn(service, 'sendGeminiPrompt').mockResolvedValue(result);
+    expect(await controller.sendGeminiPrompt({ prompt: 'test' })).toBe(result);
   });
 });
