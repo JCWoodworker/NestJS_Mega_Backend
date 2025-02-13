@@ -1,8 +1,9 @@
-import { UpdateProductDto } from './../../dto/update-product.dto';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+
 import { CbcProduct } from '../../entities/cbcProducts.entity';
+import { UpdateProductDto } from './../../dto/update-product.dto';
 @Injectable()
 export class ProductService {
   constructor(

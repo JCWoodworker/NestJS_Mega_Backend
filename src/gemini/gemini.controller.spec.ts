@@ -1,7 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
+
+import { CreateGeminiPromptDto } from '@gemini/dto/create-gemini-prompt.dto';
 import { GeminiController } from '@gemini/gemini.controller';
 import { GeminiService } from '@gemini/gemini.service';
-import { CreateGeminiPromptDto } from '@gemini/dto/create-gemini-prompt.dto';
 
 describe('GeminiController', () => {
   let controller: GeminiController;

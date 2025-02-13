@@ -1,30 +1,30 @@
+import * as Joi from '@hapi/joi';
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD, RouterModule } from '@nestjs/core';
+import { DevtoolsModule } from '@nestjs/devtools-integration';
+import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { ConfigModule } from '@nestjs/config';
+import { UsersModule } from '@users/users.module';
+
 import appConfig from '@config/app.config';
 import authConfig from '@config/auth.config';
 
-import { UsersModule } from '@users/users.module';
+import { AccessTokenGuard } from '@iam/authentication/guards/access-token/access-token.guard';
+import { AuthenticationGuard } from '@iam/authentication/guards/authentication/authentication.guard';
+import { RolesGuard } from '@iam/authorization/guards/roles.guard';
+import jwtConfig from '@iam/config/jwt.config';
 import { IamModule } from '@iam/iam.module';
-import { SubappsModule } from '@subapps/subapps.module';
+
+import { GeminiModule } from '@gemini/gemini.module';
+
 import { MycuttingboardModule } from '@subapps/mycuttingboard/mycuttingboard.module';
 import { OnlyBizlinksModule } from '@subapps/onlybizlinks/onlybizlinks.module';
-import { GeminiModule } from '@gemini/gemini.module';
-import { DevtoolsModule } from '@nestjs/devtools-integration';
+import { SubappsModule } from '@subapps/subapps.module';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-
-import { JwtModule } from '@nestjs/jwt';
-import jwtConfig from '@iam/config/jwt.config';
-
-import * as Joi from '@hapi/joi';
-
-import { APP_GUARD, RouterModule } from '@nestjs/core';
-import { RolesGuard } from '@iam/authorization/guards/roles.guard';
-import { AuthenticationGuard } from '@iam/authentication/guards/authentication/authentication.guard';
-import { AccessTokenGuard } from '@iam/authentication/guards/access-token/access-token.guard';
 
 @Module({
   imports: [

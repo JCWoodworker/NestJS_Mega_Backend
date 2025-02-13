@@ -6,6 +6,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
+
 import { OblBusinesses } from './oblBusinesses.entity';
 
 export enum SocialMediaPlatform {

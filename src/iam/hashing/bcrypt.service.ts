@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { HashingService } from './hashing.service';
 import { genSalt, hash, compare } from 'bcrypt';
+
+import { HashingService } from './hashing.service';
 
 @Injectable()
 export class BcryptService implements HashingService {

@@ -1,7 +1,8 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
 
-import { GeminiService } from '@gemini/gemini.service';
 import { CreateGeminiPromptDto } from '@gemini/dto/create-gemini-prompt.dto';
+import { GeminiService } from '@gemini/gemini.service';
+
 @Controller()
 export class GeminiController {
   constructor(private readonly geminiService: GeminiService) {}

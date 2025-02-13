@@ -5,9 +5,8 @@ import authConfig from '@config/auth.config';
 
 import { MycuttingboardModule } from './mycuttingboard/mycuttingboard.module';
 import { OnlyBizlinksModule } from './onlybizlinks/onlybizlinks.module';
-
-import { SubappsService } from './subapps.service';
 import { SubappsController } from './subapps.controller';
+import { SubappsService } from './subapps.service';
 
 @Module({
   imports: [

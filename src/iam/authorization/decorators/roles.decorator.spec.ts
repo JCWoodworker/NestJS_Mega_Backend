@@ -1,5 +1,7 @@
 import { Reflector } from '@nestjs/core';
+
 import { Role } from '@users/enums/role.enum';
+
 import { ROLES_KEY, Roles } from './roles.decorator';
 
 describe('Roles Decorator', () => {

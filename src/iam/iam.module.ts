@@ -1,22 +1,26 @@
 import { Module } from '@nestjs/common';
-import { HashingService } from './hashing/hashing.service';
-import { BcryptService } from './hashing/bcrypt.service';
+import { ConfigModule } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
+import { TypeOrmModule } from '@nestjs/typeorm';
+
+import { Users } from '@users/entities/users.entity';
+
+import { SubappsService } from '@subapps/subapps.service';
+
+import { OblBusinesses } from '@onlybizlinks/entities/oblBusinesses.entity';
+import { OblUsersAndBusinesses } from '@onlybizlinks/entities/oblUsersAndBusinesses.entity';
+
 import { AuthenticationController } from './authentication/authentication.controller';
 import { AuthenticationService } from './authentication/authentication.service';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { Users } from '@users/entities/users.entity';
-import { JwtModule } from '@nestjs/jwt';
-import jwtConfig from './config/jwt.config';
-import { ConfigModule } from '@nestjs/config';
 import { AccessTokenGuard } from './authentication/guards/access-token/access-token.guard';
+import { RefreshTokens } from './authentication/refresh-token-storage/refresh-token-storage.entity';
 import { RefreshTokensModule } from './authentication/refresh-token-storage/refresh-token-storage.module';
 import { RefreshTokensService } from './authentication/refresh-token-storage/refresh-token-storage.service';
-import { RefreshTokens } from './authentication/refresh-token-storage/refresh-token-storage.entity';
-import { GoogleAuthenticationService } from './authentication/social/google-authentication.service';
 import { GoogleAuthenticationController } from './authentication/social/google-authentication.controller';
-import { SubappsService } from '@subapps/subapps.service';
-import { OblUsersAndBusinesses } from '@onlybizlinks/entities/oblUsersAndBusinesses.entity';
-import { OblBusinesses } from '@onlybizlinks/entities/oblBusinesses.entity';
+import { GoogleAuthenticationService } from './authentication/social/google-authentication.service';
+import jwtConfig from './config/jwt.config';
+import { BcryptService } from './hashing/bcrypt.service';
+import { HashingService } from './hashing/hashing.service';
 
 @Module({
   providers: [
