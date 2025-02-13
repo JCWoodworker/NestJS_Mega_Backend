@@ -1,7 +1,7 @@
 import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
-import { RefreshTokensService } from './refresh-token-storage.service';
-import { Auth } from '../../decorators/auth.decorator';
-import { AuthType } from '../../enums/auth-type.enum';
+import { RefreshTokensService } from '@iam/authentication/refresh-token-storage/refresh-token-storage.service';
+import { Auth } from '@iam/decorators/auth.decorator';
+import { AuthType } from '@iam/enums/auth-type.enum';
 
 @Auth(AuthType.None)
 @Controller('refresh-tokens')

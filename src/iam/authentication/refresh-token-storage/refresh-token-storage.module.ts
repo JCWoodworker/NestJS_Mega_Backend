@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
-import { RefreshTokensService } from './refresh-token-storage.service';
-import { RefreshTokensController } from './refresh-token-storage.controller';
+import { RefreshTokensService } from '@iam/authentication/refresh-token-storage/refresh-token-storage.service';
+import { RefreshTokensController } from '@iam/authentication/refresh-token-storage/refresh-token-storage.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { RefreshTokens } from './refresh-token-storage.entity';
+import { RefreshTokens } from '@iam/authentication/refresh-token-storage/refresh-token-storage.entity';
 
 @Module({
   imports: [TypeOrmModule.forFeature([RefreshTokens])],

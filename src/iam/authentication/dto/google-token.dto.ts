@@ -1,5 +1,5 @@
 import { IsNotEmpty, IsEnum } from 'class-validator';
-import { AuthActionType } from './dto.enum';
+import { AuthActionType } from '@iam/authentication/dto/dto.enum';
 
 export class GoogleTokenDto {
   @IsNotEmpty()

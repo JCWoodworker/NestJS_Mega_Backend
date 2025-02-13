@@ -13,7 +13,7 @@ import { MycuttingboardService } from './mycuttingboard.service';
 // import { ActiveUser } from 'src/iam/decorators/active-user.decorator';
 // import { ActiveUserData } from 'src/iam/interfaces/active-user-data.interface';
 // import { Auth } from 'src/iam/decorators/auth.decorator';
-// import { AuthType } from 'src/iam/enums/auth-type.enum';
+// import { AuthType } from '@iam/enums/auth-type.enum';
 
 export type NewUserRole = {
   role: string;

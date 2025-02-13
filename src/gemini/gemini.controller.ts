@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
 
-import { GeminiService } from './gemini.service';
+import { GeminiService } from '@gemini/gemini.service';
 
 interface SendGeminiPromptBody {
   prompt: string;

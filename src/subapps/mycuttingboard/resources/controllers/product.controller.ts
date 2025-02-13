@@ -1,7 +1,7 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import { ProductService } from '../services/product.service';
-import { Auth } from 'src/iam/decorators/auth.decorator';
-import { AuthType } from 'src/iam/enums/auth-type.enum';
+import { Auth } from '@iam/decorators/auth.decorator';
+import { AuthType } from '@iam/enums/auth-type.enum';
 
 @Controller('product')
 export class ProductController {

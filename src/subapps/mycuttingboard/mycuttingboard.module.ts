@@ -1,23 +1,23 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { MycuttingboardController } from './mycuttingboard.controller';
-import { LinksController } from './resources/controllers/links.controller';
-import { WoodsController } from './resources/controllers/woods.controller';
-import { AdminController } from './resources/controllers/admin.controller';
-import { ProductController } from './resources/controllers/product.controller';
+import { MycuttingboardController } from '@mycuttingboard/mycuttingboard.controller';
+import { LinksController } from '@mycuttingboard/resources/controllers/links.controller';
+import { WoodsController } from '@mycuttingboard/resources/controllers/woods.controller';
+import { AdminController } from '@mycuttingboard/resources/controllers/admin.controller';
+import { ProductController } from '@mycuttingboard/resources/controllers/product.controller';
 
-import { MycuttingboardService } from './mycuttingboard.service';
-import { LinksService } from './resources/services/links.service';
-import { WoodsService } from './resources/services/woods.service';
-import { AdminService } from './resources/services/admin.service';
-import { ProductService } from './resources/services/product.service';
+import { MycuttingboardService } from '@mycuttingboard/mycuttingboard.service';
+import { LinksService } from '@mycuttingboard/resources/services/links.service';
+import { WoodsService } from '@mycuttingboard/resources/services/woods.service';
+import { AdminService } from '@mycuttingboard/resources/services/admin.service';
+import { ProductService } from '@mycuttingboard/resources/services/product.service';
 
-import { CbcLinks } from './entities/cbcLinks.entity';
-import { MycuttingboardWoods } from './entities/mycuttingboardWoods.entity';
-import { CbcProduct } from './entities/cbcProducts.entity';
-import { Users } from 'src/users/entities/users.entity';
-import { CbcUserAndProduct } from './entities/cbcUserAndProduct.entity';
+import { CbcLinks } from '@mycuttingboard/entities/cbcLinks.entity';
+import { MycuttingboardWoods } from '@mycuttingboard/entities/mycuttingboardWoods.entity';
+import { CbcProduct } from '@mycuttingboard/entities/cbcProducts.entity';
+import { Users } from '@users/entities/users.entity';
+import { CbcUserAndProduct } from '@mycuttingboard/entities/cbcUserAndProduct.entity';
 
 @Module({
   imports: [

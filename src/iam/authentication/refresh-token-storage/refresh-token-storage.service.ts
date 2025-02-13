@@ -8,7 +8,7 @@ Set up a relationship between the user and the refresh token storage with cascad
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { RefreshTokens } from './refresh-token-storage.entity';
+import { RefreshTokens } from '@iam/authentication/refresh-token-storage/refresh-token-storage.entity';
 
 @Injectable()
 export class RefreshTokensService {

@@ -1,12 +1,12 @@
 import { Controller, Get, Param, Post, Body } from '@nestjs/common';
 import { OnlyBizlinksService } from './onlybizlinks.service';
 
-import { Auth } from 'src/iam/decorators/auth.decorator';
-import { AuthType } from 'src/iam/enums/auth-type.enum';
-import { CreateCustomLinkDto } from './dto/create-custom-link.dto';
-import { CreateSocialLinkDto } from './dto/create-social-link.dto';
-import { CreateBusinessDto } from './dto/create-business.dto';
-import { CreateUserAndBusinessDto } from './dto/create-user-and-business.dto';
+import { Auth } from '@iam/decorators/auth.decorator';
+import { AuthType } from '@iam/enums/auth-type.enum';
+import { CreateCustomLinkDto } from '@onlybizlinks/dto/create-custom-link.dto';
+import { CreateSocialLinkDto } from '@onlybizlinks/dto/create-social-link.dto';
+import { CreateBusinessDto } from '@onlybizlinks/dto/create-business.dto';
+import { CreateUserAndBusinessDto } from '@onlybizlinks/dto/create-user-and-business.dto';
 
 @Controller('')
 export class OnlyBizlinksController {
