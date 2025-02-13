@@ -1,11 +1,7 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
 
 import { GeminiService } from '@gemini/gemini.service';
-
-interface SendGeminiPromptBody {
-  prompt: string;
-}
-
+import { CreateGeminiPromptDto } from '@gemini/dto/create-gemini-prompt.dto';
 @Controller()
 export class GeminiController {
   constructor(private readonly geminiService: GeminiService) {}
@@ -16,7 +12,7 @@ export class GeminiController {
   }
 
   @Post('send-gemini-prompt')
-  async sendGeminiPrompt(@Body() body: SendGeminiPromptBody) {
+  async sendGeminiPrompt(@Body() body: CreateGeminiPromptDto) {
     return this.geminiService.sendGeminiPrompt(body.prompt);
   }
 }

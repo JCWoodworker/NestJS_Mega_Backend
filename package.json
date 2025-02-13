@@ -93,10 +93,24 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "collectCoverageFrom": [
-      "**/*.(t|j)s"
+      "**/*.(t|j)s",
+      "!**/*.dto.ts",
+      "!**/*.enum.ts",
+      "!**/*.migration.ts"
     ],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "^@app/(.*)$": "<rootDir>/app/$1",
+      "^@users/(.*)$": "<rootDir>/users/$1",
+      "^@config/(.*)$": "<rootDir>/config/$1",
+      "^@iam/(.*)$": "<rootDir>/iam/$1",
+      "^@gemini/(.*)$": "<rootDir>/gemini/$1",
+      "^@subapps/(.*)$": "<rootDir>/subapps/$1",
+      "^@onlybizlinks/(.*)$": "<rootDir>/subapps/onlybizlinks/$1",
+      "^@mycuttingboard/(.*)$": "<rootDir>/subapps/mycuttingboard/$1",
+      "^@utils/(.*)$": "<rootDir>/utils/$1"
+    }
   },
   "packageManager": "yarn@4.0.2"
 }
