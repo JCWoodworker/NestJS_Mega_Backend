@@ -7,22 +7,26 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Users } from '@users/entities/users.entity';
-import { HashingService } from '../hashing/hashing.service';
-import { SignUpDto } from '@iam/authentication/dto/sign-up.dto';
-import { SignInDto } from '@iam/authentication/dto/sign-in.dto';
-import { JwtService } from '@nestjs/jwt';
-import jwtConfig from '@iam/config/jwt.config';
 import { ConfigType } from '@nestjs/config';
-import { ActiveUserData } from '@iam/interfaces/active-user-data.interface';
-import { RefreshTokenDto } from '@iam/authentication/dto/refresh-token.dto';
-import { RefreshTokensService } from '@iam/authentication/refresh-token-storage/refresh-token-storage.service';
+import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
+import { Repository } from 'typeorm';
+
+import { Users } from '@users/entities/users.entity';
+
+import { RefreshTokenDto } from '@iam/authentication/dto/refresh-token.dto';
+import { SignInDto } from '@iam/authentication/dto/sign-in.dto';
+import { SignUpDto } from '@iam/authentication/dto/sign-up.dto';
 import { InvalidateRefreshTokenError } from '@iam/authentication/refresh-token-storage/invalidate-refresh-token-error';
-import { OblUsersAndBusinesses } from '@onlybizlinks/entities/oblUsersAndBusinesses.entity';
+import { RefreshTokensService } from '@iam/authentication/refresh-token-storage/refresh-token-storage.service';
+import jwtConfig from '@iam/config/jwt.config';
+import { ActiveUserData } from '@iam/interfaces/active-user-data.interface';
+
 import { OblBusinesses } from '@onlybizlinks/entities/oblBusinesses.entity';
+import { OblUsersAndBusinesses } from '@onlybizlinks/entities/oblUsersAndBusinesses.entity';
+
+import { HashingService } from '../hashing/hashing.service';
 
 @Injectable()
 export class AuthenticationService {

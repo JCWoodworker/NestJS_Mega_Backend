@@ -1,4 +1,5 @@
 import { IsString, IsEnum, IsOptional, IsUrl } from 'class-validator';
+
 import { CbcProductEnum } from '../entities/cbcProducts.entity';
 
 export class CreateProductDto {

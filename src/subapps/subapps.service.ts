@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class SubappsService {

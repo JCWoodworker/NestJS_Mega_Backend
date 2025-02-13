@@ -6,14 +6,13 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { OblBusinesses } from './entities/oblBusinesses.entity';
-import { OblCustomLinks } from './entities/oblCustomLinks.entity';
-import { OblSocialLinks } from './entities/oblSocialLinks.entity';
-
 import { CreateBusinessDto } from './dto/create-business.dto';
 import { CreateCustomLinkDto } from './dto/create-custom-link.dto';
 import { CreateSocialLinkDto } from './dto/create-social-link.dto';
 import { CreateUserAndBusinessDto } from './dto/create-user-and-business.dto';
+import { OblBusinesses } from './entities/oblBusinesses.entity';
+import { OblCustomLinks } from './entities/oblCustomLinks.entity';
+import { OblSocialLinks } from './entities/oblSocialLinks.entity';
 import { OblUsersAndBusinesses } from './entities/oblUsersAndBusinesses.entity';
 
 @Injectable()

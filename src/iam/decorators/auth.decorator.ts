@@ -1,4 +1,5 @@
 import { SetMetadata } from '@nestjs/common';
+
 import { AuthType } from '@iam/enums/auth-type.enum';
 
 export const AUTH_TYPE_KEY = 'authType';

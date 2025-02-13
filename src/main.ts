@@ -1,8 +1,9 @@
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
 import * as cookieParser from 'cookie-parser';
+
+import { AppModule } from './app.module';
 
 // I'm just here so I don't get fined - Marshawn Lynch
 const PORT = process.env.PORT || 3000;
