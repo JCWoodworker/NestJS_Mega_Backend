@@ -5,8 +5,8 @@ import {
   ManyToOne,
   Column,
 } from 'typeorm';
-import { OblBusinesses } from './oblBusinesses.entity';
-import { Users } from 'src/users/entities/users.entity';
+import { OblBusinesses } from '@onlybizlinks/entities/oblBusinesses.entity';
+import { Users } from '@users/entities/users.entity';
 
 @Entity()
 export class OblUsersAndBusinesses {

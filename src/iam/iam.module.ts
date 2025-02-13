@@ -4,7 +4,7 @@ import { BcryptService } from './hashing/bcrypt.service';
 import { AuthenticationController } from './authentication/authentication.controller';
 import { AuthenticationService } from './authentication/authentication.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Users } from 'src/users/entities/users.entity';
+import { Users } from '@users/entities/users.entity';
 import { JwtModule } from '@nestjs/jwt';
 import jwtConfig from './config/jwt.config';
 import { ConfigModule } from '@nestjs/config';
@@ -14,9 +14,9 @@ import { RefreshTokensService } from './authentication/refresh-token-storage/ref
 import { RefreshTokens } from './authentication/refresh-token-storage/refresh-token-storage.entity';
 import { GoogleAuthenticationService } from './authentication/social/google-authentication.service';
 import { GoogleAuthenticationController } from './authentication/social/google-authentication.controller';
-import { SubappsService } from 'src/subapps/subapps.service';
-import { OblUsersAndBusinesses } from 'src/subapps/onlybizlinks/entities/oblUsersAndBusinesses.entity';
-import { OblBusinesses } from 'src/subapps/onlybizlinks/entities/oblBusinesses.entity';
+import { SubappsService } from '@subapps/subapps.service';
+import { OblUsersAndBusinesses } from '@onlybizlinks/entities/oblUsersAndBusinesses.entity';
+import { OblBusinesses } from '@onlybizlinks/entities/oblBusinesses.entity';
 
 @Module({
   providers: [

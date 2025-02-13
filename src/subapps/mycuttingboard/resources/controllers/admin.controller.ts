@@ -8,13 +8,13 @@ import {
   Param,
   Patch,
 } from '@nestjs/common';
-import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
-import { Role } from 'src/users/enums/role.enum';
-import { UpdateProductDto } from '../../dto/update-product.dto';
-import { CreateProductDto } from '../../dto/create-product.dto';
-import { CreateUserAndProductDto } from '../../dto/create-user-and-product.dto';
-import { ActiveUser } from 'src/iam/decorators/active-user.decorator';
-import { ActiveUserData } from 'src/iam/interfaces/active-user-data.interface';
+import { Roles } from '@iam/authorization/decorators/roles.decorator';
+import { Role } from '@users/enums/role.enum';
+import { UpdateProductDto } from '@mycuttingboard/dto/update-product.dto';
+import { CreateProductDto } from '@mycuttingboard/dto/create-product.dto';
+import { CreateUserAndProductDto } from '@mycuttingboard/dto/create-user-and-product.dto';
+import { ActiveUser } from '@iam/decorators/active-user.decorator';
+import { ActiveUserData } from '@iam/interfaces/active-user-data.interface';
 
 @Roles(Role.Admin)
 @Controller('admin')

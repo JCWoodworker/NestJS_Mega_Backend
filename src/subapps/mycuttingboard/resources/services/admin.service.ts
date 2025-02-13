@@ -2,14 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { CbcProduct } from '../../entities/cbcProducts.entity';
-import { UpdateProductDto } from '../../dto/update-product.dto';
-import { Users } from 'src/users/entities/users.entity';
-import { filterObject } from 'src/utils/filter-object';
-import { UpdateUserAndProductDto } from '../../dto/update-user-and-product.dto';
-import { CreateUserAndProductDto } from '../../dto/create-user-and-product.dto';
-import { ActiveUserData } from 'src/iam/interfaces/active-user-data.interface';
-import { CbcUserAndProduct } from '../../entities/cbcUserAndProduct.entity';
+import { CbcProduct } from '@mycuttingboard/entities/cbcProducts.entity';
+import { UpdateProductDto } from '@mycuttingboard/dto/update-product.dto';
+import { Users } from '@users/entities/users.entity';
+import { filterObject } from '@utils/filter-object';
+import { UpdateUserAndProductDto } from '@mycuttingboard/dto/update-user-and-product.dto';
+import { CreateUserAndProductDto } from '@mycuttingboard/dto/create-user-and-product.dto';
+import { ActiveUserData } from '@iam/interfaces/active-user-data.interface';
+import { CbcUserAndProduct } from '@mycuttingboard/entities/cbcUserAndProduct.entity';
 
 @Injectable()
 export class AdminService {

@@ -9,20 +9,20 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Users } from 'src/users/entities/users.entity';
+import { Users } from '@users/entities/users.entity';
 import { HashingService } from '../hashing/hashing.service';
-import { SignUpDto } from './dto/sign-up.dto';
-import { SignInDto } from './dto/sign-in.dto';
+import { SignUpDto } from '@iam/authentication/dto/sign-up.dto';
+import { SignInDto } from '@iam/authentication/dto/sign-in.dto';
 import { JwtService } from '@nestjs/jwt';
-import jwtConfig from '../config/jwt.config';
+import jwtConfig from '@iam/config/jwt.config';
 import { ConfigType } from '@nestjs/config';
-import { ActiveUserData } from '../interfaces/active-user-data.interface';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { RefreshTokensService } from './refresh-token-storage/refresh-token-storage.service';
+import { ActiveUserData } from '@iam/interfaces/active-user-data.interface';
+import { RefreshTokenDto } from '@iam/authentication/dto/refresh-token.dto';
+import { RefreshTokensService } from '@iam/authentication/refresh-token-storage/refresh-token-storage.service';
 import { randomUUID } from 'crypto';
-import { InvalidateRefreshTokenError } from './refresh-token-storage/invalidate-refresh-token-error';
-import { OblUsersAndBusinesses } from 'src/subapps/onlybizlinks/entities/oblUsersAndBusinesses.entity';
-import { OblBusinesses } from 'src/subapps/onlybizlinks/entities/oblBusinesses.entity';
+import { InvalidateRefreshTokenError } from '@iam/authentication/refresh-token-storage/invalidate-refresh-token-error';
+import { OblUsersAndBusinesses } from '@onlybizlinks/entities/oblUsersAndBusinesses.entity';
+import { OblBusinesses } from '@onlybizlinks/entities/oblBusinesses.entity';
 
 @Injectable()
 export class AuthenticationService {

@@ -5,7 +5,7 @@ import { Injectable } from '@nestjs/common';
 // import { AdminService } from './resources/services/admin.service';
 // import { ProductService } from './resources/services/product.service';
 
-// import { Users } from 'src/users/entities/users.entity';
+// import { Users } from '@users/entities/users.entity';
 
 // import { InjectRepository } from '@nestjs/typeorm';
 // import { Repository } from 'typeorm';

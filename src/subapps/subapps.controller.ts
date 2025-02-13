@@ -16,12 +16,12 @@ import {
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
-import { SubappsService } from './subapps.service';
+import { SubappsService } from '@subapps/subapps.service';
 
-import { Auth } from 'src/iam/decorators/auth.decorator';
-import { AuthType } from 'src/iam/enums/auth-type.enum';
-import { Role } from 'src/users/enums/role.enum';
-import { Roles } from 'src/iam/authorization/decorators/roles.decorator';
+import { Auth } from '@iam/decorators/auth.decorator';
+import { AuthType } from '@iam/enums/auth-type.enum';
+import { Role } from '@users/enums/role.enum';
+import { Roles } from '@iam/authorization/decorators/roles.decorator';
 
 import { FileInterceptor } from '@nestjs/platform-express';
 
