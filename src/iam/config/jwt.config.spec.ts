@@ -13,7 +13,6 @@ describe('JWT Config', () => {
   });
 
   it('should load all JWT configuration values from environment', () => {
-    // Set test environment variables
     process.env.JWT_SECRET = 'test-secret';
     process.env.JWT_TOKEN_AUDIENCE = 'test-audience';
     process.env.JWT_TOKEN_ISSUER = 'test-issuer';
@@ -32,7 +31,6 @@ describe('JWT Config', () => {
   });
 
   it('should use default values for TTL when environment variables are not set', () => {
-    // Clear specific environment variables
     delete process.env.JWT_ACCESS_TOKEN_TTL;
     delete process.env.JWT_REFRESH_TOKEN_TTL;
 
