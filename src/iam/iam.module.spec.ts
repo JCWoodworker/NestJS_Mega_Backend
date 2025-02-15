@@ -20,7 +20,6 @@ import { BcryptService } from './hashing/bcrypt.service';
 import { HashingService } from './hashing/hashing.service';
 import { IamModule } from './iam.module';
 
-// Create mock repositories
 const mockRepository = {
   find: jest.fn(),
   findOne: jest.fn(),
@@ -133,7 +132,6 @@ describe('IamModule', () => {
   });
 });
 
-// Mock TypeORM entities to avoid database connection
 jest.mock('@users/entities/users.entity', () => ({
   Users: class MockUsers {},
 }));
