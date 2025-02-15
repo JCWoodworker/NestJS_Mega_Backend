@@ -98,7 +98,9 @@
       "**/*.(t|j)s",
       "!**/*.dto.ts",
       "!**/*.enum.ts",
-      "!**/*.migration.ts"
+      "!**/*.migration.ts",
+      "!**/entities/**",
+      "!main.ts"
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",

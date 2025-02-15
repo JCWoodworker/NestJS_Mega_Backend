@@ -117,7 +117,6 @@ ALLOWED_ORIGINS=origin1,origin2,origin3
 * Fix all instances of camelCase in migrations!!
   * We need to be more consistent with naming conventions
   * example:
-    * "subappId" character varying NOT NULL,
     * "subscription_tier" character varying NOT NULL DEFAULT 'basic',
   * We've decided on snake case for all database variables
 
