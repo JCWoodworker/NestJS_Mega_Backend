@@ -10,6 +10,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { Repository } from 'typeorm';
 
 import { Users } from '@users/entities/users.entity';
+import { Role } from '@users/enums/role.enum';
 
 import { AuthenticationService } from '@iam/authentication/authentication.service';
 
@@ -25,8 +26,8 @@ export class GoogleAuthenticationService implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    const clientId = this.configService.get('GOOGLE_CLIENT_ID');
-    const clientSecret = this.configService.get('GOOGLE_CLIENT_SECRET');
+    const clientId = this.configService.get('GOOGLE_CLIENT_ID_CBC');
+    const clientSecret = this.configService.get('GOOGLE_CLIENT_SECRET_CBC');
     this.oauthClient = new OAuth2Client(clientId, clientSecret);
   }
 
@@ -55,10 +56,13 @@ export class GoogleAuthenticationService implements OnModuleInit {
           first_name: userNameAndImage.firstName,
           last_name: userNameAndImage.lastName,
           image_url: userNameAndImage.imageUrl,
+          role: Role.Basic,
         });
         const userAndTokens = await this.authService.generateTokens(newUser);
         return { userAndTokens };
       }
+      const userAndTokens = await this.authService.generateTokens(user);
+      return { userAndTokens };
     } catch (err) {
       const pgUniqueViolationErrorCode = '23505';
       if (err.code === pgUniqueViolationErrorCode) {
