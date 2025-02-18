@@ -14,32 +14,7 @@
 
 ## Current Features
 
-* Current features include:
-  * PostgreSQL integration
-    * TypeORM
-    * Migrations
-  * Authentication and Authorization
-    * Sign up with email and password OR use Google
-    * Successful sign in creates JWT access and refresh tokens
-      * Currently returns in the following format:
-        {
-          "access_token": "SomeLongAssAccessToken",
-          "refresh_token": "SomeLongAssRefreshToken"
-        }
-      * Refresh ID is stored in the database to check against the refresh token
-    * Refresh endpoint checks DB for matching refresh ID and returns new access and refresh tokens
-  * Pre-built endpoints for CRUD operations on Users
-    * Get all users
-    * Get current active user
-  * All endpoints globally set to require bearer authentication
-    * Guard set up to open any endpoint or an entire controller to public access
-  * User role guard lets you set any endpoint or controller to "Admin" or "Basic" user access
-  * Multiple apps supported BUT
-    * Current logic to assign app IDs is terrible and does not work as intended
-    * Too much inconsistency across subapps with naming conventions, syntax and style
-    * Abandoned email and password sign up/in in later apps (CBC)
-      * Due to security concerns
-      * Only using Google Sign in for now
+* Coming Soon ...
 
 --
 
@@ -56,6 +31,8 @@
 * You NEED to run ```yarn build``` before running ```run``` or ```revert```
   * They need to run as JS files so they need to be built first
 
+* Make sure to change the extension to ```<YOUR_NEW_MIGRATION>.migration.ts``
+  * TODO: Fix this!  What an unnecessary step!!
 --
 
 ## Configurations
@@ -79,6 +56,7 @@ When running in dev or debug mode the watcher will not update when saving the .e
 
 * CORS is enabled in main.ts and looks for an array of allowed origins
   * Store your allowed origins in .env under ALLOWED_ORIGINS
+  * See example at the bottom of this section
 
 ### You will need to set the following variables
 
@@ -124,8 +102,8 @@ ALLOWED_ORIGINS=origin1,origin2,origin3
   * config
   * iam
   * subapps
-    * freeinv
-    * bizlinksfree
+    * cuttingboardcorner
+    * onlybizlinks
   * users
   * WHAT ARE WE WRITING ABOUT??
     * Structure
@@ -144,6 +122,7 @@ ALLOWED_ORIGINS=origin1,origin2,origin3
 
 * SEE EACH README FOR THEIR SPECIFIC TODOs
 
+<<<<<<< HEAD
 **THIS README**
 * Add directory map
   * We need to show the structure, then explain how/why it is set up that way
@@ -157,3 +136,17 @@ ALLOWED_ORIGINS=origin1,origin2,origin3
     * .env settings
     * CORS settings
   * TODOs
+=======
+* Update this README:
+  * Add directory map
+    * We need to show the structure, then explain how/why it is set up that way
+  * Full HOW-TO guides for the following:
+    * Setting up this repo if cloning for your own project
+    * Adding Subapps
+    * Handling Migrations and setting up Postgres connection
+    * Managing resources
+    * Setting up configurations
+      * Main.ts settings
+      * .env settings
+      * CORS settings
+>>>>>>> ee25345 (fixed google login issues and  removed previously used keys)
