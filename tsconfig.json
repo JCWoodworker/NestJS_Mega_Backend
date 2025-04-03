@@ -17,6 +17,7 @@
       "@iam/*": ["iam/*"],
       "@gemini/*": ["gemini/*"],
       "@subapps/*": ["subapps/*"],
+      "@scrapers/*": ["scrapers/*"],
       "@onlybizlinks/*": ["subapps/onlybizlinks/*"],
       "@mycuttingboard/*": ["subapps/mycuttingboard/*"],
       "@utils/*": ["utils/*"]
