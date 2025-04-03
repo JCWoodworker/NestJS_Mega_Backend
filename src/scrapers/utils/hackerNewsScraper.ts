@@ -14,6 +14,7 @@ export async function scrapeHackerNews(): Promise<{
   try {
     browser = await chromium.launch({
       headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
 
     const context = await browser.newContext();
