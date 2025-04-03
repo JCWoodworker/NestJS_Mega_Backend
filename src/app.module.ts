@@ -23,6 +23,8 @@ import { MycuttingboardModule } from '@subapps/mycuttingboard/mycuttingboard.mod
 import { OnlyBizlinksModule } from '@subapps/onlybizlinks/onlybizlinks.module';
 import { SubappsModule } from '@subapps/subapps.module';
 
+import { ScrapersModule } from '@scrapers/scrapers.module';
+
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -52,6 +54,7 @@ import { AppService } from './app.service';
     IamModule,
     GeminiModule,
     SubappsModule,
+    ScrapersModule,
     RouterModule.register([
       {
         path: 'users',
@@ -64,6 +67,10 @@ import { AppService } from './app.service';
       {
         path: 'ai',
         module: GeminiModule,
+      },
+      {
+        path: 'scrapers',
+        module: ScrapersModule,
       },
       {
         path: 'subapps',

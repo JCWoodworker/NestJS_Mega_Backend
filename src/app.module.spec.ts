@@ -18,6 +18,8 @@ import { GeminiModule } from '@gemini/gemini.module';
 
 import { SubappsModule } from '@subapps/subapps.module';
 
+import { ScrapersModule } from '@scrapers/scrapers.module';
+
 import { AppController } from './app.controller';
 import { AppModule } from './app.module';
 import { AppService } from './app.service';
@@ -147,11 +149,12 @@ describe('AppModule', () => {
     const iamModule = module.get(IamModule);
     const geminiModule = module.get(GeminiModule);
     const subappsModule = module.get(SubappsModule);
-
+    const scrapersModule = module.get(ScrapersModule);
     expect(usersModule).toBeDefined();
     expect(iamModule).toBeDefined();
     expect(geminiModule).toBeDefined();
     expect(subappsModule).toBeDefined();
+    expect(scrapersModule).toBeDefined();
   });
 
   it('should have AppController defined', () => {
