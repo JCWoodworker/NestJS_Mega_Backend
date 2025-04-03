@@ -8266,6 +8266,7 @@ __metadata:
     multer: "npm:^1.4.5-lts.1"
     pg: "npm:^8.11.3"
     playwright: "npm:^1.51.1"
+    playwright-chromium: "npm:^1.51.1"
     prettier: "npm:^3.1.0"
     reflect-metadata: "npm:^0.1.13"
     rxjs: "npm:^7.8.1"
@@ -8884,6 +8885,17 @@ __metadata:
   dependencies:
     find-up: "npm:^4.0.0"
   checksum: c56bda7769e04907a88423feb320babaed0711af8c436ce3e56763ab1021ba107c7b0cafb11cde7529f669cfc22bffcaebffb573645cbd63842ea9fb17cd7728
+  languageName: node
+  linkType: hard
+
+"playwright-chromium@npm:^1.51.1":
+  version: 1.51.1
+  resolution: "playwright-chromium@npm:1.51.1"
+  dependencies:
+    playwright-core: "npm:1.51.1"
+  bin:
+    playwright: cli.js
+  checksum: 86f4a38c04647dce0ce2a261a1a275c1475464dbd03f1ddd06e0e7da7b1d926b0671eaca402563d93172ccf4c7263fef40af26be64af3f759a35f4c5d02ab939
   languageName: node
   linkType: hard
 
