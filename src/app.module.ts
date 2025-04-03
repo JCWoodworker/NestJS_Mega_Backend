@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, RouterModule } from '@nestjs/core';
 import { DevtoolsModule } from '@nestjs/devtools-integration';
 import { JwtModule } from '@nestjs/jwt';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { UsersModule } from '@users/users.module';
@@ -87,6 +88,14 @@ import { AppService } from './app.service';
         ],
       },
     ]),
+    ThrottlerModule.forRoot({
+      throttlers: [
+        {
+          ttl: 60000,
+          limit: 10,
+        },
+      ],
+    }),
   ],
   controllers: [AppController],
   providers: [
