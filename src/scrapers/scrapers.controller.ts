@@ -14,8 +14,6 @@ export class ScrapersController {
   @Throttle({ default: { limit: 30, ttl: 60000 } })
   @Header('Access-Control-Allow-Origin', 'http://localhost:5173')
   @Header('Access-Control-Allow-Methods', 'GET')
-  @Header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-  @Header('Access-Control-Allow-Credentials', 'true')
   @Get(':id')
   findScraper(@Param('id') id: string): Promise<any> {
     return this.scrapersService.findScraper(id);
