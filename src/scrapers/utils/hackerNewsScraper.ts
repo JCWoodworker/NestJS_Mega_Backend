@@ -6,6 +6,7 @@ interface HackerNewsArticle {
   title: string;
   id: string;
   time: string;
+  url: string;
 }
 
 export async function scrapeHackerNews(): Promise<{
@@ -46,6 +47,7 @@ export async function scrapeHackerNews(): Promise<{
               title: articleTitle.textContent!,
               id: article.getAttribute('id')!,
               time: rawTime!,
+              url: articleTitle.getAttribute('href')!,
             };
           });
         },
