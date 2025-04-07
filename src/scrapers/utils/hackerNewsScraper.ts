@@ -2,6 +2,8 @@ import { format } from 'date-fns';
 import { chromium } from 'playwright';
 
 interface HackerNewsArticle {
+  position: number;
+  title: string;
   id: string;
   time: string;
 }
@@ -21,30 +23,33 @@ export async function scrapeHackerNews(): Promise<{
     const page = await context.newPage();
 
     let allArticles: HackerNewsArticle[] = [];
-    let nextParam = null;
-    let startIndex = 1;
+    let nextParam: string | null = null;
 
     while (allArticles.length < 100) {
       const url = nextParam
-        ? `https://news.ycombinator.com/newest?next=${nextParam}&n=${startIndex}`
+        ? `https://news.ycombinator.com/${nextParam}`
         : 'https://news.ycombinator.com/newest';
 
       await page.goto(url);
 
       const currentPageArticles = await page.$$eval(
         '.submission',
-        (elements) => {
-          return elements.map((article) => {
-            const rawTime = article.nextElementSibling
-              .querySelector('.age')
+        (elements: Element[], startIndex: number) => {
+          return elements.map((article, index) => {
+            const rawTime = article
+              .nextElementSibling!.querySelector('.age')!
               .getAttribute('title');
+            const articleTitle = article.querySelector('.titleline > a')!;
 
             return {
-              id: article.getAttribute('id'),
-              time: rawTime,
+              position: startIndex + index + 1,
+              title: articleTitle.textContent!,
+              id: article.getAttribute('id')!,
+              time: rawTime!,
             };
           });
         },
+        allArticles.length,
       );
 
       const formattedArticles = currentPageArticles.map((article) => {
@@ -56,17 +61,17 @@ export async function scrapeHackerNews(): Promise<{
           };
         } catch (error) {
           console.error('Error formatting date:', error);
-          return {
-            article,
-          };
+          return article;
         }
       });
 
       allArticles = [...allArticles, ...formattedArticles];
 
-      if (currentPageArticles.length > 0) {
-        nextParam = currentPageArticles[currentPageArticles.length - 1].id;
-        startIndex = allArticles.length + 1;
+      const linkToNextPage = await page.$eval('a.morelink', (moreLink) =>
+        moreLink.getAttribute('href'),
+      );
+      if (linkToNextPage) {
+        nextParam = linkToNextPage;
       } else {
         break;
       }
@@ -88,7 +93,7 @@ export async function scrapeHackerNews(): Promise<{
       articles: allArticles,
       isSorted,
     };
-  } catch (error) {
+  } catch (error: any) {
     throw new Error(`Failed to scrape Hacker News: ${error.message}`);
   } finally {
     if (browser) {
