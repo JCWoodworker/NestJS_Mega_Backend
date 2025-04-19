@@ -30,7 +30,7 @@ export class Building {
   zip_code: string | null;
 
   @Column({ type: 'date', nullable: true })
-  construction_date: string | null; // TypeORM uses string for dates
+  construction_date: string | null;
 
   @Column({ type: 'text', nullable: true })
   notes: string | null;
