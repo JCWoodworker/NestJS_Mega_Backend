@@ -11,9 +11,7 @@ export class IronviewService {
     @InjectRepository(Building)
     private buildingRepository: Repository<Building>,
   ) {}
-  // create(ironview) {
-  //   return `This action adds a new ironview - ${ironview}`;
-  // }
+
   async findAll() {
     return await this.buildingRepository.find({
       relations: [
@@ -25,6 +23,7 @@ export class IronviewService {
       ],
     });
   }
+
   async findOne(id: UUID) {
     const building = await this.buildingRepository.findOne({
       where: {
@@ -40,10 +39,16 @@ export class IronviewService {
     });
     return building;
   }
-  // update(id: number, updateIronview) {
-  //   return `This action updates a #${id} ironview - ${updateIronview}`;
+
+  // createBuilding(building) {
+  //   return `This action adds a new building - ${building}`;
   // }
-  // remove(id: number) {
-  //   return `This action removes a #${id} ironview`;
+
+  // updateBuilding(id: number, updateBuilding) {
+  //   return `This action updates a #${id} building - ${updateBuilding}`;
+  // }
+
+  // removeBuilding(id: number) {
+  //   return `This action removes a #${id} building`;
   // }
 }
