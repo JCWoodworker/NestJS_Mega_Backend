@@ -19,23 +19,20 @@ import { IronviewService } from './ironview.service';
 export class IronviewController {
   constructor(private readonly ironviewService: IronviewService) {}
 
-  // @Post()
-  // create(@Body() createIronview) {
-  //   return this.ironviewService.create(createIronview);
-  // }
-
-  @Get()
-  testGet() {
-    return 'test';
+  @Get('buildings')
+  findAll() {
+    return this.ironviewService.findAll();
   }
-  // findAll() {
-  //   return this.ironviewService.findAll();
-  // }
 
   @Get(':id')
   findOne(@Param('id') id: UUID) {
     return this.ironviewService.findOne(id);
   }
+
+  // @Post()
+  // create(@Body() createIronview) {
+  //   return this.ironviewService.create(createIronview);
+  // }
 
   // @Patch(':id')
   // update(@Param('id') id: string, @Body() updateIronview) {

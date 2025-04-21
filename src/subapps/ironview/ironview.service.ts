@@ -14,9 +14,17 @@ export class IronviewService {
   // create(ironview) {
   //   return `This action adds a new ironview - ${ironview}`;
   // }
-  // findAll() {
-  //   return `This action returns all ironview`;
-  // }
+  async findAll() {
+    return await this.buildingRepository.find({
+      relations: [
+        'floors',
+        'floors.areas',
+        'floors.areas.rooms',
+        'floors.areas.rooms.walls',
+        'floors.areas.rooms.walls.images',
+      ],
+    });
+  }
   async findOne(id: UUID) {
     const building = await this.buildingRepository.findOne({
       where: {
