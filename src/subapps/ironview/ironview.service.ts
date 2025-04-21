@@ -13,15 +13,7 @@ export class IronviewService {
   ) {}
 
   async findAll() {
-    return await this.buildingRepository.find({
-      relations: [
-        'floors',
-        'floors.areas',
-        'floors.areas.rooms',
-        'floors.areas.rooms.walls',
-        'floors.areas.rooms.walls.images',
-      ],
-    });
+    return await this.buildingRepository.find({});
   }
 
   async findOne(id: UUID) {
