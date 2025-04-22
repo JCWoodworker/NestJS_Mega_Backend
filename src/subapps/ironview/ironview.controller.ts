@@ -24,9 +24,9 @@ export class IronviewController {
     return this.ironviewService.findAll();
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: UUID) {
-    return this.ironviewService.findOne(id);
+  @Get('buildings/:id')
+  findOneBuilding(@Param('id') id: UUID) {
+    return this.ironviewService.findOneBuilding(id);
   }
 
   // @Post()

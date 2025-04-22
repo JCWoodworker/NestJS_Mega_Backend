@@ -16,7 +16,7 @@ export class IronviewService {
     return await this.buildingRepository.find({});
   }
 
-  async findOne(id: UUID) {
+  async findOneBuilding(id: UUID) {
     const building = await this.buildingRepository.findOne({
       where: {
         id,
