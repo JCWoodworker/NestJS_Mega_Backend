@@ -13,15 +13,18 @@ OnlyBizLinks is a business link aggregation platform that allows customers to ac
 All endpoints are prefixed with `/subapps/onlybizlinks/` as defined in `app.module.ts`.
 
 ### Business Management
+
 - **GET** `/subapps/onlybizlinks/:incomingDomain` - Get business data by domain (public)
 - **GET** `/subapps/onlybizlinks/all_businesses` - List all businesses (public)
 - **POST** `/subapps/onlybizlinks/add_business` - Create new business (requires auth)
 
 ### Link Management
+
 - **POST** `/subapps/onlybizlinks/add_custom_link` - Add custom link to business (requires auth)
 - **POST** `/subapps/onlybizlinks/add_social_link` - Add social media link to business (requires auth)
 
 ### User Association
+
 - **POST** `/subapps/onlybizlinks/add_user_and_business` - Associate user with business (requires auth)
 
 ## Architecture
@@ -29,7 +32,9 @@ All endpoints are prefixed with `/subapps/onlybizlinks/` as defined in `app.modu
 ### Entities
 
 #### OblBusinesses
+
 The core business entity containing:
+
 - `id`: Primary key
 - `name`: Business name (unique)
 - `domain`: Custom domain slug (unique)
@@ -37,7 +42,9 @@ The core business entity containing:
 - **Relationships**: One-to-many with custom links, social links, and user associations
 
 #### OblCustomLinks
+
 Custom links for businesses:
+
 - `id`: Primary key
 - `business_id`: Foreign key to businesses
 - `title`: Link display name
@@ -45,7 +52,9 @@ Custom links for businesses:
 - **Relationship**: Many-to-one with businesses
 
 #### OblSocialLinks
+
 Social media links with platform validation:
+
 - `id`: Primary key
 - `business_id`: Foreign key to businesses
 - `social_media_platform`: Enum (Facebook, Instagram, LinkedIn, Pinterest, X, YouTube)
@@ -54,7 +63,9 @@ Social media links with platform validation:
 - **Relationship**: Many-to-one with businesses
 
 #### OblUsersAndBusinesses
+
 Junction table for user-business associations:
+
 - `id`: Primary key
 - `business_id`: Foreign key to businesses
 - `user_id`: Foreign key to users
@@ -63,6 +74,7 @@ Junction table for user-business associations:
 ### Data Transfer Objects (DTOs)
 
 #### CreateBusinessDto
+
 ```typescript
 {
   name: string;        // Business name
@@ -72,6 +84,7 @@ Junction table for user-business associations:
 ```
 
 #### CreateCustomLinkDto
+
 ```typescript
 {
   title: string;       // Link display name
@@ -81,6 +94,7 @@ Junction table for user-business associations:
 ```
 
 #### CreateSocialLinkDto
+
 ```typescript
 {
   business_id: number;                    // Associated business
@@ -91,6 +105,7 @@ Junction table for user-business associations:
 ```
 
 #### CreateUserAndBusinessDto
+
 ```typescript
 {
   business_id: number; // Associated business
