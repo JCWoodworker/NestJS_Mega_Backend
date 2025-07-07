@@ -1,4 +1,4 @@
-## TODO: 
+# TODO
 
 * [ ] Create all logic for user-and-products feature
   * [x] Table = cbc_user_and_products (migration)
@@ -8,7 +8,7 @@
 * [ ] Change all other table prefixes from "mycuttingboard" to "cbc"
   * [ ] Remove the following migrations and tables from dev, preprod, and prod DBs
     * [ ] createWoodsTable
-    * [ ] createLinksTable 
+    * [ ] createLinksTable
     * [ ] createUserLinksTable
   * [ ] Create new migrations:
     * [ ] create-wood-table:
@@ -56,7 +56,7 @@
     * [ ] preprod
     * [ ] prod
 
-## Completed TODOs:
+## Completed TODOs
 
 * [X] Boards and Coasters tables need to be merged into one "Products" table
   * [x] Use the following structure to create the table:
@@ -81,7 +81,7 @@
   * [x] boards entity
   * [x] boards migration
   * [x] coasters service
-  * [x] coasters controller 
+  * [x] coasters controller
   * [x] coasters entity
   * [x] coasters migration
   * [x] remove all imports for boards
