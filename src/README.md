@@ -271,6 +271,7 @@ RouterModule.register([
 ### Current Subapplications
 
 #### 1. MyCuttingBoard (`/api/v1/subapps/mycuttingboard/`)
+
 **E-commerce platform for custom cutting boards and coasters**
 
 - **Entities**: Products, Woods, Links, User-Product associations
@@ -279,6 +280,7 @@ RouterModule.register([
 - **Authentication**: Role-based admin functions
 
 #### 2. OnlyBizLinks (`/api/v1/subapps/onlybizlinks/`)
+
 **Business link aggregation platform with NFC integration**
 
 - **Entities**: Businesses, Custom Links, Social Links, User-Business associations
@@ -287,6 +289,7 @@ RouterModule.register([
 - **Public Endpoints**: Business data retrieval for NFC interaction
 
 #### 3. IronView (`/api/v1/subapps/ironview/`)
+
 **Construction and renovation management system**
 
 - **Entities**: Buildings, Floors, Areas, Rooms, Walls, Wall Images
@@ -1020,6 +1023,7 @@ DELETE /api/v1/users/profile
 ### Subapp Endpoints
 
 #### MyCuttingBoard
+
 ```
 GET    /api/v1/subapps/mycuttingboard/test-message
 GET    /api/v1/subapps/mycuttingboard/product/all
@@ -1035,6 +1039,7 @@ DELETE /api/v1/subapps/mycuttingboard/admin/delete-product/:id
 ```
 
 #### OnlyBizLinks
+
 ```
 GET    /api/v1/subapps/onlybizlinks/:domain        # Public
 GET    /api/v1/subapps/onlybizlinks/all_businesses # Public
@@ -1044,6 +1049,7 @@ POST   /api/v1/subapps/onlybizlinks/add_social_link
 ```
 
 #### IronView
+
 ```
 GET    /api/v1/subapps/ironview/buildings          # Public
 GET    /api/v1/subapps/ironview/buildings/:id      # Public
@@ -1067,6 +1073,7 @@ POST   /api/v1/subapps/image-upload                # Admin only
 ### Response Formats
 
 #### Success Response
+
 ```json
 {
   "statusCode": 200,
@@ -1076,6 +1083,7 @@ POST   /api/v1/subapps/image-upload                # Admin only
 ```
 
 #### Error Response
+
 ```json
 {
   "statusCode": 400,
@@ -1085,6 +1093,7 @@ POST   /api/v1/subapps/image-upload                # Admin only
 ```
 
 #### Authentication Response
+
 ```json
 {
   "authData": {
@@ -1156,21 +1165,25 @@ findScraper(@Param('id') id: string) { ... }
 ## Security Best Practices
 
 ### Password Security
+
 - **Bcrypt Hashing**: Configurable salt rounds
 - **Strong Password Requirements**: Enforced via validation
 - **Password Rotation**: Refresh token invalidation on password change
 
 ### Token Security
+
 - **JWT Best Practices**: Short-lived access tokens, longer refresh tokens
 - **Token Rotation**: Automatic refresh token rotation
 - **Audience/Issuer Validation**: Prevents token reuse across applications
 
 ### Database Security
+
 - **Parameterized Queries**: TypeORM prevents SQL injection
 - **Connection Encryption**: SSL/TLS database connections
 - **Least Privilege**: Role-based database access
 
 ### API Security
+
 - **CORS Configuration**: Environment-specific origin validation
 - **Input Validation**: Comprehensive DTO validation
 - **Rate Limiting**: Request throttling and abuse prevention
