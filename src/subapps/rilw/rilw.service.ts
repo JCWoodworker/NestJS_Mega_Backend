@@ -7,6 +7,15 @@ import { S3Client, ListObjectsV2Command, _Object } from '@aws-sdk/client-s3';
 @Injectable()
 export class RilwService {
   private readonly s3Client: S3Client;
+  private readonly woodworkingCategories: Record<string, string> = {
+    coasters: 'coasters/',
+    'cutting-serving-boards': 'cutting-serving-boards/',
+    'engravings-embossings': 'engravings-embossings/',
+    'flights-paddles': 'flights-paddles/',
+    misc: 'misc/',
+    'tables-benches': 'tables-benches/',
+    'wall-art': 'wall-art/',
+  };
 
   constructor(private readonly configService: ConfigService) {
     const region = this.configService.get<string>('AWS_REGION_RILW');
@@ -77,29 +86,41 @@ export class RilwService {
   }
 
   async listWoodworkingPortfolio(): Promise<Record<string, string[]>> {
-    const basePrefix = 'rilw-portfolio/woodworking/';
-    const categories: Record<string, string> = {
-      Coasters: 'coasters/',
-      'Cutting & Serving Boards': 'cutting-serving-boards/',
-      'Engraved & Embossed': 'engraved-embossed/',
-      'Flights & Paddles': 'flightspaddles/',
-      Misc: 'misc/',
-      'Tables & Benches': 'tables-benches/',
-      'Wall Art': 'wall-art/',
-    };
-
+    const basePrefix = '';
     const isImage = (key: string) =>
       /\.(?:jpe?g|png|webp|gif|bmp|tiff?)$/i.test(key);
     const result: Record<string, string[]> = {};
 
-    for (const [displayName, subdir] of Object.entries(categories)) {
+    const displayNameMap: Record<string, string> = {
+      coasters: 'Coasters',
+      'cutting-serving-boards': 'Cutting & Serving Boards',
+      'engravings-embossings': 'Engraved & Embossed',
+      'flights-paddles': 'Flights & Paddles',
+      misc: 'Misc',
+      'tables-benches': 'Tables & Benches',
+      'wall-art': 'Wall Art',
+    };
+
+    for (const [slug, subdir] of Object.entries(this.woodworkingCategories)) {
       const fullPrefix = `${basePrefix}${subdir}`;
       const keys = await this.listAllKeysByPrefix(fullPrefix);
       const urls = keys.filter(isImage).map((key) => this.buildPublicUrl(key));
-      result[displayName] = urls;
+      result[displayNameMap[slug]] = urls;
     }
 
     return result;
+  }
+
+  async listWoodworkingCategory(categorySlug: string): Promise<string[]> {
+    const basePrefix = '';
+    const subdir = this.woodworkingCategories[categorySlug];
+    if (!subdir) {
+      throw new Error(`Unknown woodworking category: ${categorySlug}`);
+    }
+    const isImage = (key: string) =>
+      /\.(?:jpe?g|png|webp|gif|bmp|tiff?)$/i.test(key);
+    const keys = await this.listAllKeysByPrefix(`${basePrefix}${subdir}`);
+    return keys.filter(isImage).map((key) => this.buildPublicUrl(key));
   }
   create(createRilwDto: CreateRilwDto) {
     return 'This action adds a new rilw';

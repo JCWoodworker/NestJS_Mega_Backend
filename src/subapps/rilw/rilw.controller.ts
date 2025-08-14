@@ -18,9 +18,44 @@ import { AuthType } from '@iam/enums/auth-type.enum';
 export class RilwController {
   constructor(private readonly rilwService: RilwService) {}
 
-  @Get('portfolio/woodworking')
+  @Get('portfolio')
   woodworkingPortfolio() {
     return this.rilwService.listWoodworkingPortfolio();
+  }
+
+  @Get('portfolio/coasters')
+  woodworkingCoasters() {
+    return this.rilwService.listWoodworkingCategory('coasters');
+  }
+
+  @Get('portfolio/cutting-serving-boards')
+  woodworkingCuttingServingBoards() {
+    return this.rilwService.listWoodworkingCategory('cutting-serving-boards');
+  }
+
+  @Get('portfolio/engravings-embossings')
+  woodworkingEngravedEmbossed() {
+    return this.rilwService.listWoodworkingCategory('engravings-embossings');
+  }
+
+  @Get('portfolio/flights-paddles')
+  woodworkingFlightsPaddles() {
+    return this.rilwService.listWoodworkingCategory('flights-paddles');
+  }
+
+  @Get('portfolio/misc')
+  woodworkingMisc() {
+    return this.rilwService.listWoodworkingCategory('misc');
+  }
+
+  @Get('portfolio/tables-benches')
+  woodworkingTablesBenches() {
+    return this.rilwService.listWoodworkingCategory('tables-benches');
+  }
+
+  @Get('portfolio/wall-art')
+  woodworkingWallArt() {
+    return this.rilwService.listWoodworkingCategory('wall-art');
   }
 
   @Post()
