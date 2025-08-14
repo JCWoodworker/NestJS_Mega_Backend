@@ -29,6 +29,7 @@ import { ScrapersModule } from '@scrapers/scrapers.module';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { RilwModule } from '@subapps/rilw/rilw.module';
 
 @Module({
   imports: [
@@ -89,6 +90,10 @@ import { AppService } from './app.service';
           {
             path: 'ironview',
             module: IronviewModule,
+          },
+          {
+            path: 'rilw',
+            module: RilwModule,
           },
         ],
       },

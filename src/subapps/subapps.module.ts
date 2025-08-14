@@ -8,6 +8,7 @@ import { MycuttingboardModule } from './mycuttingboard/mycuttingboard.module';
 import { OnlyBizlinksModule } from './onlybizlinks/onlybizlinks.module';
 import { SubappsController } from './subapps.controller';
 import { SubappsService } from './subapps.service';
+import { RilwModule } from './rilw/rilw.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { SubappsService } from './subapps.service';
     MycuttingboardModule,
     OnlyBizlinksModule,
     IronviewModule,
+    RilwModule,
   ],
   controllers: [SubappsController],
   providers: [SubappsService],
