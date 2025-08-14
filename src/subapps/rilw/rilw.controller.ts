@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { RilwService } from './rilw.service';
 import { CreateRilwDto } from './dto/create-rilw.dto';
 import { UpdateRilwDto } from './dto/update-rilw.dto';
@@ -9,6 +17,11 @@ import { AuthType } from '@iam/enums/auth-type.enum';
 @Controller('')
 export class RilwController {
   constructor(private readonly rilwService: RilwService) {}
+
+  @Get('portfolio/woodworking')
+  woodworkingPortfolio() {
+    return this.rilwService.listWoodworkingPortfolio();
+  }
 
   @Post()
   create(@Body() createRilwDto: CreateRilwDto) {
