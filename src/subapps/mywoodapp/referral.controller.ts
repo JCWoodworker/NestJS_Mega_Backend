@@ -30,6 +30,15 @@ export class ReferralController {
       request.ip;
     const userAgent = request.headers['user-agent'];
 
-    return this.referralService.create(createReferralDto, ipAddress, userAgent);
+    const savedReferral = await this.referralService.create(
+      createReferralDto,
+      ipAddress,
+      userAgent,
+    );
+    if (savedReferral) {
+      return { message: 'Referral saved successfully' };
+    } else {
+      return { message: 'Referral not saved' };
+    }
   }
 }

@@ -38,6 +38,6 @@ export class ReferralService {
       user_agent: userAgent,
     });
 
-    return this.referralRepository.save(referral);
+    return await this.referralRepository.save(referral);
   }
 }
