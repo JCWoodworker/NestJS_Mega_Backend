@@ -22,6 +22,7 @@ import { GeminiModule } from '@gemini/gemini.module';
 
 import { IronviewModule } from '@subapps/ironview/ironview.module';
 import { MycuttingboardModule } from '@subapps/mycuttingboard/mycuttingboard.module';
+import { MywoodappModule } from '@subapps/mywoodapp/mywoodapp.module';
 import { OnlyBizlinksModule } from '@subapps/onlybizlinks/onlybizlinks.module';
 import { SubappsModule } from '@subapps/subapps.module';
 
@@ -82,6 +83,10 @@ import { RilwModule } from '@subapps/rilw/rilw.module';
           {
             path: 'mycuttingboard',
             module: MycuttingboardModule,
+          },
+          {
+            path: 'mywoodapp',
+            module: MywoodappModule,
           },
           {
             path: 'onlybizlinks',
