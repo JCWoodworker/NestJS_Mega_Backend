@@ -24,13 +24,13 @@ import { IronviewModule } from '@subapps/ironview/ironview.module';
 import { MycuttingboardModule } from '@subapps/mycuttingboard/mycuttingboard.module';
 import { MywoodappModule } from '@subapps/mywoodapp/mywoodapp.module';
 import { OnlyBizlinksModule } from '@subapps/onlybizlinks/onlybizlinks.module';
+import { RilwModule } from '@subapps/rilw/rilw.module';
 import { SubappsModule } from '@subapps/subapps.module';
 
 import { ScrapersModule } from '@scrapers/scrapers.module';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { RilwModule } from '@subapps/rilw/rilw.module';
 
 @Module({
   imports: [
