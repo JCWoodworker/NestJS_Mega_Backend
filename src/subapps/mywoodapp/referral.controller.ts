@@ -38,7 +38,7 @@ export class ReferralController {
     if (savedReferral) {
       return { message: 'Referral saved successfully' };
     } else {
-      return { message: 'Referral not saved' };
+      return { message: 'Referral already tracked within the last 24 hours' };
     }
   }
 }

@@ -23,12 +23,36 @@ export class ReferralService {
     createReferralDto: CreateReferralDto,
     ipAddress?: string,
     userAgent?: string,
-  ): Promise<Referral> {
+  ): Promise<Referral | null> {
     if (
       this.allowedSources.length > 0 &&
       !this.allowedSources.includes(createReferralDto.source)
     ) {
       throw new BadRequestException('Invalid referral source');
+    }
+
+    // Check for duplicate: same IP + source within last 24 hours
+    if (ipAddress) {
+      const twentyFourHoursAgo = new Date();
+      twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+
+      const existingReferral = await this.referralRepository.findOne({
+        where: {
+          source: createReferralDto.source,
+          ip_address: ipAddress,
+        },
+        order: {
+          created_at: 'DESC',
+        },
+      });
+
+      if (
+        existingReferral &&
+        existingReferral.created_at >= twentyFourHoursAgo
+      ) {
+        // Duplicate found within 24 hours - return null to indicate skip
+        return null;
+      }
     }
 
     const referral = this.referralRepository.create({
