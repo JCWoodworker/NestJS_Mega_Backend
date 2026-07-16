@@ -26,6 +26,7 @@ import { MywoodappModule } from '@subapps/mywoodapp/mywoodapp.module';
 import { OnlyBizlinksModule } from '@subapps/onlybizlinks/onlybizlinks.module';
 import { RilwModule } from '@subapps/rilw/rilw.module';
 import { SubappsModule } from '@subapps/subapps.module';
+import { WoodpricingModule } from '@subapps/woodpricing/woodpricing.module';
 
 import { ScrapersModule } from '@scrapers/scrapers.module';
 
@@ -99,6 +100,10 @@ import { AppService } from './app.service';
           {
             path: 'rilw',
             module: RilwModule,
+          },
+          {
+            path: 'woodpricing',
+            module: WoodpricingModule,
           },
         ],
       },
