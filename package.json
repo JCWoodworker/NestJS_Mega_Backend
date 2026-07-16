@@ -24,11 +24,14 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "migrate:run": "typeorm migration:run -d dist/typeorm-cli.config",
     "migrate:revert": "typeorm migration:revert -d dist/typeorm-cli.config",
-    "seed:users": "ts-node ./src/seeders/users.seed.ts"
+    "seed:users": "ts-node ./src/seeders/users.seed.ts",
+    "seed:woodpricing": "ts-node -r tsconfig-paths/register src/subapps/woodpricing/seed-wood-pricing.ts",
+    "mcp:stdio": "ts-node -r tsconfig-paths/register src/subapps/woodpricing/mcp/mcp-stdio.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.498.0",
     "@hapi/joi": "^17.1.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@nestjs/cli": "^10.2.1",
     "@nestjs/common": "^10.2.8",
     "@nestjs/config": "^3.1.1",
@@ -57,7 +60,8 @@
     "rxjs": "^7.8.1",
     "typeorm": "^0.3.17",
     "uuid": "^9.0.1",
-    "webpack": "^5.89.0"
+    "webpack": "^5.89.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@nestjs/schematics": "^10.0.3",

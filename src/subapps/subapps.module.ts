@@ -10,6 +10,7 @@ import { OnlyBizlinksModule } from './onlybizlinks/onlybizlinks.module';
 import { RilwModule } from './rilw/rilw.module';
 import { SubappsController } from './subapps.controller';
 import { SubappsService } from './subapps.service';
+import { WoodpricingModule } from './woodpricing/woodpricing.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { SubappsService } from './subapps.service';
     IronviewModule,
     RilwModule,
     MywoodappModule,
+    WoodpricingModule,
   ],
   controllers: [SubappsController],
   providers: [SubappsService],
