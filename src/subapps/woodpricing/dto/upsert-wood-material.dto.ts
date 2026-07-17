@@ -1,30 +1,14 @@
-import {
-  IsEnum,
-  IsNumber,
-  IsObject,
-  IsOptional,
-  IsString,
-  Min,
-} from 'class-validator';
-
 import { MeasurementType } from '../enums/measurement-type.enum';
 
-export class UpsertWoodMaterialDto {
-  @IsString()
+/**
+ * Shape of a single seed/upsert record. Not validated by a Nest
+ * ValidationPipe (there's no REST surface for this module — MCP only);
+ * `seed-wood-pricing.ts` is responsible for trusting the JSON file's shape.
+ */
+export interface UpsertWoodMaterialDto {
   species: string;
-
-  @IsEnum(MeasurementType)
   measurementType: MeasurementType;
-
-  @IsOptional()
-  @IsString()
   thickness?: string | null;
-
-  @IsNumber()
-  @Min(0)
   unitPrice: number;
-
-  @IsOptional()
-  @IsObject()
   dimensions?: Record<string, unknown> | null;
 }

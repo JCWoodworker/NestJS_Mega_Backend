@@ -10,7 +10,7 @@
     "yarn": "4.x"
   },
   "scripts": {
-    "build": "nest build",
+    "build": "nest build && mkdir -p dist/src/subapps/woodpricing/data && cp src/subapps/woodpricing/data/wood-pricing-seed.json dist/src/subapps/woodpricing/data/wood-pricing-seed.json",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
@@ -25,7 +25,7 @@
     "migrate:run": "typeorm migration:run -d dist/typeorm-cli.config",
     "migrate:revert": "typeorm migration:revert -d dist/typeorm-cli.config",
     "seed:users": "ts-node ./src/seeders/users.seed.ts",
-    "seed:woodpricing": "ts-node -r tsconfig-paths/register src/subapps/woodpricing/seed-wood-pricing.ts",
+    "seed:woodpricing": "node dist/src/subapps/woodpricing/seed-wood-pricing.js",
     "mcp:stdio": "ts-node -r tsconfig-paths/register src/subapps/woodpricing/mcp/mcp-stdio.ts"
   },
   "dependencies": {
