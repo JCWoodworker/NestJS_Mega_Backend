@@ -328,11 +328,11 @@ Errors use the same shape as section 3 (`{ statusCode, message, error }`). Rate 
 60 req/60s per IP (global default is 10/60s — a trader flipping timeframes can easily exceed
 that).
 
-**Not yet live-tested against real Schwab market data** (no RTH window hit yet since this
-landed) — the code path mirrors `OrdersService`'s already-verified `HttpService` usage (same
-Bearer interceptor, same base URL, same error handling), so it's expected to work, but treat the
-first real `200` + non-empty `candles` response as the actual confirmation, same spirit as the
-still-open tick field-map verification in section 6.
+**Live-verified 2026-09-02** with a direct authenticated `curl` against preprod:
+`?symbol=SPY&periodType=day&period=1&frequencyType=minute&frequency=1` → `200` with **726**
+one-minute SPY candles, correct normalized shape (`datetime`/`open`/`high`/`low`/`close`/`volume`),
+first candle `datetime: 1788260400000` (today's session open) through the last available minute.
+9a is confirmed fully working end-to-end.
 
 ### 9b. `subscribe-option-chart` (client → server) + piggybacked `CHART_EQUITY`
 
@@ -362,6 +362,21 @@ frontend's own socket reconnecting — if your socket itself drops and reconnect
 `subscribe-option-chart` for whatever symbol you're tracking, same as you'd re-emit
 `subscribe-underlying`.)
 
+⚠️ **Live-tested 2026-09-02, after-hours (~7:42pm ET) — one real finding**: `CHART_EQUITY/SUBS`
+for `SPY` was accepted by Schwab with no error. But `CHART_OPTIONS/SUBS` for a live 0DTE OSI
+symbol came back with **`{"code":11,"msg":"Service not available or temporary down."}`** — logged
+cleanly, no socket disconnect/crash-loop (confirmed the connection stayed healthy afterward,
+unlike the old "Bad command formatting" bug). Given today's already-confirmed finding that 0DTE
+**options** have no after-hours session at all (see the "after-hours behavior" changelog entry),
+this is most likely Schwab's `CHART_OPTIONS` service simply refusing subscriptions outside RTH for
+options specifically — but that's a guess, not confirmed, since it could also be a capability this
+dev account/tier doesn't have. **Needs a retest during regular market hours (9:30am–4pm ET)**
+before treating this as either "expected after-hours behavior, ignore" or "real bug, dig further."
+Ack still returns `{ status: 'ok' }` on our side regardless (Schwab accepts the SUBS request frame
+itself; the error is Schwab declining to actually stream anything back) — so the frontend won't
+see an error from the ack, only silence where a `chart-candle` should be. Will update this section
+after the next market open.
+
 ### 9c. `chart-candle` (server → client)
 
 Implemented exactly as specced:
@@ -386,10 +401,22 @@ Field maps used, matching what the frontend already had documented:
   `7`=chartTime, `8`=chartDay.
 - `CHART_OPTIONS`: `0`=key, `1`=chartTime, `2`=open, `3`=high, `4`=low, `5`=close, `6`=volume.
 
-**Not yet live-verified with real Schwab candle frames** — same caveat as 9a/section 6. The field
-indices above are per Schwab's public Streamer Guide, not yet cross-checked against an actual
-`CHART_EQUITY`/`CHART_OPTIONS` frame from the live connection. Worth confirming once the market's
-open and a client has subscribed.
+**Live-tested 2026-09-02, after-hours — no `chart-candle` observed yet for either asset type**,
+despite `CHART_EQUITY/SUBS` being accepted cleanly (no error) and `underlying-price`/
+`account-snapshot`/`ladder-recentered` all confirmed flowing normally on the same connection over
+a 90s window. Two candidate explanations, neither confirmed yet:
+1. **Thin/zero after-hours volume** (most likely, benign): per Schwab's public field docs,
+   `CHART_EQUITY` is documented to update in both regular *and* AM/PM (extended) hours - but
+   candle-close events may simply require at least one trade in that minute to fire, and at
+   ~7:40pm ET extended-hours SPY volume can be genuinely near-zero for a given minute even while
+   the quote (`underlying-price`) still refreshes.
+2. A code-level issue in `handleChartEquityCandles`/the `CHART_EQUITY` data-routing path that
+   after-hours testing can't rule out from thin volume alone.
+`CHART_OPTIONS` additionally got an explicit Schwab-side rejection - see the 9b callout above.
+**Bottom line: field indices are correct per Schwab's Streamer Guide, the request/subscribe path
+works, but an actual live candle hasn't been observed end-to-end yet.** This needs a retest during
+RTH with real volume before either side treats 9c as fully confirmed - will update this file right
+after.
 
 ### 9d. Open question — answered (partially)
 
@@ -407,14 +434,25 @@ of how the live check turns out.
 
 ### 9e. Acceptance checks — status
 
-All four implemented and ready for the frontend to verify against preprod:
-1. `price-history` 200 + non-empty candles during RTH — **not yet checked live** (see 9a).
+All four implemented; status against preprod after live testing on 2026-09-02 (after-hours):
+1. `price-history` 200 + non-empty candles during RTH — **✅ live-verified** (see 9a, 726 candles,
+   though that specific test ran after-hours against *today's already-closed* session, not live
+   RTH - worth a same-day-during-RTH sanity check too, low risk given it's a straight Schwab proxy).
 2. `chart-candle` (`EQUITY`) arriving within ~2min of a new bar after `subscribe-underlying` —
-   **not yet checked live** (see 9c).
-3. `chart-candle` (`OPTION`) arriving after `subscribe-option-chart` — **not yet checked live**,
-   needs a liquid 0DTE contract during market hours.
+   **tested, not yet observed** (90s live window, zero `chart-candle` events despite a clean
+   `CHART_EQUITY/SUBS` ack) - see 9c, likely after-hours volume, needs RTH retest.
+3. `chart-candle` (`OPTION`) arriving after `subscribe-option-chart` — **tested, currently
+   blocked**: `CHART_OPTIONS/SUBS` itself was rejected by Schwab (`code: 11`, "Service not
+   available or temporary down") - see 9b. Needs RTH retest with a liquid 0DTE contract.
 4. `subscribe-option-chart({ symbol: null })` stops option candles without killing the equity
-   stream — implemented per 9b (independent SUBS/UNSUBS calls per symbol), not yet live-verified.
+   stream — implemented per 9b (independent SUBS/UNSUBS calls per symbol); the unsubscribe path
+   itself works (confirmed via ack + logs), but since no candles were flowing yet from check 3
+   there's nothing to confirm actually stops.
+
+**All four need a market-hours (9:30am–4pm ET) retest before section 9 is fully closed out.**
+Nothing wrong has been confirmed - price-history and the subscribe plumbing all work exactly as
+specced - but live 1-minute candle delivery for both equity and (especially) options is still an
+open question pending real trading-hours volume.
 
 ## 7. Git remote / CI, sign-up UI
 Both resolved on the frontend side — GitHub repo + Netlify push-to-deploy wired up, and a Sign In
@@ -427,10 +465,19 @@ Both resolved on the frontend side — GitHub repo + Netlify push-to-deploy wire
 Current state:
 1. Streamer **tick** field mappings (`option-ticks`) — still open, blocked on an open option
    position generating live ticks (see section 6).
-2. **New**: section 9 (chart backfill + live candles) is implemented and deployed, but not yet
-   live-verified against real Schwab data/frames (9a's `price-history` response, 9c's
-   `CHART_EQUITY`/`CHART_OPTIONS` field indices, 9d's same-day 0DTE history question) — same "code
-   looks right, needs a live check" status as item 1. Will update this file once verified.
+2. **Section 9 (chart backfill + live candles) is implemented and deployed, partially
+   live-verified**:
+   - 9a (`price-history`) — **✅ fully live-verified** (726 real SPY candles from preprod).
+   - `subscribe-option-chart`/`subscribe-underlying` request plumbing (acks, no crash on Schwab
+     rejection) — **✅ live-verified**.
+   - Actual `chart-candle` delivery (9c), for both `EQUITY` and `OPTION` — **not yet observed**,
+     tested after-hours only. `CHART_OPTIONS` was explicitly rejected by Schwab
+     (`code: 11, "Service not available or temporary down"`) in that after-hours test; `CHART_EQUITY`
+     was accepted but produced no candle in a 90s window. Likely just after-hours/thin-volume
+     behavior (matches today's separate finding that 0DTE options have no after-hours session at
+     all) but **not confirmed** — needs a retest during regular market hours (9:30am–4pm ET). See
+     section 9b/9c/9e for full detail. Will update this file immediately after that retest.
+   - 9d (same-day 0DTE history question) — still open, same reason.
 3. Everything else (auth contract, CORS, OAuth connect, orders/accounts/positions, account
    balances, all four reported bugs including the streaming crash loop) — confirmed live on
    preprod and prod.
@@ -447,9 +494,21 @@ Current state:
   maps. Also hardened the option-chart subscription to survive a backend-side streamer reconnect
   (re-armed automatically on re-login, matching how the equity quote/chart subscriptions already
   behaved). Deployed to preprod + prod; local module-wiring verified (no DI/circular-dependency
-  issues, learned the hard way from the auth/http module cycle earlier). **Not yet live-verified
-  against real Schwab candle data** — see section 9 for exactly what's confirmed-by-code vs.
-  confirmed-live, and 9d for the still-open same-day-0DTE-history question.
+  issues, learned the hard way from the auth/http module cycle earlier).
+- **2026-09-02 (chart contract — live test results, after-hours)**: Ran a full live test against
+  preprod right after deploying section 9: `price-history` (9a) came back **✅ fully verified** —
+  a real `200` with 726 one-minute SPY candles for the day. The socket side (9b/9c) is partially
+  verified: `subscribe-underlying`/`subscribe-option-chart` acks work, and — importantly — a
+  Schwab-side rejection of `CHART_OPTIONS/SUBS` (`code: 11, "Service not available or temporary
+  down"`) did **not** crash the streamer or trigger the old flapping bug, confirming today's
+  earlier robustness fixes hold up under a new kind of error too. But no actual `chart-candle`
+  event arrived for either `CHART_EQUITY` (SPY, accepted with no error) or `CHART_OPTIONS`
+  (rejected) in a 90-second window. Most likely explanation is thin/zero after-hours volume at
+  ~7:40pm ET (consistent with today's separate finding that options have no after-hours session
+  at all) rather than a code bug — Schwab's own field docs confirm `CHART_EQUITY` is supposed to
+  update in extended hours too, so this needs a market-hours retest to actually confirm, not just
+  a plausible excuse. **Section 9 is not being marked fully done until that retest happens** — see
+  section 9 and "Open items" for the precise breakdown of what's confirmed vs. still open.
 - **2026-09-02 (after-hours behavior + 0DTE day-rollover fix)**: After the streaming fix below,
   frontend asked why no option prices were showing at ~6:30pm ET. Confirmed live: this is expected,
   not a bug — equity **options** have no after-hours session (unlike SPY/QQQ/IWM itself, which
