@@ -20,6 +20,7 @@
       "@scrapers/*": ["scrapers/*"],
       "@onlybizlinks/*": ["subapps/onlybizlinks/*"],
       "@mycuttingboard/*": ["subapps/mycuttingboard/*"],
+      "@schwab/*": ["subapps/schwab/*"],
       "@utils/*": ["utils/*"]
     },
     "incremental": true,

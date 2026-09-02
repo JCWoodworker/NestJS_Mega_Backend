@@ -1,8 +1,9 @@
+import { S3Client, ListObjectsV2Command, _Object } from '@aws-sdk/client-s3';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+
 import { CreateRilwDto } from './dto/create-rilw.dto';
 import { UpdateRilwDto } from './dto/update-rilw.dto';
-import { S3Client, ListObjectsV2Command, _Object } from '@aws-sdk/client-s3';
 
 @Injectable()
 export class RilwService {

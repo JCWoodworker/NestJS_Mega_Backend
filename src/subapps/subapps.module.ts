@@ -8,6 +8,7 @@ import { MycuttingboardModule } from './mycuttingboard/mycuttingboard.module';
 import { MywoodappModule } from './mywoodapp/mywoodapp.module';
 import { OnlyBizlinksModule } from './onlybizlinks/onlybizlinks.module';
 import { RilwModule } from './rilw/rilw.module';
+import { SchwabModule } from './schwab/schwab.module';
 import { SubappsController } from './subapps.controller';
 import { SubappsService } from './subapps.service';
 import { WoodpricingModule } from './woodpricing/woodpricing.module';
@@ -21,6 +22,7 @@ import { WoodpricingModule } from './woodpricing/woodpricing.module';
     RilwModule,
     MywoodappModule,
     WoodpricingModule,
+    SchwabModule,
   ],
   controllers: [SubappsController],
   providers: [SubappsService],

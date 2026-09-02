@@ -7,11 +7,13 @@ import {
   Param,
   Delete,
 } from '@nestjs/common';
-import { RilwService } from './rilw.service';
-import { CreateRilwDto } from './dto/create-rilw.dto';
-import { UpdateRilwDto } from './dto/update-rilw.dto';
+
 import { Auth } from '@iam/decorators/auth.decorator';
 import { AuthType } from '@iam/enums/auth-type.enum';
+
+import { CreateRilwDto } from './dto/create-rilw.dto';
+import { UpdateRilwDto } from './dto/update-rilw.dto';
+import { RilwService } from './rilw.service';
 
 @Auth(AuthType.None)
 @Controller('')

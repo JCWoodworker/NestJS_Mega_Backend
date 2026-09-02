@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, RouterModule } from '@nestjs/core';
 import { DevtoolsModule } from '@nestjs/devtools-integration';
 import { JwtModule } from '@nestjs/jwt';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
@@ -25,6 +26,7 @@ import { MycuttingboardModule } from '@subapps/mycuttingboard/mycuttingboard.mod
 import { MywoodappModule } from '@subapps/mywoodapp/mywoodapp.module';
 import { OnlyBizlinksModule } from '@subapps/onlybizlinks/onlybizlinks.module';
 import { RilwModule } from '@subapps/rilw/rilw.module';
+import { SchwabModule } from '@subapps/schwab/schwab.module';
 import { SubappsModule } from '@subapps/subapps.module';
 import { WoodpricingModule } from '@subapps/woodpricing/woodpricing.module';
 
@@ -55,6 +57,7 @@ import { AppService } from './app.service';
       }),
     }),
     JwtModule.registerAsync(jwtConfig.asProvider()),
+    ScheduleModule.forRoot(),
     UsersModule,
     IamModule,
     GeminiModule,
@@ -104,6 +107,10 @@ import { AppService } from './app.service';
           {
             path: 'woodpricing',
             module: WoodpricingModule,
+          },
+          {
+            path: 'schwab',
+            module: SchwabModule,
           },
         ],
       },

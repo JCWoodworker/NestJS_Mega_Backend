@@ -1,0 +1,368 @@
+import { HttpService } from '@nestjs/axios';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
+import { ConfigType } from '@nestjs/config';
+import { firstValueFrom } from 'rxjs';
+import * as WebSocket from 'ws';
+
+import { SchwabAuthService } from '@schwab/auth/schwab-auth.service';
+import schwabConfig from '@schwab/config/schwab.config';
+
+import {
+  LEVEL_ONE_EQUITY_FIELD_KEYS,
+  LEVEL_ONE_EQUITY_FIELDS,
+  LEVEL_ONE_OPTIONS_FIELD_KEYS,
+} from './level-one-fields';
+import { OptionsGateway } from './options.gateway';
+import { buildOsiSymbol } from './osi-symbol.util';
+
+interface StreamerInfo {
+  streamerSocketUrl: string;
+  schwabClientCustomerId: string;
+  schwabClientCorrelId: string;
+  schwabClientChannel: string;
+  schwabClientFunctionId: string;
+}
+
+const RECONNECT_DELAY_MS = 2000;
+const HEARTBEAT_CHECK_INTERVAL_MS = 5000;
+const CONNECT_RETRY_WHEN_UNAUTHENTICATED_MS = 30000;
+
+/**
+ * Owns the raw connection to Schwab's LEVELONE streamer: login handshake,
+ * heartbeat watchdog, subscription churn for the dynamic strike ladder, and
+ * throttled relay of ticks to OptionsGateway. The frontend never talks to
+ * this socket directly.
+ *
+ * NOTE: Schwab's streamer login payload/field semantics here follow the
+ * publicly documented Streamer Guide; validate against a live account
+ * before trading real money, since this hasn't been exercised against
+ * Schwab's production streamer in this environment.
+ */
+@Injectable()
+export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(SchwabStreamerService.name);
+
+  private socket: WebSocket | null = null;
+  private streamerInfo: StreamerInfo | null = null;
+  private requestId = 1;
+  private loggedIn = false;
+
+  private lastFrameAt: number | null = null;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
+  private flushTimer: NodeJS.Timeout | null = null;
+  private reconnectTimer: NodeJS.Timeout | null = null;
+  private destroyed = false;
+
+  private readonly underlyingSymbol = 'SPY';
+  private readonly optionRoot = 'SPY';
+  private readonly strikeIncrement = 1;
+
+  private centerStrike: number | null = null;
+  private currentWindowSymbols = new Set<string>();
+  private pendingOptionTicks: Array<Record<string, unknown>> = [];
+  private pendingUnderlyingPrice: number | null = null;
+
+  constructor(
+    private readonly httpService: HttpService,
+    private readonly authService: SchwabAuthService,
+    private readonly optionsGateway: OptionsGateway,
+    @Inject(schwabConfig.KEY)
+    private readonly config: ConfigType<typeof schwabConfig>,
+  ) {}
+
+  onModuleInit(): void {
+    this.flushTimer = setInterval(
+      () => this.flushBufferedUpdates(),
+      this.config.tickEmitThrottleMs,
+    );
+    void this.connect();
+  }
+
+  onModuleDestroy(): void {
+    this.destroyed = true;
+    if (this.flushTimer) clearInterval(this.flushTimer);
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.socket?.close();
+  }
+
+  private async connect(): Promise<void> {
+    if (this.destroyed) return;
+
+    try {
+      const accessToken = await this.authService.getValidAccessToken();
+      this.streamerInfo = await this.fetchStreamerInfo();
+      this.openSocket(accessToken);
+    } catch (err) {
+      this.logger.warn(
+        `Schwab streamer not started yet (${err.message}); retrying in ${
+          CONNECT_RETRY_WHEN_UNAUTHENTICATED_MS / 1000
+        }s`,
+      );
+      this.scheduleReconnect(CONNECT_RETRY_WHEN_UNAUTHENTICATED_MS);
+    }
+  }
+
+  private async fetchStreamerInfo(): Promise<StreamerInfo> {
+    const response = await firstValueFrom(
+      this.httpService.get('/trader/v1/userPreference'),
+    );
+    const streamerInfo = response.data?.streamerInfo?.[0];
+    if (!streamerInfo) {
+      throw new Error('Schwab userPreference response missing streamerInfo');
+    }
+    return streamerInfo;
+  }
+
+  private openSocket(accessToken: string): void {
+    this.socket = new WebSocket(this.streamerInfo.streamerSocketUrl);
+
+    this.socket.on('open', () => this.sendLoginRequest(accessToken));
+    this.socket.on('message', (raw) => this.handleMessage(raw.toString()));
+    this.socket.on('close', () => this.handleSocketClosed());
+    this.socket.on('error', (err) => {
+      this.logger.error(`Schwab streamer socket error: ${err.message}`);
+    });
+
+    this.startHeartbeatWatchdog();
+  }
+
+  private sendLoginRequest(accessToken: string): void {
+    const { schwabClientCustomerId, schwabClientCorrelId } = this.streamerInfo;
+
+    this.sendRequest({
+      service: 'ADMIN',
+      command: 'LOGIN',
+      requestid: this.nextRequestId(),
+      SchwabClientCustomerId: schwabClientCustomerId,
+      SchwabClientCorrelId: schwabClientCorrelId,
+      parameters: {
+        Authorization: accessToken,
+        SchwabClientChannel: this.streamerInfo.schwabClientChannel,
+        SchwabClientFunctionId: this.streamerInfo.schwabClientFunctionId,
+      },
+    });
+  }
+
+  private handleMessage(raw: string): void {
+    this.lastFrameAt = Date.now();
+
+    let payload: {
+      response?: Array<Record<string, any>>;
+      data?: Array<Record<string, any>>;
+      notify?: Array<Record<string, any>>;
+    };
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return;
+    }
+
+    for (const response of payload.response ?? []) {
+      if (response.command === 'LOGIN' && response.content?.code === 0) {
+        this.onLoggedIn();
+      }
+    }
+
+    for (const dataItem of payload.data ?? []) {
+      if (dataItem.service === 'LEVELONE_EQUITIES') {
+        this.handleEquityTicks(dataItem.content ?? []);
+      } else if (dataItem.service === 'LEVELONE_OPTIONS') {
+        this.pendingOptionTicks.push(...(dataItem.content ?? []));
+      }
+    }
+  }
+
+  private async onLoggedIn(): Promise<void> {
+    this.loggedIn = true;
+    this.optionsGateway.emitStreamStatus({
+      connected: true,
+      lastFrameAt: this.lastFrameAt,
+    });
+
+    this.sendRequest({
+      service: 'LEVELONE_EQUITIES',
+      command: 'SUBS',
+      requestid: this.nextRequestId(),
+      parameters: {
+        keys: this.underlyingSymbol,
+        fields: LEVEL_ONE_EQUITY_FIELD_KEYS,
+      },
+    });
+
+    try {
+      const initialPrice = await this.fetchInitialUnderlyingPrice();
+      this.recenterLadder(initialPrice);
+    } catch (err) {
+      this.logger.error(
+        `Failed to fetch initial ${this.underlyingSymbol} quote for ladder seed`,
+        err.message,
+      );
+    }
+  }
+
+  private async fetchInitialUnderlyingPrice(): Promise<number> {
+    const response = await firstValueFrom(
+      this.httpService.get('/marketdata/v1/quotes', {
+        params: { symbols: this.underlyingSymbol },
+      }),
+    );
+    const quote = response.data?.[this.underlyingSymbol]?.quote;
+    return quote?.lastPrice ?? quote?.mark ?? 0;
+  }
+
+  private handleEquityTicks(ticks: Array<Record<string, any>>): void {
+    for (const tick of ticks) {
+      const price = tick[LEVEL_ONE_EQUITY_FIELDS.LAST_PRICE];
+      if (typeof price === 'number' && price > 0) {
+        this.pendingUnderlyingPrice = price;
+        this.recenterLadder(price);
+      }
+    }
+  }
+
+  /**
+   * Re-centers the 16-strike (8 ITM / 8 OTM) window whenever the spot price
+   * drifts more than one strike increment away from the current center,
+   * diffing old vs. new symbol sets to issue minimal UNSUBS/SUBS calls.
+   */
+  private recenterLadder(spotPrice: number): void {
+    const nearestStrike =
+      Math.round(spotPrice / this.strikeIncrement) * this.strikeIncrement;
+
+    if (
+      this.centerStrike !== null &&
+      Math.abs(nearestStrike - this.centerStrike) < this.strikeIncrement
+    ) {
+      return;
+    }
+
+    const expiration = new Date();
+    const newSymbols = new Set<string>();
+    for (let offset = -8; offset < 8; offset += 1) {
+      const strike = nearestStrike + offset * this.strikeIncrement;
+      newSymbols.add(
+        buildOsiSymbol({
+          root: this.optionRoot,
+          expiration,
+          right: 'C',
+          strike,
+        }),
+      );
+      newSymbols.add(
+        buildOsiSymbol({
+          root: this.optionRoot,
+          expiration,
+          right: 'P',
+          strike,
+        }),
+      );
+    }
+
+    const toUnsub = [...this.currentWindowSymbols].filter(
+      (s) => !newSymbols.has(s),
+    );
+    const toSub = [...newSymbols].filter(
+      (s) => !this.currentWindowSymbols.has(s),
+    );
+
+    if (toUnsub.length > 0) {
+      this.sendRequest({
+        service: 'LEVELONE_OPTIONS',
+        command: 'UNSUBS',
+        requestid: this.nextRequestId(),
+        parameters: { keys: toUnsub.join(',') },
+      });
+    }
+    if (toSub.length > 0) {
+      this.sendRequest({
+        service: 'LEVELONE_OPTIONS',
+        command: 'SUBS',
+        requestid: this.nextRequestId(),
+        parameters: {
+          keys: toSub.join(','),
+          fields: LEVEL_ONE_OPTIONS_FIELD_KEYS,
+        },
+      });
+    }
+
+    this.centerStrike = nearestStrike;
+    this.currentWindowSymbols = newSymbols;
+    this.optionsGateway.emitLadderRecentered({
+      centerStrike: nearestStrike,
+      symbols: [...newSymbols],
+    });
+  }
+
+  private flushBufferedUpdates(): void {
+    if (this.pendingOptionTicks.length > 0) {
+      this.optionsGateway.emitOptionTicks(this.pendingOptionTicks);
+      this.pendingOptionTicks = [];
+    }
+    if (this.pendingUnderlyingPrice !== null) {
+      this.optionsGateway.emitUnderlyingPrice({
+        symbol: this.underlyingSymbol,
+        price: this.pendingUnderlyingPrice,
+        timestamp: Date.now(),
+      });
+      this.pendingUnderlyingPrice = null;
+    }
+  }
+
+  private startHeartbeatWatchdog(): void {
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+
+    this.heartbeatTimer = setInterval(() => {
+      if (
+        this.lastFrameAt !== null &&
+        Date.now() - this.lastFrameAt > this.config.heartbeatTimeoutMs
+      ) {
+        this.logger.warn(
+          'No frames received from Schwab streamer within heartbeat window; forcing reconnect',
+        );
+        this.optionsGateway.emitStreamStatus({
+          connected: false,
+          lastFrameAt: this.lastFrameAt,
+        });
+        this.socket?.close();
+      }
+    }, HEARTBEAT_CHECK_INTERVAL_MS);
+  }
+
+  private handleSocketClosed(): void {
+    this.loggedIn = false;
+    this.optionsGateway.emitStreamStatus({
+      connected: false,
+      lastFrameAt: this.lastFrameAt,
+    });
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    this.scheduleReconnect(RECONNECT_DELAY_MS);
+  }
+
+  private scheduleReconnect(delayMs: number): void {
+    if (this.destroyed) return;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = setTimeout(() => void this.connect(), delayMs);
+  }
+
+  private sendRequest(request: Record<string, unknown>): void {
+    // WebSocket.OPEN is a valid static on the `ws` class; the
+    // import/namespace rule mis-resolves it for this CJS-interop import
+    // style, so it's disabled just for this line.
+    // eslint-disable-next-line import/namespace
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    this.socket.send(JSON.stringify({ requests: [request] }));
+  }
+
+  private nextRequestId(): string {
+    return String(this.requestId++);
+  }
+}
