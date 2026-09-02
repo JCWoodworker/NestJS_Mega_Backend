@@ -55,6 +55,11 @@ const STRIKE_INCREMENT_OVERRIDES: Record<string, number> = {
   SPXW: 5,
 };
 
+/** `YYYYMMDD` key used to detect the 0DTE expiration date rolling over. */
+function formatDateKey(date: Date): string {
+  return date.toISOString().slice(0, 10).replace(/-/g, '');
+}
+
 /**
  * Owns the raw connection to Schwab's LEVELONE streamer: login handshake,
  * heartbeat watchdog, subscription churn for the dynamic strike ladder, and
@@ -85,7 +90,17 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
   private optionRoot = 'SPY';
   private strikeIncrement = 1;
 
+  /** Last equity price seen, independent of the throttled `pendingUnderlyingPrice`
+   * buffer - used to force a same-price recenter on day rollover (see
+   * `startHeartbeatWatchdog`) without waiting on the next actual tick. */
+  private lastKnownSpotPrice: number | null = null;
   private centerStrike: number | null = null;
+  /** `YYYYMMDD` key for the expiration date `currentWindowSymbols` was built
+   * against - lets `recenterLadder` detect the day rolling over (0DTE
+   * contracts expiring at today's close) even when the spot price hasn't
+   * moved a full strike, which would otherwise leave the ladder subscribed
+   * to yesterday's dead, already-expired symbols indefinitely. */
+  private currentExpirationDateKey: string | null = null;
   private currentWindowSymbols = new Set<string>();
   private pendingOptionTicks: Array<Record<string, unknown>> = [];
   private pendingUnderlyingPrice: number | null = null;
@@ -354,6 +369,7 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
     this.optionRoot = OPTION_ROOT_OVERRIDES[symbol] ?? symbol;
     this.strikeIncrement = STRIKE_INCREMENT_OVERRIDES[symbol] ?? 1;
     this.centerStrike = null;
+    this.currentExpirationDateKey = null;
     this.currentWindowSymbols = new Set();
 
     this.sendRequest({
@@ -391,6 +407,7 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
       const price = tick[LEVEL_ONE_EQUITY_FIELDS.LAST_PRICE];
       if (typeof price === 'number' && price > 0) {
         this.pendingUnderlyingPrice = price;
+        this.lastKnownSpotPrice = price;
         this.recenterLadder(price);
       }
     }
@@ -398,21 +415,26 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Re-centers the 16-strike (8 ITM / 8 OTM) window whenever the spot price
-   * drifts more than one strike increment away from the current center,
-   * diffing old vs. new symbol sets to issue minimal UNSUBS/SUBS calls.
+   * drifts more than one strike increment away from the current center, OR
+   * the calendar day has rolled over since the window was last built (0DTE
+   * contracts expire at today's close, so yesterday's symbols are dead and
+   * must be replaced with today's even if price hasn't moved) - diffing old
+   * vs. new symbol sets to issue minimal UNSUBS/SUBS calls either way.
    */
   private recenterLadder(spotPrice: number): void {
     const nearestStrike =
       Math.round(spotPrice / this.strikeIncrement) * this.strikeIncrement;
+    const expiration = new Date();
+    const todayKey = formatDateKey(expiration);
 
     if (
       this.centerStrike !== null &&
-      Math.abs(nearestStrike - this.centerStrike) < this.strikeIncrement
+      Math.abs(nearestStrike - this.centerStrike) < this.strikeIncrement &&
+      this.currentExpirationDateKey === todayKey
     ) {
       return;
     }
 
-    const expiration = new Date();
     const newSymbols = new Set<string>();
     for (let offset = -8; offset < 8; offset += 1) {
       const strike = nearestStrike + offset * this.strikeIncrement;
@@ -462,6 +484,7 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.centerStrike = nearestStrike;
+    this.currentExpirationDateKey = todayKey;
     this.currentWindowSymbols = newSymbols;
     this.optionsGateway.emitLadderRecentered({
       centerStrike: nearestStrike,
@@ -500,6 +523,24 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
           lastFrameAt: this.lastFrameAt,
         });
         this.socket?.close();
+        return;
+      }
+
+      // Piggyback the day-rollover check on this same interval: overnight,
+      // there can be long gaps with zero equity ticks (options don't trade
+      // after hours at all), so don't wait on the next tick to notice the
+      // 0DTE expiration date changed - proactively rebuild with the last
+      // known price as soon as the calendar day rolls over.
+      if (
+        this.loggedIn &&
+        this.lastKnownSpotPrice !== null &&
+        this.currentExpirationDateKey !== null &&
+        this.currentExpirationDateKey !== formatDateKey(new Date())
+      ) {
+        this.logger.log(
+          '0DTE expiration date rolled over; forcing option ladder rebuild',
+        );
+        this.recenterLadder(this.lastKnownSpotPrice);
       }
     }, HEARTBEAT_CHECK_INTERVAL_MS);
   }
