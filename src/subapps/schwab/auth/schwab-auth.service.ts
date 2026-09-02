@@ -17,9 +17,9 @@ import schwabConfig from '@schwab/config/schwab.config';
 import { SchwabToken } from './entities/schwab-token.entity';
 import { decryptToken, encryptToken } from './token-encryption.util';
 
-interface PendingAuthorization {
+interface StatePayload {
   codeVerifier: string;
-  createdAt: number;
+  exp: number;
 }
 
 interface SchwabTokenResponse {
@@ -31,18 +31,13 @@ interface SchwabTokenResponse {
 }
 
 const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
-/** PKCE `state` -> verifier is kept in-memory: this backend drives a single
- * personal OAuth flow at a time, so persistence across restarts mid-flow
- * isn't required. */
+/** How long a user has to complete the Schwab login/consent screen before
+ * the `state` round-trip is rejected as expired. */
 const PENDING_AUTHORIZATION_TTL_MS = 10 * 60 * 1000;
 
 @Injectable()
 export class SchwabAuthService {
   private readonly logger = new Logger(SchwabAuthService.name);
-  private readonly pendingAuthorizations = new Map<
-    string,
-    PendingAuthorization
-  >();
   private cachedAccessToken: { value: string; expiresAt: number } | null = null;
 
   constructor(
@@ -53,18 +48,27 @@ export class SchwabAuthService {
     private readonly config: ConfigType<typeof schwabConfig>,
   ) {}
 
+  /**
+   * The PKCE `code_verifier` + expiry are packed into the `state` param
+   * itself (AES-256-GCM encrypted) rather than kept in an in-memory map, so
+   * the flow survives dyno restarts/redeploys between `/connect` and
+   * `/callback` (Heroku config changes, cycling, etc. would otherwise wipe a
+   * server-side pending-authorization store mid-flow).
+   */
   buildAuthorizationUrl(): string {
-    const state = randomBytes(16).toString('hex');
     const codeVerifier = randomBytes(32).toString('base64url');
     const codeChallenge = createHash('sha256')
       .update(codeVerifier)
       .digest('base64url');
 
-    this.pendingAuthorizations.set(state, {
+    const statePayload: StatePayload = {
       codeVerifier,
-      createdAt: Date.now(),
-    });
-    this.pruneExpiredAuthorizations();
+      exp: Date.now() + PENDING_AUTHORIZATION_TTL_MS,
+    };
+    const state = encryptToken(
+      JSON.stringify(statePayload),
+      this.config.tokenEncryptionKey,
+    );
 
     const params = new URLSearchParams({
       response_type: 'code',
@@ -79,13 +83,7 @@ export class SchwabAuthService {
   }
 
   async handleCallback(code: string, state: string): Promise<void> {
-    const pending = this.pendingAuthorizations.get(state);
-    if (!pending) {
-      throw new UnauthorizedException(
-        'Unknown or expired OAuth state parameter',
-      );
-    }
-    this.pendingAuthorizations.delete(state);
+    const pending = this.decodeState(state);
 
     const tokenResponse = await this.requestToken({
       grant_type: 'authorization_code',
@@ -95,6 +93,25 @@ export class SchwabAuthService {
     });
 
     await this.persistTokenResponse(tokenResponse);
+  }
+
+  private decodeState(state: string): StatePayload {
+    let payload: StatePayload;
+    try {
+      payload = JSON.parse(decryptToken(state, this.config.tokenEncryptionKey));
+    } catch {
+      throw new UnauthorizedException(
+        'Unknown or expired OAuth state parameter',
+      );
+    }
+
+    if (!payload?.codeVerifier || payload.exp < Date.now()) {
+      throw new UnauthorizedException(
+        'Unknown or expired OAuth state parameter',
+      );
+    }
+
+    return payload;
   }
 
   /**
@@ -246,14 +263,5 @@ export class SchwabAuthService {
 
   private cacheAccessToken(value: string, expiresAt: Date): void {
     this.cachedAccessToken = { value, expiresAt: expiresAt.getTime() };
-  }
-
-  private pruneExpiredAuthorizations(): void {
-    const now = Date.now();
-    for (const [state, pending] of this.pendingAuthorizations.entries()) {
-      if (now - pending.createdAt > PENDING_AUTHORIZATION_TTL_MS) {
-        this.pendingAuthorizations.delete(state);
-      }
-    }
   }
 }
