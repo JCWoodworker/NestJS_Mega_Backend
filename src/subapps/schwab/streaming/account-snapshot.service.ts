@@ -10,6 +10,10 @@ import { ConfigType } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 
 import schwabConfig from '@schwab/config/schwab.config';
+import {
+  mapAccountBalances,
+  mapAccountPositions,
+} from '@schwab/shared/account-data.mapper';
 
 import { AccountSnapshotPayload, OptionsGateway } from './options.gateway';
 
@@ -45,19 +49,14 @@ export class AccountSnapshotService implements OnModuleInit, OnModuleDestroy {
 
   async fetchSnapshot(): Promise<Omit<AccountSnapshotPayload, 'asOf'>> {
     const response = await firstValueFrom(
-      this.httpService.get(`/trader/v1/accounts/${this.config.accountHash}`),
+      this.httpService.get(`/trader/v1/accounts/${this.config.accountHash}`, {
+        params: { fields: 'positions' },
+      }),
     );
 
-    // Field names vary between cash and margin accounts on Schwab's API;
-    // fall back across the documented aliases rather than assuming one shape.
-    const balances = response.data?.securitiesAccount?.currentBalances ?? {};
-
     return {
-      equity: balances.equity ?? balances.liquidationValue ?? 0,
-      settledCash:
-        balances.cashAvailableForTrading ?? balances.cashBalance ?? 0,
-      optionsBuyingPower:
-        balances.optionBuyingPower ?? balances.buyingPower ?? 0,
+      ...mapAccountBalances(response.data),
+      positions: mapAccountPositions(response.data),
     };
   }
 

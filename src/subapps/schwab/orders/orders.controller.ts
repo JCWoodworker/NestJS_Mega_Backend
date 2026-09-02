@@ -1,10 +1,29 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Query,
+} from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 
 import { FastOrderDto } from './dto/fast-order.dto';
 import { FlattenPositionDto } from './dto/flatten-position.dto';
 import { ReversePositionDto } from './dto/reverse-position.dto';
 import { OrdersService } from './orders.service';
 
+/**
+ * Overrides this app's global default rate limit (10 req/60s, from the
+ * `ThrottlerModule` APP_GUARD in `ScrapersModule`) to match the 120
+ * orders/min per-account limit approved for this app in the Schwab
+ * Developer Portal - the global default would otherwise throttle a
+ * scalping workflow almost immediately. Schwab enforces its own 120/min
+ * cap upstream regardless; this just keeps our own guard from being
+ * stricter than that for no reason.
+ */
+@Throttle({ default: { limit: 120, ttl: 60000 } })
 @Controller('orders')
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
@@ -25,5 +44,17 @@ export class OrdersController {
   @HttpCode(HttpStatus.OK)
   async reversePosition(@Body() dto: ReversePositionDto) {
     return this.ordersService.reversePosition(dto);
+  }
+
+  /** Lists Schwab account numbers linked to this app + their `hashValue`
+   * (the opaque `accountHash` every order/position endpoint expects). */
+  @Get('accounts')
+  async listAccounts() {
+    return this.ordersService.listAccounts();
+  }
+
+  @Get('positions')
+  async getPositions(@Query('accountHash') accountHash: string) {
+    return this.ordersService.getPositions(accountHash);
   }
 }

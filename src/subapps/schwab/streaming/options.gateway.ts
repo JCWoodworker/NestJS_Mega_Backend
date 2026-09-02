@@ -1,4 +1,4 @@
-import { Inject, Logger } from '@nestjs/common';
+import { forwardRef, Inject, Logger } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
@@ -11,6 +11,13 @@ import {
 import { Server, Socket } from 'socket.io';
 
 import jwtConfig from '@iam/config/jwt.config';
+
+import { PositionSnapshot } from '@schwab/shared/account-data.mapper';
+
+import {
+  SchwabStreamerService,
+  SwitchUnderlyingResult,
+} from './schwab-streamer.service';
 
 export interface UnderlyingPricePayload {
   symbol: string;
@@ -32,6 +39,7 @@ export interface AccountSnapshotPayload {
   equity: number;
   settledCash: number;
   optionsBuyingPower: number;
+  positions: PositionSnapshot[];
   asOf: number;
 }
 
@@ -67,6 +75,8 @@ export class OptionsGateway implements OnGatewayConnection {
     private readonly jwtService: JwtService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
+    @Inject(forwardRef(() => SchwabStreamerService))
+    private readonly streamerService: SchwabStreamerService,
   ) {}
 
   async handleConnection(client: Socket): Promise<void> {
@@ -104,12 +114,18 @@ export class OptionsGateway implements OnGatewayConnection {
     return undefined;
   }
 
+  /**
+   * Switches the shared ladder to a new underlying (SPY/QQQ/IWM/SPX/SPXW).
+   * This affects every connected client (there's one shared Schwab streamer
+   * connection, not one per socket) - last request wins. Returns an ack if
+   * the client's `emit` included a callback; fire-and-forget otherwise.
+   */
   @SubscribeMessage('subscribe-underlying')
-  handleSubscribeUnderlying(@MessageBody() body: { symbol: string }): void {
+  async handleSubscribeUnderlying(
+    @MessageBody() body: { symbol: string },
+  ): Promise<SwitchUnderlyingResult> {
     this.logger.log(`Client requested underlying: ${body?.symbol}`);
-    // SchwabStreamerService owns the actual Schwab-side subscription churn;
-    // this event exists so multiple frontend tabs could request different
-    // underlyings without every one of them driving reconnect logic itself.
+    return this.streamerService.switchUnderlying(body?.symbol);
   }
 
   emitOptionTicks(ticks: Array<Record<string, unknown>>): void {

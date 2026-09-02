@@ -20,6 +20,10 @@ import { decryptToken, encryptToken } from './token-encryption.util';
 interface StatePayload {
   codeVerifier: string;
   exp: number;
+  /** Overrides `config.redirectSuccessUrl` for this one flow - used by web
+   * clients that can't handle an Expo deep link (see `returnTo` handling
+   * in `buildAuthorizationUrl`/`decodeState`). */
+  returnTo?: string;
 }
 
 interface SchwabTokenResponse {
@@ -34,6 +38,11 @@ const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 /** How long a user has to complete the Schwab login/consent screen before
  * the `state` round-trip is rejected as expired. */
 const PENDING_AUTHORIZATION_TTL_MS = 10 * 60 * 1000;
+
+/** Expo/dev-client deep link schemes that don't need to appear in
+ * ALLOWED_ORIGINS (that env var is for browser CORS, which doesn't apply
+ * to these custom schemes at all). */
+const RETURN_TO_ALLOWED_SCHEMES = new Set(['exp:', 'myapp:']);
 
 @Injectable()
 export class SchwabAuthService {
@@ -55,7 +64,22 @@ export class SchwabAuthService {
    * `/callback` (Heroku config changes, cycling, etc. would otherwise wipe a
    * server-side pending-authorization store mid-flow).
    */
-  buildAuthorizationUrl(): string {
+  /**
+   * `returnTo` lets a web client (Expo web, browser tab - anywhere the
+   * Expo deep link scheme can't be handled) override where `/auth/callback`
+   * redirects to on success, instead of the configured
+   * `SCHWAB_REDIRECT_SUCCESS_URL` deep link. Validated against
+   * `ALLOWED_ORIGINS`/`ALLOWED_ORIGINS_DEVELOPMENT` (same allowlist used for
+   * CORS) plus the `exp://`/`myapp://` custom schemes, so this can't be
+   * used as an open redirect to an arbitrary host.
+   */
+  buildAuthorizationUrl(returnTo?: string): string {
+    if (returnTo && !this.isAllowedReturnTo(returnTo)) {
+      throw new UnauthorizedException(
+        `returnTo "${returnTo}" is not an allowed redirect target`,
+      );
+    }
+
     const codeVerifier = randomBytes(32).toString('base64url');
     const codeChallenge = createHash('sha256')
       .update(codeVerifier)
@@ -64,6 +88,7 @@ export class SchwabAuthService {
     const statePayload: StatePayload = {
       codeVerifier,
       exp: Date.now() + PENDING_AUTHORIZATION_TTL_MS,
+      returnTo,
     };
     const state = encryptToken(
       JSON.stringify(statePayload),
@@ -82,7 +107,10 @@ export class SchwabAuthService {
     return `${this.config.authorizeUrl}?${params.toString()}`;
   }
 
-  async handleCallback(code: string, state: string): Promise<void> {
+  /** Returns the URL the controller should redirect the browser to on
+   * success: the flow's `returnTo` override if one was set, else the
+   * configured `SCHWAB_REDIRECT_SUCCESS_URL` deep link. */
+  async handleCallback(code: string, state: string): Promise<string> {
     const pending = this.decodeState(state);
 
     const tokenResponse = await this.requestToken({
@@ -93,6 +121,26 @@ export class SchwabAuthService {
     });
 
     await this.persistTokenResponse(tokenResponse);
+
+    return pending.returnTo || this.config.redirectSuccessUrl;
+  }
+
+  private isAllowedReturnTo(url: string): boolean {
+    try {
+      const parsed = new URL(url);
+      if (RETURN_TO_ALLOWED_SCHEMES.has(parsed.protocol)) {
+        return true;
+      }
+
+      const allowedOrigins = [
+        ...(process.env.ALLOWED_ORIGINS?.split(',') ?? []),
+        ...(process.env.ALLOWED_ORIGINS_DEVELOPMENT?.split(',') ?? []),
+      ].map((origin) => origin.trim());
+
+      return allowedOrigins.includes(parsed.origin);
+    } catch {
+      return false;
+    }
   }
 
   private decodeState(state: string): StatePayload {
@@ -173,14 +221,20 @@ export class SchwabAuthService {
   async getConnectionStatus(): Promise<{
     connected: boolean;
     expiresAt: string | null;
+    accountHash: string | null;
   }> {
     const token = await this.getTokenRow();
     if (!token) {
-      return { connected: false, expiresAt: null };
+      return {
+        connected: false,
+        expiresAt: null,
+        accountHash: this.config.accountHash || null,
+      };
     }
     return {
       connected: token.refreshTokenExpiresAt.getTime() > Date.now(),
       expiresAt: token.accessTokenExpiresAt.toISOString(),
+      accountHash: this.config.accountHash || null,
     };
   }
 

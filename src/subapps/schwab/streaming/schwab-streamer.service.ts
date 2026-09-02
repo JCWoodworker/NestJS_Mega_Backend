@@ -1,5 +1,6 @@
 import { HttpService } from '@nestjs/axios';
 import {
+  forwardRef,
   Inject,
   Injectable,
   Logger,
@@ -33,6 +34,27 @@ const RECONNECT_DELAY_MS = 2000;
 const HEARTBEAT_CHECK_INTERVAL_MS = 5000;
 const CONNECT_RETRY_WHEN_UNAUTHENTICATED_MS = 30000;
 
+export interface SwitchUnderlyingResult {
+  status: 'ok' | 'error';
+  symbol: string;
+  message?: string;
+}
+
+/**
+ * Underlyings the ladder can re-center around via the `subscribe-underlying`
+ * socket event. SPX/SPXW are listed but flagged as unverified: Schwab's
+ * index quotes may need a different streamer service than
+ * `LEVELONE_EQUITIES` (which is documented for equities/ETFs) - confirm
+ * against a live account before relying on SPX/SPXW underlying price ticks.
+ */
+const SUPPORTED_UNDERLYINGS = new Set(['SPY', 'QQQ', 'IWM', 'SPX', 'SPXW']);
+/** 0DTE SPX options trade under the SPXW root, not SPX. */
+const OPTION_ROOT_OVERRIDES: Record<string, string> = { SPX: 'SPXW' };
+const STRIKE_INCREMENT_OVERRIDES: Record<string, number> = {
+  SPX: 5,
+  SPXW: 5,
+};
+
 /**
  * Owns the raw connection to Schwab's LEVELONE streamer: login handshake,
  * heartbeat watchdog, subscription churn for the dynamic strike ladder, and
@@ -59,9 +81,9 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private destroyed = false;
 
-  private readonly underlyingSymbol = 'SPY';
-  private readonly optionRoot = 'SPY';
-  private readonly strikeIncrement = 1;
+  private underlyingSymbol = 'SPY';
+  private optionRoot = 'SPY';
+  private strikeIncrement = 1;
 
   private centerStrike: number | null = null;
   private currentWindowSymbols = new Set<string>();
@@ -71,6 +93,7 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly httpService: HttpService,
     private readonly authService: SchwabAuthService,
+    @Inject(forwardRef(() => OptionsGateway))
     private readonly optionsGateway: OptionsGateway,
     @Inject(schwabConfig.KEY)
     private readonly config: ConfigType<typeof schwabConfig>,
@@ -215,6 +238,87 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
     );
     const quote = response.data?.[this.underlyingSymbol]?.quote;
     return quote?.lastPrice ?? quote?.mark ?? 0;
+  }
+
+  /**
+   * Handles a frontend-requested underlying change (`subscribe-underlying`
+   * socket event): unsubscribes the current equity quote + option ladder,
+   * switches root/strike-increment, and resubscribes around the new
+   * underlying's current price.
+   */
+  async switchUnderlying(
+    requestedSymbol: string,
+  ): Promise<SwitchUnderlyingResult> {
+    const symbol = requestedSymbol?.toUpperCase()?.trim();
+    if (!symbol || !SUPPORTED_UNDERLYINGS.has(symbol)) {
+      return {
+        status: 'error',
+        symbol: requestedSymbol,
+        message: `Unsupported underlying "${requestedSymbol}"`,
+      };
+    }
+
+    if (symbol === this.underlyingSymbol) {
+      return { status: 'ok', symbol };
+    }
+
+    if (!this.loggedIn) {
+      return {
+        status: 'error',
+        symbol,
+        message: 'Streamer not connected to Schwab yet',
+      };
+    }
+
+    this.sendRequest({
+      service: 'LEVELONE_EQUITIES',
+      command: 'UNSUBS',
+      requestid: this.nextRequestId(),
+      parameters: { keys: this.underlyingSymbol },
+    });
+    if (this.currentWindowSymbols.size > 0) {
+      this.sendRequest({
+        service: 'LEVELONE_OPTIONS',
+        command: 'UNSUBS',
+        requestid: this.nextRequestId(),
+        parameters: { keys: [...this.currentWindowSymbols].join(',') },
+      });
+    }
+
+    this.underlyingSymbol = symbol;
+    this.optionRoot = OPTION_ROOT_OVERRIDES[symbol] ?? symbol;
+    this.strikeIncrement = STRIKE_INCREMENT_OVERRIDES[symbol] ?? 1;
+    this.centerStrike = null;
+    this.currentWindowSymbols = new Set();
+
+    this.sendRequest({
+      service: 'LEVELONE_EQUITIES',
+      command: 'SUBS',
+      requestid: this.nextRequestId(),
+      parameters: {
+        keys: this.underlyingSymbol,
+        fields: LEVEL_ONE_EQUITY_FIELD_KEYS,
+      },
+    });
+
+    try {
+      const initialPrice = await this.fetchInitialUnderlyingPrice();
+      this.recenterLadder(initialPrice);
+    } catch (err) {
+      this.logger.error(
+        `Failed to fetch initial ${this.underlyingSymbol} quote after underlying switch`,
+        err.message,
+      );
+    }
+
+    return {
+      status: 'ok',
+      symbol,
+      message:
+        symbol === 'SPX' || symbol === 'SPXW'
+          ? 'Index underlying price feed via LEVELONE_EQUITIES is unverified against live Schwab data - confirm before trading real money'
+          : undefined,
+    };
   }
 
   private handleEquityTicks(ticks: Array<Record<string, any>>): void {

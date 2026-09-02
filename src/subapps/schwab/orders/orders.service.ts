@@ -2,11 +2,21 @@ import { HttpService } from '@nestjs/axios';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
 
+import {
+  mapAccountPositions,
+  PositionSnapshot,
+} from '@schwab/shared/account-data.mapper';
+
 import { FastOrderDto } from './dto/fast-order.dto';
 import { FlattenPositionDto } from './dto/flatten-position.dto';
 import { ReversePositionDto } from './dto/reverse-position.dto';
 import { OrderInstruction, OrderType } from './enums/order-instruction.enum';
 import { applyMarketableLimitOffset } from './marketable-limit.util';
+
+export interface LinkedAccount {
+  accountNumber: string;
+  hashValue: string;
+}
 
 export interface OrderDispatchResult {
   status: 'SUBMITTED';
@@ -117,5 +127,24 @@ export class OrdersService {
 
     const [closed, opened] = await Promise.all([closeOrder, openOrder]);
     return { status: 'REVERSED', closed, opened };
+  }
+
+  /** Lists Schwab account numbers linked to this app + their hash values
+   * (the opaque `accountHash` every order/position endpoint expects), so
+   * the frontend doesn't have to hardcode `SCHWAB_ACCOUNT_HASH`. */
+  async listAccounts(): Promise<LinkedAccount[]> {
+    const response = await firstValueFrom(
+      this.httpService.get('/trader/v1/accounts/accountNumbers'),
+    );
+    return response.data ?? [];
+  }
+
+  async getPositions(accountHash: string): Promise<PositionSnapshot[]> {
+    const response = await firstValueFrom(
+      this.httpService.get(`/trader/v1/accounts/${accountHash}`, {
+        params: { fields: 'positions' },
+      }),
+    );
+    return mapAccountPositions(response.data);
   }
 }

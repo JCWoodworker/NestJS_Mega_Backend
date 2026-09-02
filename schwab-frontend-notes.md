@@ -13,6 +13,60 @@ Status: **Backend implemented (Phase 1: auth, streaming gateway, orders).** Sect
 
 ---
 
+## Master build prompt (paste this whole block into your frontend Cursor instance first)
+
+> I'm building the Expo/React Native frontend for a "High-Velocity 0DTE Options Scalping
+> Platform" against an already-implemented NestJS backend. I've copied the file
+> `schwab-frontend-notes.md` into this project root — read it in full before doing anything, it's
+> the authoritative contract for every endpoint, event, and payload shape below. Do NOT invent
+> different field names, routes, or auth flows; if something is ambiguous, ask me rather than
+> guessing.
+>
+> Build these in order, one at a time, confirming each works before moving to the next:
+>
+> **1. Env config.** Add the env vars from `schwab-frontend-notes.md` section 1 to `.env` /
+> `app.config.ts`. Use the **preprod** values for now
+> (`https://nestjs-mega-backend-preprod-420ae4c0c109.herokuapp.com`) — that's the environment we're
+> using for first live tests. Leave `EXPO_PUBLIC_DEEPLINK_SCHEME` as `myapp://schwab-connected`
+> unless you pick a different scheme name for this app (tell me what you pick — I need to set the
+> matching `SCHWAB_REDIRECT_SUCCESS_URL` on the backend).
+>
+> **2. Backend auth (this app's own JWT, not Schwab's).** Implement/confirm sign-in against
+> `POST /api/v1/authentication/sign-in` and token refresh against
+> `POST /api/v1/authentication/refresh-tokens`. Every `/orders/*` REST call and the `/options`
+> socket handshake need `Authorization: Bearer <accessToken>` — see section 0 for the exact
+> pattern and the `useOrdersApi.ts` / `useMarketStream.ts` wiring instructions.
+>
+> **3. Schwab "Connect" flow.** Register the `myapp://` deep link scheme in `app.json`, add a
+> "Connect Schwab" button that opens `/api/v1/subapps/schwab/auth/connect` via
+> `expo-web-browser`'s `openAuthSessionAsync`, and show a connected/disconnected badge driven by
+> `GET /auth/status`. Full instructions and exact prompt text in section 2.
+>
+> **4. Real-time market data.** Implement `hooks/useMarketStream.ts` per section 4 — connect to the
+> `/options` Socket.io namespace with the JWT, handle `option-ticks`, `underlying-price`,
+> `ladder-recentered`, and `stream-status`, emit `subscribe-underlying` on mount.
+>
+> **5. Account snapshot + affordability.** Add `account-snapshot` handling to the same socket
+> (section 4/6) into `useAccountStore.ts`, then implement the local affordability formula in
+> `FastOrderBar.tsx` exactly as documented in section 6 — this must be computed client-side for
+> instant feedback, never a round trip to the backend.
+>
+> **6. Order execution.** Wire `QuickActionBtns.tsx` and `FastOrderBar.tsx` to
+> `useOrdersApi.ts` hitting `fast-execute` / `flatten` / `reverse` per section 3, using the OSI
+> symbol format from section 5 wherever a symbol needs to be built or parsed locally.
+>
+> After each step, tell me what you built and any assumptions you made so I can confirm against
+> the actual backend behavior — some of this (streamer field names, account-balance field names)
+> hasn't been exercised against Schwab's live API yet, so we may need to adjust field mappings once
+> we do a real end-to-end test.
+
+**Open decision I still need from you (the human) before this is fully wired:** what Expo deep
+link scheme/path do you want for the post-connect redirect? Default assumption above is
+`myapp://schwab-connected` — once you (or the frontend AI) pick the real one, tell me and I'll set
+`SCHWAB_REDIRECT_SUCCESS_URL` to match on both preprod and prod.
+
+---
+
 ## 1. Base URLs & mounting
 
 - REST API prefix (global): `api/v1`
@@ -28,6 +82,21 @@ EXPO_PUBLIC_SOCKET_URL=http://localhost:3000
 EXPO_PUBLIC_SOCKET_NAMESPACE=/options
 EXPO_PUBLIC_DEEPLINK_SCHEME=myapp://schwab-connected
 ```
+
+**Real deployed URLs (live now, verified working):**
+
+```
+# Preprod
+EXPO_PUBLIC_API_BASE_URL=https://nestjs-mega-backend-preprod-420ae4c0c109.herokuapp.com
+EXPO_PUBLIC_SOCKET_URL=https://nestjs-mega-backend-preprod-420ae4c0c109.herokuapp.com
+
+# Prod
+EXPO_PUBLIC_API_BASE_URL=https://nestjs-mega-backend-prod-893a099fba68.herokuapp.com
+EXPO_PUBLIC_SOCKET_URL=https://nestjs-mega-backend-prod-893a099fba68.herokuapp.com
+```
+
+`EXPO_PUBLIC_SOCKET_NAMESPACE` stays `/options` in both. Point the Expo app at **preprod** while
+testing — that's the environment we're using for the first live Schwab OAuth/order tests.
 
 ---
 
@@ -79,6 +148,17 @@ minutes of expiry). The frontend only needs:
   automatically once the browser/WebView redirects to it.
 - These three OAuth endpoints (`/auth/connect`, `/auth/callback`, `/auth/status`) are public
   (no backend JWT required) since Schwab's own redirect can't carry your app's bearer token.
+- **Web client support (added):** if you're testing via Expo web / a plain browser tab (deep links
+  don't work there), pass `?returnTo=<url>` on `/auth/connect`, e.g.
+  `/api/v1/subapps/schwab/auth/connect?returnTo=http://localhost:8081/schwab-connected`. The
+  backend redirects here instead of the Expo deep link on success. `returnTo` must be either an
+  `exp://` / `myapp://` URL, or an origin already present in this backend's `ALLOWED_ORIGINS` /
+  `ALLOWED_ORIGINS_DEVELOPMENT` CORS allowlist (preprod currently includes
+  `http://localhost:8081` and `http://localhost:19006` for Expo web dev servers) — anything else is
+  rejected with a 401 to prevent this becoming an open redirect. Omit it entirely for the native
+  deep-link flow, unchanged from above.
+- `GET /auth/status` now also returns `accountHash: string | null` (see section 3.5) so you don't
+  have to hardcode it.
 
 **Frontend prompt to paste:**
 
@@ -141,13 +221,65 @@ Response:
 { status: 'REVERSED'; closed: <fast-execute response>; opened: <fast-execute response> }
 ```
 
+**Error response shape (all endpoints, no custom exception filter):** standard Nest default —
+
+```ts
+{ statusCode: number; message: string | string[]; error: string }
+```
+
+`message` is a single string for most thrown errors (e.g. Schwab order rejections surface as
+`{ statusCode: 400, message: "<schwab's error text>", error: "Bad Request" }`), but is a **string
+array** for DTO validation failures (e.g. missing `accountHash`), since that's `class-validator`'s
+default format. Don't assume `message` is always a string.
+
+**Rate limiting (added):** this backend has a global default guard of 10 requests/60s per IP
+(shared across all subapps in this mega-backend). `OrdersController` overrides this to **120
+requests/60s per IP**, matching the Order Limit approved for this app in the Schwab Developer
+Portal — Schwab enforces its own 120/min-per-account cap upstream regardless, so you shouldn't hit
+429s from us before Schwab itself would reject the request. If you do get a 429, it's a real
+`ThrottlerException` (`{ statusCode: 429, message: "ThrottlerException: Too Many Requests" }`), not
+an accidental backend limit.
+
+### `GET /api/v1/subapps/schwab/orders/accounts`
+
+Lists Schwab account numbers linked to this app + their `hashValue` (the opaque `accountHash`
+every order/position endpoint expects) — so you don't have to hardcode
+`SCHWAB_ACCOUNT_HASH`/ask the user to find it themselves.
+
+```ts
+// response
+Array<{ accountNumber: string; hashValue: string }>
+```
+
+### `GET /api/v1/subapps/schwab/orders/positions?accountHash=<hash>`
+
+On-demand fetch for the Position HUD (e.g. initial load before the socket connects, or a manual
+refresh button). The same shape is also pushed proactively every ~4s via the `account-snapshot`
+socket event (section 4) — prefer that for live updates, use this endpoint only for one-off fetches.
+
+```ts
+// response
+Array<{
+  symbol: string;       // OSI for options, plain ticker for equities
+  assetType: string;    // e.g. "OPTION", "EQUITY"
+  quantity: number;     // positive = net long, negative = net short
+  averagePrice: number;
+  marketValue: number;
+  dayProfitLoss: number;
+}>
+```
+
 **Frontend prompt to paste:**
 
 > "Wire `QuickActionBtns.tsx` and `FastOrderBar.tsx` to a `useOrdersApi.ts` hook using TanStack
 > Query mutations against `${EXPO_PUBLIC_API_BASE_URL}/api/v1/subapps/schwab/orders/{fast-execute|flatten|reverse}`.
 > Use the request/response shapes documented in `schwab-frontend-notes.md` section 3. On success,
-> fire the audio/haptic feedback hooks; on failure, surface `error.message` inline near the button
-> without a blocking modal."
+> fire the audio/haptic feedback hooks; on failure, check whether `error.message` is a string or
+> array (DTO validation errors are arrays) before rendering it, and surface it inline near the
+> button without a blocking modal. Build the Position HUD's initial state from
+> `GET /orders/positions?accountHash=<hash>` (fetch `accountHash` from `GET /auth/status` first),
+> then let live updates come from the `account-snapshot` socket event instead of polling this
+> endpoint."
 
 ---
 
@@ -197,16 +329,46 @@ type OptionTickRaw = {
   own connection health to Schwab's streamer (heartbeat watchdog state), useful for showing a
   "stale data" banner in the UI.
 - `account-snapshot` — **DECIDED**: delivered over this same socket, not REST polling. Backend's
-  `AccountSnapshotService` polls Schwab's account REST endpoint on an interval (~3-5s) and
-  re-broadcasts here:
+  `AccountSnapshotService` polls Schwab's account REST endpoint on an interval (~4s) and
+  re-broadcasts here. **Now includes `positions`** (added, was missing from earlier drafts of this
+  doc — this is the Position HUD's live data source):
 
 ```ts
-{ equity: number; settledCash: number; optionsBuyingPower: number; asOf: number /* epoch ms */ }
+{
+  equity: number;
+  settledCash: number;
+  optionsBuyingPower: number;
+  positions: Array<{
+    symbol: string;       // OSI for options, plain ticker for equities
+    assetType: string;    // e.g. "OPTION", "EQUITY"
+    quantity: number;     // positive = net long, negative = net short
+    averagePrice: number;
+    marketValue: number;
+    dayProfitLoss: number;
+  }>;
+  asOf: number; // epoch ms
+}
 ```
 
 ### Client → server events
 
-- `subscribe-underlying` — `{ symbol: 'SPY' | 'SPX' }` — tells backend which underlying to stream/re-center around.
+- `subscribe-underlying` — `{ symbol: 'SPY' | 'QQQ' | 'IWM' | 'SPX' | 'SPXW' }` — tells the backend
+  which underlying to stream/re-center the ladder around. **This is now fully wired** (previously
+  logged but ignored): the backend unsubscribes the old equity quote + option ladder from Schwab's
+  streamer, switches to the new root, and resubscribes. There's one shared Schwab streamer
+  connection for the whole backend (not one per socket) — the **last** `subscribe-underlying`
+  request from any connected client wins for everyone. Strike increment auto-adjusts (1 for
+  SPY/QQQ/IWM, 5 for SPX/SPXW), and `SPX` requests automatically use the `SPXW` option root (0DTE
+  SPX options trade under that root, not `SPX`).
+  - **Supports acks**: if you `emit('subscribe-underlying', { symbol }, callback)`, the callback
+    receives `{ status: 'ok' | 'error', symbol: string, message?: string }`. Fire-and-forget
+    (no callback) still works, same as before.
+  - **SPX/SPXW caveat**: the underlying index price feed for SPX goes through the same
+    `LEVELONE_EQUITIES` Schwab streamer service used for equity ETFs, which is
+    unverified against Schwab's live streamer for an index (Schwab's docs suggest indices may need
+    a different service/quote type). The ack for SPX/SPXW includes a `message` flagging this —
+    surface it as a warning banner rather than silently trusting the price feed until we've
+    confirmed it against a live account.
 
 **Frontend prompt to paste:**
 
@@ -215,7 +377,9 @@ type OptionTickRaw = {
 > `useMarketStore.updateTicks(payload)` (payload is already keyed by Schwab field-map indices, no
 > transform needed). On `underlying-price`, call `setUnderlyingPrice`. On `stream-status` with
 > `connected: false`, show a non-blocking 'stale data' banner. Emit `subscribe-underlying` on mount
-> with `{ symbol: 'SPY' }`."
+> with `{ symbol: 'SPY' }`, using the ack callback form so you can show an error toast if the
+> backend rejects the symbol or isn't connected to Schwab yet, and a warning banner if the ack
+> includes a `message` (currently only for SPX/SPXW)."
 
 ---
 
@@ -288,5 +452,24 @@ which section to re-paste.
 ## Decisions log
 
 - **OAuth success redirect**: Expo deep link (`myapp://schwab-connected`), not a plain HTML page. Register this scheme in `app.json` and handle it with `expo-web-browser`'s `openAuthSessionAsync`.
-- **Account snapshot delivery**: streamed over the `/options` socket as an `account-snapshot` event, not REST polling. One socket connection covers ticks, underlying price, and balances.
+- **Account snapshot delivery**: streamed over the `/options` socket as an `account-snapshot` event, not REST polling. One socket connection covers ticks, underlying price, balances, and (added) positions.
 - **Socket authentication (added after initial build)**: the `/options` gateway broadcasts account balances/positions, so it now requires this backend's own JWT (same one used for REST) via the Socket.io handshake `auth: { token }`. Unauthenticated or invalid-token sockets are disconnected immediately. This was not in the original plan — added before deployment once we flagged it as a security gap.
+- **CORS**: `ALLOWED_ORIGINS` (preprod)/`ALLOWED_ORIGINS_DEVELOPMENT` env vars drive CORS for both
+  the REST API and the `/options` socket namespace identically. Preprod's list currently includes
+  `http://localhost:8081` and `http://localhost:19006` for Expo web dev servers — if your dev
+  server runs on a different port, tell me and I'll add it. CORS is irrelevant for native
+  iOS/Android builds (browser-only concept); this only matters for Expo web / browser testing.
+- **Web OAuth redirect (added)**: `/auth/connect?returnTo=<url>` lets a web client override the
+  Expo deep link with a plain URL, validated against the CORS allowlist above (see section 2).
+- **Open positions (added, was a gap)**: no separate "positions" concept existed before — now
+  included in every `account-snapshot` socket payload, plus an on-demand
+  `GET /orders/positions?accountHash=` REST endpoint for initial loads.
+- **Account hash discovery (added, was a gap)**: `GET /orders/accounts` lists linked Schwab
+  accounts + their hash values, and `GET /auth/status` now also returns `accountHash`, so the
+  frontend never has to hardcode or manually ask for it.
+- **`subscribe-underlying` (fixed — was previously a no-op)**: now actually switches the shared
+  ladder's underlying/option-root/strike-increment and supports SPY/QQQ/IWM fully, SPX/SPXW with a
+  flagged caveat on the underlying price feed (see section 4). Supports Socket.io acks.
+- **Order endpoint rate limit (fixed — was a gap)**: `OrdersController` now overrides this
+  backend's global 10 req/60s guard with 120 req/60s, matching the Schwab-approved per-account
+  order limit for this app.
