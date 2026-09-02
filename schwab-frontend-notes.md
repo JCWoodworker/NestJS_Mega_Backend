@@ -1,127 +1,107 @@
 # Schwab 0DTE Scalper — Frontend Sync Notes
 
 This file is the shared contract between this backend repo (`nestjs_mega_backend`) and the
-separate frontend project (`schwab-0dte-spy-trader` — **TanStack Start web app**, not Expo/React
-Native — see correction below). Paste sections of this into your frontend Cursor instance as you
-build each piece. I'll update this file as the backend implementation progresses, so re-sync
-periodically (diff against your last copy).
+separate frontend project (`schwab-0dte-spy-trader` — TanStack Start, **web**). There's no shared
+package/schema between the two repos, so **both sides keep this file in sync manually** by
+copy-pasting sections back and forth as the contract evolves. Check the Changelog at the bottom
+whenever a new copy comes in.
 
-> Source spec: "High-Velocity 0DTE Options Scalping Platform" doc (Schwab Trader API + NestJS).
-> Backend plan: `schwab` subapp under `src/subapps/schwab/` in this repo.
-
-Status: **Fully live end-to-end on preprod as of 2026-09-02.** A real Schwab account is now
-connected (completed the actual OAuth consent screen), and every layer has been verified against
-real data: sign-in → JWT → `/orders/accounts` → real account hash → `/orders/positions` → real
-(empty) positions → `/options` socket → real `account-snapshot` (balances) and `stream-status`
-(raw Schwab streamer alive). One real bug was found and fixed in the process — see below.
+Status: **Fully live end-to-end on preprod and prod as of 2026-09-02.** A real Schwab account is
+connected on preprod; sign-in, CORS, orders/accounts/positions endpoints, and the `/options`
+socket (`account-snapshot` + `stream-status`) have all been verified against real data. Two real
+backend bugs were found and fixed along the way (see Changelog) — both frontend-reported, both
+now fixed and deployed to preprod + prod.
 
 ---
 
-## ⚠️ Correction: this frontend is a web app (TanStack Start), not Expo
+## ✅ Resolved: this is a web app (TanStack Start), not Expo
 
-My earlier notes (master build prompt, deep-link instructions, `EXPO_PUBLIC_*` env vars,
-`8081`/`19006` dev ports) assumed an Expo/React Native client. The actual frontend is a plain web
-app — TanStack Start + Vite, dev server on `http://localhost:3000`, deployed to Netlify at
-**`https://schwab-0dte-spy-trader.netlify.app`**. Everything below has been corrected for that:
+No deep links — OAuth success uses `?returnTo=<url>` (section 2), landing on the frontend's own
+`/schwab-connected` page. Env vars use Vite's `VITE_*` convention. Dev server port `3000`.
+Production: `https://schwab-0dte-spy-trader.netlify.app`. Both origins are CORS-cleared on
+preprod (and the Netlify origin on prod too) — see section 2b.
 
-- No deep links — OAuth success uses `?returnTo=<url>` (section 2), landing on a plain page.
-- Env vars use Vite's `VITE_*` convention, not `EXPO_PUBLIC_*`.
-- CORS allowlists (both preprod and prod) have been updated and **live-verified** — see section 2b.
-- Section 0 (backend's own JWT auth) had an incorrect assumed response shape — **fixed below**,
-  this was a real bug in your guess, not just a documentation gap. Read it before touching your
-  `authApi.ts`.
+## 0. Backend's own JWT auth — CONFIRMED, live-tested
 
----
-
-## 0. Backend's own JWT auth (corrected — your guessed shape was wrong)
-
-This is separate from Schwab's OAuth (section 2) — it's this mega-backend's own authentication
-system, required for every `/orders/*` REST call and the `/options` socket handshake.
+Separate from Schwab's OAuth (section 2) — this mega-backend's own auth system, required for
+every `/orders/*` REST call and the `/options` socket handshake.
 
 ### `POST /api/v1/authentication/sign-in`
 
-Request body needs **three** fields, not two — `signUpOrIn` is required:
-
 ```ts
 {
-  email: string;
-  password: string;      // must satisfy class-validator's IsStrongPassword default:
-                          // min 8 chars, ≥1 lowercase, ≥1 uppercase, ≥1 number, ≥1 symbol
-  signUpOrIn: 'signin';   // literal string, required — enum has 'signup' | 'signin'
+  email: string
+  password: string    // class-validator IsStrongPassword: min 8 chars, ≥1 lower, ≥1 upper, ≥1 number, ≥1 symbol
+  signUpOrIn: 'signin' // literal, required — enum is 'signup' | 'signin'
 }
 ```
 
-Response is **nested**, not a flat `{ accessToken, refreshToken }`:
+Response — **nested**, tokens are at `authData.tokens`, not top-level:
 
 ```ts
 {
   authData: {
-    userInfo: { firstName: string | null; lastName: string | null; imageUrl: string | null; role: string };
-    tokens: { accessToken: string; refreshToken: string };
-  };
-  businesses?: unknown[]; // only present if the user has OnlyBizLinks business associations — ignore this
+    userInfo: { firstName: string | null; lastName: string | null; imageUrl: string | null; role: string }
+    tokens: { accessToken: string; refreshToken: string }
+  }
+  businesses?: unknown[] // OnlyBizLinks association artifact — ignore
 }
 ```
 
-So the tokens are at `response.authData.tokens.accessToken` / `.refreshToken`, **not**
-`response.accessToken`.
-
 ### `POST /api/v1/authentication/sign-up`
-
-Same shape as sign-in, but `signUpOrIn: 'signup'`:
 
 ```ts
 { email: string; password: string; signUpOrIn: 'signup' }
-// response: { message: string }  -- NOT tokens, you still need to sign in after signing up
+// response: { message: string } -- no tokens, sign in separately after
 ```
+
+Returns `409 { message: "Conflict" }` if the email already exists on this backend (shared across
+every subapp, not Schwab-specific — see the bug note below for what that can imply).
 
 ### `POST /api/v1/authentication/refresh-tokens`
 
 ```ts
 { refreshToken: string }
-// response: same nested shape as sign-in — { authData: { userInfo, tokens: { accessToken, refreshToken } } }
+// response: same nested shape as sign-in
 ```
 
-Note the old refresh token is invalidated server-side on use (rotation) — always store the new
-`refreshToken` from the response, the old one won't work twice.
+Old refresh token is invalidated server-side on use (rotation) — always store the new one.
 
-### Test credentials (created on preprod for you — verified working just now)
+### Test credentials (preprod)
 
 ```
 email:    schwab-frontend-test@example.com
 password: SchwabTest123!
 ```
 
-I ran this against preprod myself and confirmed both sign-up and sign-in work end-to-end (real
-JWTs came back, `role: "basic"`, no elevated role needed for any Schwab endpoint). Use this to
-actually exercise the app now — no more guessing/mocking auth.
-
-One more thing so you don't chase a false bug: with this JWT, `GET /auth/status` correctly returns
-`{ connected: false, ... }` and `/orders/*` correctly 401s with
-`"Schwab account is not connected yet. Visit /auth/connect first."` — that's expected, since no
-one has run the actual Schwab OAuth connect flow against preprod yet. That's a separate manual
-step (someone with real Schwab credentials needs to click "Connect Schwab" and complete Schwab's
-consent screen) — not something either of us can script around. Once that's done once on preprod,
-`/orders/*` will start returning real data for this same test account.
-
-**Frontend confirmed (2026-09-02)**: ran the actual app against preprod — sign-in form correctly
-round-trips a real JWT and passes the route guard into the workspace, and clicking "Connect
-Schwab" correctly opens and redirects all the way through to Schwab's real login page
-(`sws-gateway.schwab.com`), stopping there since the frontend doesn't hold real Schwab credentials.
-That's as far as either side can verify without someone actually logging into Schwab — I'll do
-that next (see "Next step" below).
+Verified working end-to-end repeatedly throughout testing. Role `basic`, no elevated role needed
+for any Schwab endpoint.
 
 ### Attaching the token
 
 - Every `/orders/*` REST call: `Authorization: Bearer <accessToken>`.
-- Socket.io handshake: `auth: { token: accessToken }` (query param or `Authorization` header also
-  accepted as fallbacks). Sockets with no/invalid/expired token are disconnected immediately on
-  connect.
-- On REST 401 or a socket `disconnect` with reason `io server disconnect`: call
-  `refresh-tokens` once, retry/reconnect with the new token pulled from
-  `authData.tokens.accessToken`, and only surface an auth error if that fails too.
-- `/auth/connect`, `/auth/callback`, `/auth/status` (Schwab OAuth, section 2) remain public — no
-  bearer token required.
+- Socket.io handshake: `auth: { token: accessToken }` (query param / `Authorization` header also
+  accepted as fallbacks). Sockets with no/invalid/expired token disconnect immediately.
+- On REST 401 or socket `disconnect` reason `io server disconnect`: call `refresh-tokens` once,
+  retry/reconnect with the new token, only surface an auth error if that fails too.
+- `/auth/connect`, `/auth/callback`, `/auth/status` (section 2) remain public — no bearer token.
+
+### ⚠️ Bug fixed 2026-09-02: `sign-in` 500'd instead of 401'ing for Google-only accounts
+
+**Reported by frontend, root-caused and fixed by backend same day.** If a `Users` row was created
+via this mega-backend's Google OAuth flow (a different code path than this Schwab-specific auth,
+used by other subapps on this backend), it never gets a `password` set — that column is
+nullable. `AuthenticationService.signIn` called `bcrypt.compare(password, user.password)`
+unconditionally; `bcrypt.compare` throws on a `null` hash, which was uncaught and surfaced as a
+raw `500` instead of a normal auth failure.
+
+Confirmed via the preprod DB: the specific account the frontend hit
+(`jfc3303@gmail.com`) has `password: NULL` and a `googleId` set. **Fixed**: `signIn` now checks
+for a missing password first and throws a clean `401` (`"This account has no password set
+(likely signed up via Google) — sign in with Google instead"`). Deployed to both preprod and
+prod, live-verified on both, and confirmed no regression on normal sign-in. This was a
+pre-existing bug in shared code, not something either side's contract work introduced — no
+frontend changes needed.
 
 ---
 
@@ -129,20 +109,14 @@ that next (see "Next step" below).
 
 - REST API prefix: `/api/v1`, `schwab` subapp mounted at `subapps/schwab`.
 - Auth endpoints are NOT under the subapp prefix: `/api/v1/authentication/*`.
-- Schwab-specific REST: `${VITE_API_BASE_URL}/api/v1/subapps/schwab/<path>`.
 - Socket.io gateway, namespace `/options`, same host as the REST API.
 
-**Real deployed URLs:**
-
 ```
-# Preprod (default — use this for now)
+# Preprod (default)
 https://nestjs-mega-backend-preprod-420ae4c0c109.herokuapp.com
-
 # Prod
 https://nestjs-mega-backend-prod-893a099fba68.herokuapp.com
 ```
-
-Env vars — Vite convention (`VITE_*`, not `EXPO_PUBLIC_*`):
 
 ```
 VITE_API_BASE_URL=https://nestjs-mega-backend-preprod-420ae4c0c109.herokuapp.com
@@ -151,71 +125,34 @@ VITE_SOCKET_NAMESPACE=/options
 VITE_UNDERLYING_SYMBOL=SPY
 ```
 
----
-
 ## 2. Schwab OAuth connect flow (public endpoints, server-driven)
 
-Backend owns the Schwab token lifecycle entirely (proactive rotation at 5 min before expiry,
-checked every 10 min). Frontend only needs:
-
-- A "Connect Schwab Account" action.
 - `GET /auth/status` → `{ connected: boolean, expiresAt: string | null, accountHash: string | null }`.
+  Note: `accountHash` here reflects an optional `SCHWAB_ACCOUNT_HASH` config override (usually
+  unset/`null`) — use `GET /orders/accounts` (section 3) for the real dynamically-resolved hash.
+- **Web flow**: `GET /api/v1/subapps/schwab/auth/connect?returnTo=<url>`. `returnTo` must be an
+  origin already in the CORS allowlist (2b) or gets a 401. Flow: open
+  `/auth/connect?returnTo=${origin}/schwab-connected` in a new tab, land on the frontend's own
+  page, poll `/auth/status` from Settings for the Connected badge.
+- **Live-verified end to end**: a real Schwab account is connected on preprod as of 2026-09-02.
 
-**Web flow**: `GET /api/v1/subapps/schwab/auth/connect?returnTo=<url>`. `returnTo` must be an
-origin already present in the backend's CORS allowlist (see 2b) — anything else gets a 401
-(open-redirect protection). Your flow: open
-`/auth/connect?returnTo=${origin}/schwab-connected` in a new tab, land on your own
-`/schwab-connected` page, and independently poll `/auth/status` from the Settings page to update
-the Connected badge.
+### 2b. CORS
 
-### 2b. CORS — how it actually works (important correction)
+Keyed off **this backend's own `ENVIRONMENT` var**, not the calling origin's shape:
+`ENVIRONMENT=development` (backend run locally) reads `ALLOWED_ORIGINS_DEVELOPMENT`;
+`ENVIRONMENT=preprod`/`prod` (both deployed Heroku apps) reads `ALLOWED_ORIGINS`. Since the
+frontend always hits the deployed apps, only `ALLOWED_ORIGINS` matters here.
 
-Your ask was "add `localhost:3000` to `ALLOWED_ORIGINS_DEVELOPMENT`" — that's not how this
-backend's CORS is wired, and doing it that way would **not** have worked. The var this backend
-reads is chosen by **this backend's own `ENVIRONMENT` var**, not by whether the origin itself
-looks like a dev or prod URL:
-
-- `ENVIRONMENT=development` (only when *this NestJS backend* is run locally on someone's machine)
-  → reads `ALLOWED_ORIGINS_DEVELOPMENT`.
-- `ENVIRONMENT=preprod` or `ENVIRONMENT=prod` (both deployed Heroku apps) → reads `ALLOWED_ORIGINS`.
-
-Since you're hitting the **deployed preprod Heroku app** (not running this backend locally),
-preprod's `ENVIRONMENT=preprod`, so it only ever reads `ALLOWED_ORIGINS` — regardless of whether
-your origin is `http://localhost:3000` or a deployed Netlify URL. `ALLOWED_ORIGINS_DEVELOPMENT`
-on preprod/prod is unused dead weight.
-
-**Done — I've already updated and live-verified both:**
-
-- **Preprod `ALLOWED_ORIGINS`** now includes `http://localhost:3000` and
-  `https://schwab-0dte-spy-trader.netlify.app` (removed the stale Expo `8081`/`19006` entries).
-- **Prod `ALLOWED_ORIGINS`** now also includes `https://schwab-0dte-spy-trader.netlify.app`, for
-  whenever you point the frontend at prod.
-
-Verified with a live preflight request against preprod just now:
-
-```
-$ curl -i -X OPTIONS https://nestjs-mega-backend-preprod-420ae4c0c109.herokuapp.com/api/v1/authentication/sign-in \
-    -H "Origin: https://schwab-0dte-spy-trader.netlify.app" \
-    -H "Access-Control-Request-Method: POST"
-
-HTTP/1.1 204 No Content
-Access-Control-Allow-Credentials: true
-Access-Control-Allow-Origin: https://schwab-0dte-spy-trader.netlify.app
-```
-
-Both your deployed Netlify origin and `localhost:3000` are cleared for REST + the `/options`
-socket right now — no further backend changes needed for CORS.
-
----
+**Live-verified on both:**
+- Preprod `ALLOWED_ORIGINS`: `http://localhost:3000` + `https://schwab-0dte-spy-trader.netlify.app`.
+- Prod `ALLOWED_ORIGINS`: `https://schwab-0dte-spy-trader.netlify.app`.
 
 ## 3. Order execution + account endpoints (REST)
 
-All require `Authorization: Bearer <accessToken>` (section 0). No preview/confirmation step on
-order dispatch.
+All require `Authorization: Bearer <accessToken>` (section 0).
 
 ### `POST /api/v1/subapps/schwab/orders/fast-execute`
 ```ts
-// request (FastOrderDto)
 {
   accountHash: string
   symbol: string // 21-char OSI
@@ -231,56 +168,42 @@ order dispatch.
 
 ### `POST /api/v1/subapps/schwab/orders/flatten`
 ```ts
-{ accountHash: string; symbol: string; quantity: number } // -> same response as fast-execute
+{ accountHash: string; symbol: string; quantity: number } // -> fast-execute response shape
 ```
 
 ### `POST /api/v1/subapps/schwab/orders/reverse`
 ```ts
-// request
 { accountHash: string; closeSymbol: string; openSymbol: string; quantity: number }
-// response
-{ status: 'REVERSED'; closed: <fast-execute response>; opened: <fast-execute response> }
+// response: { status: 'REVERSED'; closed: <fast-execute response>; opened: <fast-execute response> }
 ```
 
 ### `GET /api/v1/subapps/schwab/orders/accounts`
 ```ts
 Array<{ accountNumber: string; hashValue: string }>
 ```
+Confirmed live: returns the real connected account's number + hash on preprod.
 
 ### `GET /api/v1/subapps/schwab/orders/positions?accountHash=<hash>`
-On-demand fetch for initial Position HUD load; prefer the `account-snapshot` socket event
-(section 4) for live updates.
 ```ts
-Array<{
-  symbol: string       // OSI for options, plain ticker for equities
-  assetType: string    // e.g. "OPTION", "EQUITY"
-  quantity: number      // positive = net long, negative = net short
-  averagePrice: number
-  marketValue: number
-  dayProfitLoss: number
-}>
+Array<{ symbol: string; assetType: string; quantity: number; averagePrice: number; marketValue: number; dayProfitLoss: number }>
 ```
+Confirmed live (returns `[]` for the connected test account — no open positions).
 
-### Error response shape (all endpoints)
+### Error response shape
 ```ts
 { statusCode: number; message: string | string[]; error: string }
 ```
-`message` is a string for most errors but a string array for `class-validator` DTO failures. Your
-`lib/api.ts` flattening (join with `; `) is the right approach.
+`message` is a string for most errors, a string array for `class-validator` DTO failures.
 
 ### Rate limiting
-`OrdersController` allows **120 req/60s per IP** (overriding this backend's global 10/60s
-default), matching the Schwab-approved per-account order limit.
-
----
+`OrdersController`: 120 req/60s per IP (overrides this backend's global 10/60s default).
 
 ## 4. Real-time streaming (Socket.io namespace `/options`)
 
-Connect with this backend's JWT (section 0):
 ```ts
 io(`${VITE_SOCKET_URL}${VITE_SOCKET_NAMESPACE}`, {
   transports: ['websocket'],
-  auth: { token: accessToken }, // pull from authData.tokens.accessToken, see section 0
+  auth: { token: accessToken },
 })
 ```
 
@@ -289,16 +212,15 @@ io(`${VITE_SOCKET_URL}${VITE_SOCKET_NAMESPACE}`, {
 - **`option-ticks`** — batched array, ~50ms throttle:
   ```ts
   type OptionTickRaw = {
-    '0': string; '1': number; '2': number; '3': number // symbol, bid, ask, last (always present)
+    '0': string; '1': number; '2': number; '3': number // symbol, bid, ask, last
     '4'?: number; '5'?: number; '8'?: number; '9'?: number; '16'?: number; '17'?: number
-    // bid size, ask size, volume, OI, delta, gamma (optional)
+    // bid size, ask size, volume, OI, delta, gamma
   }
   ```
-- **`ladder-recentered`** — `{ centerStrike: number, symbols: string[] }`. Parse each OSI symbol
-  (`lib/osi.ts`) into ladder rows yourself.
-- **`stream-status`** — `{ connected: boolean, lastFrameAt: number | null }` — backend's own
-  Schwab-streamer health; drives the "stale data" banner directly.
-- **`account-snapshot`** — every ~4s, includes `positions`:
+- **`ladder-recentered`** — `{ centerStrike: number, symbols: string[] }`.
+- **`stream-status`** — `{ connected: boolean, lastFrameAt: number | null }`. **Live-verified**:
+  `connected: true` observed against the real connected account.
+- **`account-snapshot`** — every ~4s:
   ```ts
   {
     equity: number
@@ -308,104 +230,86 @@ io(`${VITE_SOCKET_URL}${VITE_SOCKET_NAMESPACE}`, {
     asOf: number
   }
   ```
+  **Live-verified** — see section 6 for the real observed payload and a bug that was blocking
+  this entirely until fixed.
 
 ### Client → server events
-- **`subscribe-underlying`** — `{ symbol: 'SPY' | 'QQQ' | 'IWM' | 'SPX' | 'SPXW' }`. Switches the
-  shared ladder's underlying/option root/strike increment for **all** connected clients (one
-  shared Schwab streamer connection backend-wide; last request wins). `SPX` auto-maps to the
-  `SPXW` 0DTE option root.
-  - **Supports acks**: `emit('subscribe-underlying', { symbol }, callback)` →
-    `{ status: 'ok' | 'error', symbol: string, message?: string }`.
-  - **SPX/SPXW caveat** (still unverified — see section 6): the underlying price feed for these
-    currently reuses the equity-quote streamer service, unverified against Schwab's live streamer
-    for an index. The ack includes a `message` flagging this — show as a warning banner.
-
----
+- **`subscribe-underlying`** — `{ symbol: 'SPY' | 'QQQ' | 'IWM' | 'SPX' | 'SPXW' }`. Shared
+  backend-wide streamer (last request wins for all clients). Supports acks:
+  `emit('subscribe-underlying', { symbol }, callback)` →
+  `{ status: 'ok' | 'error', symbol: string, message?: string }`.
+  - **SPX/SPXW caveat (still unverified)**: underlying price feed reuses the equity-quote
+    streamer service, unverified for an index. Ack includes a `message` flagging this.
 
 ## 5. OSI option symbol format
 21 chars: root (6, space-padded) + `YYMMDD` + `C`/`P` + strike×1000 (zero-padded 8 digits).
-Backend reference: `src/subapps/schwab/streaming/osi-symbol.util.ts` (unit tested — worth diffing
-against your `src/lib/osi.ts` once you have a moment).
+Backend reference: `src/subapps/schwab/streaming/osi-symbol.util.ts`.
 
-## 6. Pre-flight affordability check (unchanged)
+## 6. Pre-flight affordability check
 ```
 tradeCost = q * p * 100
 affordable = tradeCost <= B && (E >= 2000 || tradeCost <= C)
 ```
-Sourced from `account-snapshot`. Stale hint if `asOf` older than ~10s.
+Sourced from `account-snapshot`.
 
-**Now confirmed against a live Schwab account** (connected on preprod 2026-09-02) — real
-`account-snapshot` payload observed:
+**Confirmed against a live Schwab account** (connected on preprod 2026-09-02):
 ```json
 { "equity": 4.99, "settledCash": 4.99, "optionsBuyingPower": 4.99, "positions": [], "asOf": 1788362140783 }
 ```
-This is a low-balance account with no open positions, so the three balance fields happening to be
-identical isn't conclusive proof each maps to a genuinely distinct Schwab field (`equity` /
-`cashAvailableForTrading` / `optionBuyingPower` could theoretically all be aliasing the same
-number by coincidence at this balance). Treat this as "pipeline confirmed end-to-end, exact field
-semantics still worth a sanity check" rather than "fully bulletproof" — will re-verify once
-there's a position open or a less trivial balance. Streamer tick field-map indices (`0`/`1`/`2`/
-etc in section 4) are still unverified since there's no open option position generating live
-ticks yet.
+Low-balance account, no open positions, so the three identical balance values aren't fully
+conclusive proof each maps to a genuinely distinct Schwab field — worth a second look with a
+less trivial balance, but the pipeline is confirmed working end-to-end. This required fixing a
+real bug first: `AccountSnapshotService` was reading an unset `SCHWAB_ACCOUNT_HASH` config value
+instead of resolving the hash dynamically (same lookup `GET /orders/accounts` uses), so
+`account-snapshot` was silently never broadcasting (`Invalid account number` in logs, ~every 4s).
+Fixed to resolve + cache the real hash; re-verified live afterward.
 
-## 7. Git remote / CI for your Netlify deploy
-Up to you and outside this backend's scope, but since you asked: yes, wiring up Netlify's GitHub
-integration (push-to-deploy) instead of manual `netlify deploy` CLI calls is the standard move
-once you have a remote. Nothing on the backend depends on how your deploys are triggered — CORS is
-keyed off the resulting origin URL, which won't change either way.
+**Still open**: streamer **tick** field-map indices (section 4, `'0'`/`'1'`/`'2'`/etc.) —
+unverified, needs an actual open option position generating live ticks. Nothing to do on either
+side until that happens; any mismatch found then is a backend mapping bug.
+
+## 7. Git remote / CI, sign-up UI
+Both resolved on the frontend side — GitHub repo + Netlify push-to-deploy wired up, and a Sign In
+/ Create Account toggle shipped on `/sign-in`. No backend action needed.
 
 ---
 
-## Open items / asks for backend — status
+## Open items — status
 
-1. ~~This is a web app, not Expo~~ — **resolved.**
-2. ~~Exact `sign-in`/`refresh-tokens` field names~~ — **resolved.** Frontend updated
-   `src/types/auth.ts` / `src/lib/authApi.ts` to match and live-tested sign-in through the actual
-   running app against preprod.
-3. ~~Add `http://localhost:3000`~~ — **resolved**, live-verified.
-4. ~~Add `https://schwab-0dte-spy-trader.netlify.app`~~ — **resolved**, live-verified on both
-   preprod and prod.
-5. ~~Streamer field mappings / balance field names~~ — **mostly resolved.** Completed the real
-   Schwab OAuth consent flow on preprod myself. Found and fixed a real bug in the process:
-   `AccountSnapshotService` was using an unset `SCHWAB_ACCOUNT_HASH` config value instead of
-   resolving the real account hash dynamically (same lookup `GET /orders/accounts` already used),
-   so `account-snapshot` was silently never broadcasting (`Invalid account number` in the logs).
-   Fixed, deployed, and re-verified — real balances now flow over the socket. Streamer tick field
-   mappings (section 4) still need an open option position to generate live ticks to check against.
-6. **New from frontend**: no git remote/CI yet for their Netlify deploy — their call, doesn't block
-   anything on this backend (CORS is keyed off the resulting origin, not the deploy mechanism).
+All prior items resolved. Current state:
+1. Streamer **tick** field mappings — still open, blocked on an open option position generating
+   live ticks (see section 6).
+2. Everything else (auth contract, CORS, OAuth connect, orders/accounts/positions, account
+   balances, both reported bugs) — confirmed live on preprod (and prod for the auth bug fix).
 
 ## Changelog
-- **2026-09-02 (live Schwab connection + real bug fix)**: Completed the actual Schwab OAuth
-  consent flow on preprod (real account now connected). Found and fixed a real backend bug in the
-  process: `AccountSnapshotService` was reading an unset `SCHWAB_ACCOUNT_HASH` config value instead
-  of resolving the account hash dynamically, so `account-snapshot` never broadcast anything (silent
-  `Invalid account number` failures every ~4s). Now resolves via the same `listAccounts()` lookup
-  `GET /orders/accounts` uses, cached after first success. Verified live end-to-end: real account
-  hash via `/orders/accounts`, real (empty) positions via `/orders/positions`, real balances
-  (`equity`/`settledCash`/`optionsBuyingPower`: $4.99 each on this low-balance account) and
-  `stream-status: connected: true` via the `/options` socket. Streamer tick field mappings still
-  need an open option position to fully verify.
-- **2026-09-02 (frontend live-test)**: Frontend confirmed everything end-to-end against preprod —
-  real sign-in round-trip through the actual app (not just curl), "Connect Schwab" redirects
-  through to Schwab's real login page. Updated `src/lib/authApi.ts` to unwrap the nested
-  `authData.tokens` shape. Only remaining open item is live field-mapping verification, blocked on
-  someone completing the real OAuth consent screen once.
-- **2026-09-02 (later)**: Corrected section 0 — sign-in/sign-up/refresh-tokens actually require a
-  `signUpOrIn` field and return a nested `{ authData: { userInfo, tokens } }` shape, not the
-  guessed flat `{ accessToken, refreshToken }`. Verified both endpoints live and created a real
-  test account on preprod (`schwab-frontend-test@example.com`). Fixed CORS: added
-  `http://localhost:3000` and `https://schwab-0dte-spy-trader.netlify.app` to **preprod's**
-  `ALLOWED_ORIGINS` (not `_DEVELOPMENT` — clarified why in section 2b), added the Netlify origin to
-  **prod's** `ALLOWED_ORIGINS` too, removed stale Expo dev-port entries, live-verified with a CORS
-  preflight request. Rewrote Expo-specific instructions (deep links, `EXPO_PUBLIC_*`) for the
-  actual TanStack Start web frontend.
-- **2026-09-02**: Major update from backend — added section 0 (backend's own JWT auth, now
-  required for orders + socket), real deployed preprod/prod URLs, `returnTo` param for web-friendly
-  OAuth redirect, `GET /orders/accounts` + `GET /orders/positions` + `account-snapshot.positions`,
-  confirmed error shape, confirmed rate limit (120/60s on orders), `subscribe-underlying` fully
-  wired with ack support and SPY/QQQ/IWM/SPX/SPXW, SPX/SPXW price-feed caveat.
-- **2026-08-28**: Replaced initial draft with backend's first confirmed contract (base path
-  `/api/v1/subapps/schwab`, socket namespace `/options`, `account-snapshot` over socket,
-  `ladder-recentered` raw symbols, simplified `underlying-price`, auth via `/auth/connect` +
-  `/auth/status`).
+
+- **2026-09-02 (sign-in 500 bug fix)**: Frontend diagnosed and reported `sign-in` returning a raw
+  `500` instead of `401` for a real account (`jfc3303@gmail.com`) — ruled out their own
+  implementation first with a clean throwaway sign-up/sign-in repro against preprod. Backend
+  root-caused via the preprod DB: that account was created through this backend's separate Google
+  OAuth flow (used by other subapps), so it has `password: NULL`; `bcrypt.compare` throws on a
+  null hash, uncaught, → 500. Fixed `AuthenticationService.signIn` to check for a missing password
+  and return a clean 401 first. Deployed to both preprod and prod, live-verified on both, no
+  regression on normal sign-in.
+- **2026-09-02 (live Schwab connection + account-snapshot bug fix)**: Completed the real Schwab
+  OAuth consent flow on preprod. Found and fixed a real bug: `AccountSnapshotService` read an
+  unset `SCHWAB_ACCOUNT_HASH` config value instead of resolving the hash dynamically, so
+  `account-snapshot` never broadcast (silent `Invalid account number` failures). Fixed to resolve
+  via the same `GET /orders/accounts` lookup, cached after first success. Verified live
+  end-to-end: real account hash, real (empty) positions, real balances, `stream-status: connected:
+  true`. Tick field mappings still need an open position to verify.
+- **2026-09-02 (frontend live-test + auth contract fix)**: Frontend confirmed sign-in, CORS, and
+  the OAuth redirect all work end-to-end through the actual running app. Backend corrected section
+  0 — sign-in/sign-up/refresh-tokens require a `signUpOrIn` field and return a nested
+  `{ authData: { userInfo, tokens } }` shape (frontend's original flat-shape guess was wrong).
+  Fixed CORS: `http://localhost:3000` and the Netlify origin added to preprod's `ALLOWED_ORIGINS`
+  (not `_DEVELOPMENT` — clarified why), Netlify origin also added to prod's.
+- **2026-09-02 (Netlify)**: Frontend deployed production to Netlify
+  (`https://schwab-0dte-spy-trader.netlify.app`).
+- **2026-09-02**: Major backend update — section 0 (JWT auth required for orders + socket), real
+  deployed preprod/prod URLs, `returnTo` param for web OAuth redirect, `GET /orders/accounts` +
+  `GET /orders/positions` + `account-snapshot.positions`, confirmed error shape, confirmed rate
+  limit, `subscribe-underlying` fully wired with acks and SPY/QQQ/IWM/SPX/SPXW support.
+- **2026-08-28**: Initial confirmed contract (base path, socket namespace, `account-snapshot`
+  over socket, `ladder-recentered` raw symbols, auth via `/auth/connect` + `/auth/status`).
