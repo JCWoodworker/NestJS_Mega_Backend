@@ -8,9 +8,10 @@ whenever a new copy comes in.
 
 Status: **Fully live end-to-end on preprod and prod as of 2026-09-02.** A real Schwab account is
 connected on preprod; sign-in, CORS, orders/accounts/positions endpoints, and the `/options`
-socket (`account-snapshot` + `stream-status`) have all been verified against real data. Two real
-backend bugs were found and fixed along the way (see Changelog) — both frontend-reported, both
-now fixed and deployed to preprod + prod.
+socket (`account-snapshot` + `stream-status`) have all been verified against real data. Three real
+backend bugs were found and fixed along the way (see Changelog) — all frontend-reported/flagged,
+all now fixed and deployed to preprod + prod, including a serious one where the Schwab connection
+itself was silently dying due to a token-refresh race condition.
 
 ---
 
@@ -128,8 +129,16 @@ VITE_UNDERLYING_SYMBOL=SPY
 ## 2. Schwab OAuth connect flow (public endpoints, server-driven)
 
 - `GET /auth/status` → `{ connected: boolean, expiresAt: string | null, accountHash: string | null }`.
-  Note: `accountHash` here reflects an optional `SCHWAB_ACCOUNT_HASH` config override (usually
-  unset/`null`) — use `GET /orders/accounts` (section 3) for the real dynamically-resolved hash.
+  `accountHash` now resolves the same way `GET /orders/accounts` does (dynamic lookup, cached) —
+  **`GET /orders/accounts` is still the source of truth** if you need more than the first account,
+  but `/auth/status.accountHash` is no longer stale/always-`null` (see Changelog, "auth/status
+  accountHash + connection-death bug fix").
+- ⚠️ **If you were relying on `connected: true` alone to mean "will actually work"**: as of the fix
+  below, `connected` now reflects whether the backend still holds a live, refreshable Schwab
+  session — it flips to `false` immediately if Schwab has revoked the token (previously it could
+  say `true` for up to 7 days after the connection was actually dead server-side). If you ever see
+  `connected: false` after previously connecting, the fix is the same as a first-time connect: hit
+  `/auth/connect` again.
 - **Web flow**: `GET /api/v1/subapps/schwab/auth/connect?returnTo=<url>`. `returnTo` must be an
   origin already in the CORS allowlist (2b) or gets a 401. Flow: open
   `/auth/connect?returnTo=${origin}/schwab-connected` in a new tab, land on the frontend's own
@@ -280,10 +289,35 @@ All prior items resolved. Current state:
 1. Streamer **tick** field mappings — still open, blocked on an open option position generating
    live ticks (see section 6).
 2. Everything else (auth contract, CORS, OAuth connect, orders/accounts/positions, account
-   balances, both reported bugs) — confirmed live on preprod (and prod for the auth bug fix).
+   balances, all three reported bugs) — confirmed live on preprod (and prod for the auth bug fix).
 
 ## Changelog
 
+- **2026-09-02 (`/auth/status` `accountHash` + connection-death bug fix)**: Frontend reported
+  `accountHash: null` on `/auth/status` despite `connected: true` (worked around client-side with a
+  fallback to `GET /orders/accounts`, which is fine to keep), and separately flagged that
+  `expiresAt` looked already in the past relative to the response's own `Date` header right after
+  connecting. Backend investigated the second one and found something much bigger: the Schwab
+  connection was actually **dead** — every scheduled refresh attempt in the preprod logs was
+  failing with `invalid_grant` ("refresh token is invalid, expired or revoked"). Root cause: this
+  backend's `getValidAccessToken()` is called independently by *every* outgoing Schwab HTTP request
+  (the Bearer interceptor — including `AccountSnapshotService`'s ~4s poll) and by the raw
+  streamer's reconnect path, with no coordination between them. When two of those landed in the
+  same near-expiry window, each redeemed the *same* refresh_token concurrently — Schwab (like most
+  OAuth providers) rotates the refresh token on every use and revokes the whole token family if it
+  detects the same one reused, which is exactly what killed the connection. Compounding bug: the
+  OAuth callback handler always inserted a fresh DB row instead of reusing the existing one, so
+  three orphaned rows had piled up and the "get the current token" query could non-deterministically
+  read a stale, already-dead one instead of the latest. Fixed all three: a single-flight lock so
+  only one refresh is ever in flight backend-wide, the callback handler now reuses the existing row,
+  and `/auth/status.accountHash` now resolves the same dynamic way `GET /orders/accounts` does
+  instead of an always-unset config var. Also: a refresh that fails with `invalid_grant` now clears
+  the stored token immediately, so `connected` correctly flips to `false` right away instead of
+  lying for up to 7 days. Deployed to both preprod and prod; preprod's connection is healthy again
+  (verified a live refresh succeeded in place, `/auth/status` returns a real `accountHash`, no
+  further `invalid_grant`s in ~10+ min of log monitoring spanning a refresh cycle). **No frontend
+  action needed** — your `GET /orders/accounts` fallback is harmless to keep, and `connected: false`
+  going forward is now trustworthy enough to just show a "reconnect" prompt on.
 - **2026-09-02 (sign-in 500 bug fix)**: Frontend diagnosed and reported `sign-in` returning a raw
   `500` instead of `401` for a real account (`jfc3303@gmail.com`) — ruled out their own
   implementation first with a clean throwaway sign-up/sign-in repro against preprod. Backend
