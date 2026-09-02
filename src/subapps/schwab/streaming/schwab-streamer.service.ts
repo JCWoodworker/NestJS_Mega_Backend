@@ -144,13 +144,31 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private openSocket(accessToken: string): void {
+    this.logger.log(
+      `Opening Schwab streamer socket to ${this.streamerInfo.streamerSocketUrl}`,
+    );
     this.socket = new WebSocket(this.streamerInfo.streamerSocketUrl);
 
-    this.socket.on('open', () => this.sendLoginRequest(accessToken));
+    this.socket.on('open', () => {
+      this.logger.log('Schwab streamer socket opened, sending LOGIN');
+      this.sendLoginRequest(accessToken);
+    });
     this.socket.on('message', (raw) => this.handleMessage(raw.toString()));
-    this.socket.on('close', () => this.handleSocketClosed());
+    this.socket.on('close', (code, reasonBuf) => {
+      this.logger.warn(
+        `Schwab streamer socket closed: code=${code} reason="${reasonBuf?.toString()}" wasLoggedIn=${
+          this.loggedIn
+        } msSinceLastFrame=${
+          this.lastFrameAt ? Date.now() - this.lastFrameAt : 'n/a'
+        }`,
+      );
+      this.handleSocketClosed();
+    });
     this.socket.on('error', (err) => {
-      this.logger.error(`Schwab streamer socket error: ${err.message}`);
+      this.logger.error(
+        `Schwab streamer socket error: ${err.message}`,
+        err.stack,
+      );
     });
 
     this.startHeartbeatWatchdog();
@@ -184,12 +202,39 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
     try {
       payload = JSON.parse(raw);
     } catch {
+      this.logger.warn(`Received non-JSON frame from Schwab streamer: ${raw}`);
       return;
     }
 
     for (const response of payload.response ?? []) {
-      if (response.command === 'LOGIN' && response.content?.code === 0) {
-        this.onLoggedIn();
+      if (response.command === 'LOGIN') {
+        if (response.content?.code === 0) {
+          this.onLoggedIn();
+        } else {
+          this.logger.error(
+            `Schwab streamer LOGIN failed: ${JSON.stringify(response.content)}`,
+          );
+        }
+      } else if (response.content?.code && response.content.code !== 0) {
+        // Any non-zero code on a SUBS/UNSUBS response indicates Schwab
+        // rejected that request - logging this is the main way to catch a
+        // malformed subscription payload silently killing the connection.
+        this.logger.error(
+          `Schwab streamer ${response.service}/${
+            response.command
+          } error: ${JSON.stringify(response.content)}`,
+        );
+      }
+    }
+
+    // ADMIN notifications (e.g. a server-initiated logoff/kick) show up here,
+    // not in `response` - logging these is critical to diagnosing an
+    // unexpected disconnect that isn't a plain socket "close".
+    for (const notification of payload.notify ?? []) {
+      if (notification.heartbeat === undefined) {
+        this.logger.warn(
+          `Schwab streamer notify: ${JSON.stringify(notification)}`,
+        );
       }
     }
 
@@ -204,6 +249,7 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
 
   private async onLoggedIn(): Promise<void> {
     this.loggedIn = true;
+    this.logger.log('Schwab streamer LOGIN succeeded');
     this.optionsGateway.emitStreamStatus({
       connected: true,
       lastFrameAt: this.lastFrameAt,
@@ -461,8 +507,20 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
     // style, so it's disabled just for this line.
     // eslint-disable-next-line import/namespace
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      this.logger.warn(
+        `Dropped ${request.service}/${
+          request.command
+        } request: socket not open (readyState=${
+          this.socket?.readyState ?? 'null'
+        })`,
+      );
       return;
     }
+    this.logger.debug(
+      `-> ${request.service}/${request.command} ${JSON.stringify(
+        request.parameters ?? {},
+      )}`,
+    );
     this.socket.send(JSON.stringify({ requests: [request] }));
   }
 
