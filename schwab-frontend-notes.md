@@ -6,12 +6,16 @@ package/schema between the two repos, so **both sides keep this file in sync man
 copy-pasting sections back and forth as the contract evolves. Check the Changelog at the bottom
 whenever a new copy comes in.
 
-Status: **Fully live end-to-end on preprod and prod as of 2026-09-02.** A real Schwab account is
-connected on preprod; sign-in, CORS, orders/accounts/positions endpoints, and the `/options`
-socket (`account-snapshot` + `stream-status`) have all been verified against real data. Three real
-backend bugs were found and fixed along the way (see Changelog) — all frontend-reported/flagged,
-all now fixed and deployed to preprod + prod, including a serious one where the Schwab connection
-itself was silently dying due to a token-refresh race condition.
+Status: **Fully live end-to-end on preprod and prod as of 2026-09-02, including real-time
+streaming.** A real Schwab account is connected on preprod; sign-in, CORS,
+orders/accounts/positions endpoints, and the `/options` socket (`option-ticks`,
+`underlying-price`, `ladder-recentered`, `account-snapshot`, `stream-status`) have all been
+live-verified with real, continuously-updating market data. Four real backend bugs were found and
+fixed along the way (see Changelog) — all frontend-reported/flagged, all now fixed and deployed to
+preprod + prod, including two serious ones: a token-refresh race condition that was silently
+killing the Schwab connection, and a malformed streamer request that was causing a rapid
+connect→login→kicked crash loop (this is what caused the `stream-status` flapping / zero
+ladder-recentered/option-ticks bug report below).
 
 ---
 
@@ -226,9 +230,14 @@ io(`${VITE_SOCKET_URL}${VITE_SOCKET_NAMESPACE}`, {
     // bid size, ask size, volume, OI, delta, gamma
   }
   ```
-- **`ladder-recentered`** — `{ centerStrike: number, symbols: string[] }`.
+- **`ladder-recentered`** — `{ centerStrike: number, symbols: string[] }`. **Live-verified** with
+  real ticking option symbols (see the streaming bug fix in the Changelog). Also now sent
+  immediately on connect if the ladder is already established (see "late-joiner replay" below) —
+  previously a client connecting after the ladder had already stabilized got nothing until the
+  next actual re-center, which could be a long wait.
 - **`stream-status`** — `{ connected: boolean, lastFrameAt: number | null }`. **Live-verified**:
-  `connected: true` observed against the real connected account.
+  `connected: true`, stable, no flapping (see Changelog for the bug that used to cause constant
+  `true`→`false` flapping). Also now sent immediately on connect (see "late-joiner replay" below).
 - **`account-snapshot`** — every ~4s:
   ```ts
   {
@@ -241,6 +250,12 @@ io(`${VITE_SOCKET_URL}${VITE_SOCKET_NAMESPACE}`, {
   ```
   **Live-verified** — see section 6 for the real observed payload and a bug that was blocking
   this entirely until fixed.
+- **Late-joiner replay (new, 2026-09-02)**: `stream-status` and (if already established)
+  `ladder-recentered` are now sent directly to a socket immediately on successful connection,
+  reflecting current state rather than waiting for the next change. Relevant any time a client
+  connects/reconnects after the streamer has already stabilized (page refresh, network blip, tab
+  reopen, etc.) — you should now always get both without needing to wait or re-trigger
+  `subscribe-underlying`.
 
 ### Client → server events
 - **`subscribe-underlying`** — `{ symbol: 'SPY' | 'QQQ' | 'IWM' | 'SPX' | 'SPXW' }`. Shared
@@ -289,10 +304,40 @@ All prior items resolved. Current state:
 1. Streamer **tick** field mappings — still open, blocked on an open option position generating
    live ticks (see section 6).
 2. Everything else (auth contract, CORS, OAuth connect, orders/accounts/positions, account
-   balances, all three reported bugs) — confirmed live on preprod (and prod for the auth bug fix).
+   balances, all four reported bugs including the streaming crash loop) — confirmed live on
+   preprod and prod.
 
 ## Changelog
 
+- **2026-09-02 (streaming crash-loop bug fix — the `stream-status` flapping / zero ticks report)**:
+  Frontend reported (with raw socket.io frame evidence) `stream-status` flapping `true`→`false`
+  within ms on a tight ~2.6s loop, zero `ladder-recentered`/`option-ticks`/`underlying-price` over
+  a 33s window despite a successful `subscribe-underlying` ack, and `account-snapshot` seemingly
+  stuck on stale data. Root cause, found via new close-code/response-error logging added to the raw
+  Schwab streamer connection: **every subscription request (`SUBS`/`UNSUBS`) was missing the
+  `SchwabClientCustomerId`/`SchwabClientCorrelId` fields Schwab requires on every request, not just
+  `LOGIN`.** `sendLoginRequest` built its own request object with those fields; every other command
+  (the equity quote and option ladder subscriptions) went through a shared `sendRequest()` helper
+  that never attached them. Schwab responded to the malformed `SUBS` with
+  `{"code":21,"msg":"Bad command formatting"}` and then closed the socket outright — so the
+  sequence was always connect → login succeeds → first `SUBS` gets rejected → connection killed →
+  reconnect after 2s → repeat forever. That's exactly the flapping loop and exactly why no ladder
+  or ticks ever arrived (the connection never survived past the first subscription). Fixed by
+  attaching both fields to every outgoing request inside `sendRequest()` itself, so no future
+  caller can hit the same bug. **Live-verified after the fix**: connection has held stable with
+  zero reconnects/errors, and a direct socket capture against preprod over 30s showed continuous
+  real data — 30 `option-ticks` batches with live bid/ask/last, 23 `underlying-price` ticks (SPY
+  moving tick-by-tick), and 7 `account-snapshot` broadcasts. Also investigated the "stale
+  `account-snapshot`" half of the report: confirmed via temporary logging that the balance poll was
+  never cached/stale — it's genuinely live-polling Schwab every cycle. There's still only one
+  Schwab account linked (`GET /orders/accounts` returns exactly one), so the ~$4.99 balance you're
+  seeing is that same account's real current balance, not a different "old test account" bleeding
+  through — there was never a second account connected. Additionally fixed a related gap while in
+  there: a client connecting after the streamer had already stabilized got neither
+  `stream-status` nor `ladder-recentered` until the next actual change (which could look identical
+  to this same bug for anyone reconnecting later) — `OptionsGateway` now replays both immediately
+  on connect. Deployed and live-verified on preprod, merged to prod too (prod has no account
+  connected yet, but the fix is in place for whenever it does). **No frontend action needed.**
 - **2026-09-02 (`/auth/status` `accountHash` + connection-death bug fix)**: Frontend reported
   `accountHash: null` on `/auth/status` despite `connected: true` (worked around client-side with a
   fallback to `GET /orders/accounts`, which is fine to keep), and separately flagged that
