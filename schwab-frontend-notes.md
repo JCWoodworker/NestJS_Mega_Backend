@@ -309,6 +309,23 @@ All prior items resolved. Current state:
 
 ## Changelog
 
+- **2026-09-02 (after-hours behavior + 0DTE day-rollover fix)**: After the streaming fix below,
+  frontend asked why no option prices were showing at ~6:30pm ET. Confirmed live: this is expected,
+  not a bug — equity **options** have no after-hours session (unlike SPY/QQQ/IWM itself, which
+  keeps ticking `underlying-price` for a while after the 4pm close), so no market maker quotes
+  those contracts again until the next session opens. `stream-status` stayed `connected: true` the
+  whole time; it's genuinely just a quiet market. This surfaced a related latent bug though: the
+  ladder only rebuilt its 16-strike window when price drifted a full strike, with no awareness of
+  the calendar day changing — since today's 0DTE contracts expire at today's close, if price didn't
+  happen to drift a full point overnight, the backend would've stayed subscribed to yesterday's
+  now-dead symbols indefinitely (a market open, `connected: true`, but permanently-expired-contract
+  version of the exact same "no data" symptom). Fixed: the streamer now tracks which expiration
+  date the current window was built for and forces a full rebuild the moment the date rolls over —
+  checked reactively on the next equity tick and proactively every 5s using the last known price, so
+  it doesn't depend on price movement or on equity ticks continuing to arrive overnight. Deployed to
+  preprod + prod. **No frontend action needed** — real ticks should just start flowing again at the
+  next market open (9:30am ET) against the correct new expiration date; worth a quick sanity check
+  then but nothing to build for.
 - **2026-09-02 (streaming crash-loop bug fix — the `stream-status` flapping / zero ticks report)**:
   Frontend reported (with raw socket.io frame evidence) `stream-status` flapping `true`→`false`
   within ms on a tight ~2.6s loop, zero `ladder-recentered`/`option-ticks`/`underlying-price` over
