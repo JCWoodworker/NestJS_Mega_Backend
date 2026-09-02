@@ -26,7 +26,8 @@ import { MycuttingboardModule } from '@subapps/mycuttingboard/mycuttingboard.mod
 import { MywoodappModule } from '@subapps/mywoodapp/mywoodapp.module';
 import { OnlyBizlinksModule } from '@subapps/onlybizlinks/onlybizlinks.module';
 import { RilwModule } from '@subapps/rilw/rilw.module';
-import { SchwabModule } from '@subapps/schwab/schwab.module';
+import { SchwabAuthModule } from '@subapps/schwab/auth/schwab-auth.module';
+import { OrdersModule } from '@subapps/schwab/orders/orders.module';
 import { SubappsModule } from '@subapps/subapps.module';
 import { WoodpricingModule } from '@subapps/woodpricing/woodpricing.module';
 
@@ -108,9 +109,20 @@ import { AppService } from './app.service';
             path: 'woodpricing',
             module: WoodpricingModule,
           },
+          // SchwabModule itself declares no controllers directly - it only
+          // aggregates SchwabAuthModule/OrdersModule/SchwabStreamingModule.
+          // RouterModule's path-prefixing metadata is registered per exact
+          // module class, so we must point it at the modules that actually
+          // own the controllers, or their routes fall back to the bare
+          // global prefix (this bit us once already - see the `schwab`
+          // deploy history).
           {
             path: 'schwab',
-            module: SchwabModule,
+            module: SchwabAuthModule,
+          },
+          {
+            path: 'schwab',
+            module: OrdersModule,
           },
         ],
       },
