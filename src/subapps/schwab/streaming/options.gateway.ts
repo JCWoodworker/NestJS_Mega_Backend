@@ -92,6 +92,13 @@ export class OptionsGateway implements OnGatewayConnection {
     try {
       await this.jwtService.verifyAsync(token, this.jwtConfiguration);
       this.logger.log(`Client connected: ${client.id}`);
+      // Replay current state so a client joining after the ladder/streamer
+      // already stabilized isn't stuck waiting for the next change event.
+      const snapshot = this.streamerService.getSnapshotForNewClient();
+      client.emit('stream-status', snapshot.streamStatus);
+      if (snapshot.ladder) {
+        client.emit('ladder-recentered', snapshot.ladder);
+      }
     } catch {
       this.logger.warn(`Rejecting socket ${client.id}: invalid/expired token`);
       client.disconnect(true);

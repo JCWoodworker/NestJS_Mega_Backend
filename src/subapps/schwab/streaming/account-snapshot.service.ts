@@ -76,23 +76,8 @@ export class AccountSnapshotService implements OnModuleInit, OnModuleDestroy {
       }),
     );
 
-    const balances = mapAccountBalances(response.data);
-
-    // TEMPORARY: confirms whether the $4.99 figures the frontend keeps
-    // seeing are actually what Schwab is returning live right now vs.
-    // something cached/stale on our end. Only logs the same 3 fields
-    // already broadcast unencrypted to every connected client on every poll
-    // (see emitAccountSnapshot) - no new data exposure. Remove once the
-    // "stale balance" bug report is resolved.
-    this.logger.warn(
-      `[TEMP DEBUG] account-snapshot balances for ${accountHash.slice(
-        0,
-        8,
-      )}...: ${JSON.stringify(balances)}`,
-    );
-
     return {
-      ...balances,
+      ...mapAccountBalances(response.data),
       positions: mapAccountPositions(response.data),
     };
   }

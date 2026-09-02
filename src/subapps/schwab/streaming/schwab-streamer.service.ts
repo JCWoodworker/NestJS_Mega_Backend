@@ -99,6 +99,29 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
     private readonly config: ConfigType<typeof schwabConfig>,
   ) {}
 
+  /**
+   * Snapshot of current streamer state for a client that just connected -
+   * without this, a client joining after the ladder already stabilized
+   * would see no `ladder-recentered`/`stream-status` until the next actual
+   * change, which could be a long wait (or look identical to the streamer
+   * being broken, as in the original bug report).
+   */
+  getSnapshotForNewClient(): {
+    streamStatus: { connected: boolean; lastFrameAt: number | null };
+    ladder: { centerStrike: number; symbols: string[] } | null;
+  } {
+    return {
+      streamStatus: { connected: this.loggedIn, lastFrameAt: this.lastFrameAt },
+      ladder:
+        this.centerStrike !== null
+          ? {
+              centerStrike: this.centerStrike,
+              symbols: [...this.currentWindowSymbols],
+            }
+          : null,
+    };
+  }
+
   onModuleInit(): void {
     this.flushTimer = setInterval(
       () => this.flushBufferedUpdates(),
@@ -140,14 +163,6 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
     if (!streamerInfo) {
       throw new Error('Schwab userPreference response missing streamerInfo');
     }
-    // TEMPORARY: confirm the exact keys/values Schwab's userPreference
-    // endpoint actually returns, in case our StreamerInfo interface's field
-    // names don't match Schwab's real response shape. No token/secret data
-    // in this payload. Remove once the SUBS "Bad command formatting" bug is
-    // resolved.
-    this.logger.debug(
-      `[TEMP DEBUG] streamerInfo raw: ${JSON.stringify(streamerInfo)}`,
-    );
     return streamerInfo;
   }
 
@@ -534,14 +549,7 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
       SchwabClientCorrelId: this.streamerInfo?.schwabClientCorrelId,
     };
 
-    // TEMPORARY: log the full outgoing frame (Authorization redacted) to
-    // pin down exactly why Schwab is rejecting SUBS with "Bad command
-    // formatting" - remove once resolved.
-    this.logger.debug(
-      `-> ${JSON.stringify(fullRequest, (key, value) =>
-        key === 'Authorization' ? '<redacted>' : value,
-      )}`,
-    );
+    this.logger.debug(`-> ${request.service}/${request.command}`);
     this.socket.send(JSON.stringify({ requests: [fullRequest] }));
   }
 
