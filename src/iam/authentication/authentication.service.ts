@@ -69,6 +69,15 @@ export class AuthenticationService {
     if (!user) {
       throw new UnauthorizedException('User does not exists');
     }
+    // Accounts created via Google OAuth (see GoogleAuthenticationService)
+    // never get a `password` set, so bcrypt.compare would throw on a null
+    // hash here instead of failing cleanly. Treat that as "wrong
+    // credentials" rather than letting an unhandled exception 500.
+    if (!user.password) {
+      throw new UnauthorizedException(
+        'This account has no password set (likely signed up via Google) — sign in with Google instead',
+      );
+    }
     const isEqual = await this.hashingService.compare(
       signInDto.password,
       user.password,
