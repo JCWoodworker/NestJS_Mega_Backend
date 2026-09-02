@@ -43,6 +43,17 @@ export interface AccountSnapshotPayload {
   asOf: number;
 }
 
+export interface ChartCandlePayload {
+  symbol: string;
+  assetType: 'EQUITY' | 'OPTION';
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  chartTime: number;
+}
+
 const allowedOrigins =
   process.env.ENVIRONMENT === 'development'
     ? process.env.ALLOWED_ORIGINS_DEVELOPMENT?.split(',').map((o) =>
@@ -135,6 +146,22 @@ export class OptionsGateway implements OnGatewayConnection {
     return this.streamerService.switchUnderlying(body?.symbol);
   }
 
+  /**
+   * Starts/swaps/stops the single tracked-option premium chart stream
+   * (frontend contract section 9b) - shared across all connected clients,
+   * last request wins, same pattern as `subscribe-underlying`. Send
+   * `symbol: null` to unsubscribe without affecting the underlying's
+   * `CHART_EQUITY` stream (started automatically alongside
+   * `subscribe-underlying`, not via this event).
+   */
+  @SubscribeMessage('subscribe-option-chart')
+  async handleSubscribeOptionChart(
+    @MessageBody() body: { symbol: string | null },
+  ): Promise<SwitchUnderlyingResult> {
+    this.logger.log(`Client requested option chart: ${body?.symbol}`);
+    return this.streamerService.subscribeOptionChart(body?.symbol ?? null);
+  }
+
   emitOptionTicks(ticks: Array<Record<string, unknown>>): void {
     this.server?.emit('option-ticks', ticks);
   }
@@ -153,5 +180,9 @@ export class OptionsGateway implements OnGatewayConnection {
 
   emitAccountSnapshot(payload: AccountSnapshotPayload): void {
     this.server?.emit('account-snapshot', payload);
+  }
+
+  emitChartCandle(payload: ChartCandlePayload): void {
+    this.server?.emit('chart-candle', payload);
   }
 }

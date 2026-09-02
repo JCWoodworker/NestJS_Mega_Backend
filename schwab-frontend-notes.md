@@ -17,6 +17,16 @@ killing the Schwab connection, and a malformed streamer request that was causing
 connect→login→kicked crash loop (this is what caused the `stream-status` flapping / zero
 ladder-recentered/option-ticks bug report below).
 
+⚠️ **If you're pasting from an older frontend copy of this file that still shows open item 8
+(streamer flapping / no ladder / stale `account-snapshot`) as unresolved: that's stale.** It was
+root-caused and fixed the same day it was reported — see the "streaming crash-loop bug fix"
+changelog entry below and the Status line above. Nothing outstanding on that front.
+
+**New (2026-09-02): the chart backfill + live candle contract (frontend's section 9) is now
+implemented** — `GET .../market-data/price-history`, `subscribe-option-chart`, and `chart-candle`
+are all live on preprod + prod as of this update. See section 9 below for the full contract as
+implemented, including the answer to the 9d open question.
+
 ---
 
 ## ✅ Resolved: this is a web app (TanStack Start), not Expo
@@ -292,6 +302,120 @@ Fixed to resolve + cache the real hash; re-verified live afterward.
 unverified, needs an actual open option position generating live ticks. Nothing to do on either
 side until that happens; any mismatch found then is a backend mapping bug.
 
+## 9. Chart backfill + live candle streaming — **implemented 2026-09-02**
+
+Implements the frontend's section 9 ask (chart backfill REST + live `chart-candle` streaming) in
+full — 9a through 9c below, live on preprod + prod. Section 9's original priority note said this
+was P1/parallelizable and OK to build without waiting on item 8 (streamer flapping) — moot now
+since item 8 was already fixed same-day it was reported.
+
+### 9a. `GET /api/v1/subapps/schwab/market-data/price-history`
+
+Implemented exactly as specced: thin authenticated proxy to Schwab's
+`GET /marketdata/v1/pricehistory`, pass-through query params
+(`symbol`, `periodType`, `period`, `frequencyType`, `frequency`, `startDate`, `endDate`), requires
+`Authorization: Bearer <accessToken>` (same guard as `/orders/*`), and a normalized response —
+**not** Schwab's raw envelope:
+
+```ts
+{
+  symbol: string
+  candles: Array<{ datetime: number; open: number; high: number; low: number; close: number; volume: number }>
+}
+```
+
+Errors use the same shape as section 3 (`{ statusCode, message, error }`). Rate limit override:
+60 req/60s per IP (global default is 10/60s — a trader flipping timeframes can easily exceed
+that).
+
+**Not yet live-tested against real Schwab market data** (no RTH window hit yet since this
+landed) — the code path mirrors `OrdersService`'s already-verified `HttpService` usage (same
+Bearer interceptor, same base URL, same error handling), so it's expected to work, but treat the
+first real `200` + non-empty `candles` response as the actual confirmation, same spirit as the
+still-open tick field-map verification in section 6.
+
+### 9b. `subscribe-option-chart` (client → server) + piggybacked `CHART_EQUITY`
+
+Implemented as specced on the `/options` namespace:
+
+```ts
+emit('subscribe-option-chart', { symbol: string | null }, (ack) => ...)
+// ack: { status: 'ok' | 'error', symbol: string, message?: string }
+```
+
+Shared backend-wide subscription (last request wins, mirrors `subscribe-underlying`). `symbol:
+null` unsubscribes without touching the underlying's own chart stream — ack's `symbol` comes back
+as `''` in that case. Independent of `subscribe-underlying`/underlying switches: the tracked
+option chart symbol is not cleared when the underlying changes.
+
+**`CHART_EQUITY` piggyback**: implemented as specced — whenever the backend starts (or swaps) the
+`LEVELONE_EQUITIES` quote subscription for the current underlying (on initial connect and on
+every `subscribe-underlying` switch), it now also starts/swaps a Schwab `CHART_EQUITY`
+subscription for that same symbol. No separate client event needed, exactly as asked.
+
+One implementation detail worth knowing: if the backend's socket to Schwab has to reconnect (rare
+now that item 8 is fixed, but still possible on a network blip or dyno restart), both the
+underlying's `CHART_EQUITY` subscription *and* any active tracked-option `CHART_OPTIONS`
+subscription are automatically re-armed on the new login — you should not need to re-emit
+`subscribe-option-chart` after a transient backend-side reconnect. (This does not cover the
+frontend's own socket reconnecting — if your socket itself drops and reconnects, re-emit
+`subscribe-option-chart` for whatever symbol you're tracking, same as you'd re-emit
+`subscribe-underlying`.)
+
+### 9c. `chart-candle` (server → client)
+
+Implemented exactly as specced:
+
+```ts
+{
+  symbol: string
+  assetType: 'EQUITY' | 'OPTION'
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+  chartTime: number // epoch ms
+}
+```
+
+Emitted directly (not batched/throttled like `option-ticks` — 1-minute candles are low-frequency
+enough not to need it) as soon as a `CHART_EQUITY`/`CHART_OPTIONS` frame arrives from Schwab.
+Field maps used, matching what the frontend already had documented:
+- `CHART_EQUITY`: `0`=key, `1`=open, `2`=high, `3`=low, `4`=close, `5`=volume, `6`=sequence,
+  `7`=chartTime, `8`=chartDay.
+- `CHART_OPTIONS`: `0`=key, `1`=chartTime, `2`=open, `3`=high, `4`=low, `5`=close, `6`=volume.
+
+**Not yet live-verified with real Schwab candle frames** — same caveat as 9a/section 6. The field
+indices above are per Schwab's public Streamer Guide, not yet cross-checked against an actual
+`CHART_EQUITY`/`CHART_OPTIONS` frame from the live connection. Worth confirming once the market's
+open and a client has subscribed.
+
+### 9d. Open question — answered (partially)
+
+*"Does Schwab's `/pricehistory` reliably return same-day minute candles for a freshly-listed 0DTE
+option contract from market open?"* — **not yet answered**, needs a live check during market
+hours against a real freshly-listed 0DTE contract, which hasn't happened yet since 9a just landed
+after close. Flagging back as still open rather than guessing — will confirm at the next market
+open and update this section. If it turns out Schwab doesn't have same-day intraday history for a
+same-day-listed contract (plausible — the contract didn't exist yet at Schwab's data-vendor level
+until today), the practical workaround is simple: an OSI symbol representing a contract that
+didn't exist before today has no "before" to backfill anyway, so the frontend chart for a newly
+armed 0DTE contract should just start empty and fill in live via `chart-candle` rather than
+expecting backfill to produce anything — worth building for that as the safe default regardless
+of how the live check turns out.
+
+### 9e. Acceptance checks — status
+
+All four implemented and ready for the frontend to verify against preprod:
+1. `price-history` 200 + non-empty candles during RTH — **not yet checked live** (see 9a).
+2. `chart-candle` (`EQUITY`) arriving within ~2min of a new bar after `subscribe-underlying` —
+   **not yet checked live** (see 9c).
+3. `chart-candle` (`OPTION`) arriving after `subscribe-option-chart` — **not yet checked live**,
+   needs a liquid 0DTE contract during market hours.
+4. `subscribe-option-chart({ symbol: null })` stops option candles without killing the equity
+   stream — implemented per 9b (independent SUBS/UNSUBS calls per symbol), not yet live-verified.
+
 ## 7. Git remote / CI, sign-up UI
 Both resolved on the frontend side — GitHub repo + Netlify push-to-deploy wired up, and a Sign In
 / Create Account toggle shipped on `/sign-in`. No backend action needed.
@@ -300,15 +424,32 @@ Both resolved on the frontend side — GitHub repo + Netlify push-to-deploy wire
 
 ## Open items — status
 
-All prior items resolved. Current state:
-1. Streamer **tick** field mappings — still open, blocked on an open option position generating
-   live ticks (see section 6).
-2. Everything else (auth contract, CORS, OAuth connect, orders/accounts/positions, account
+Current state:
+1. Streamer **tick** field mappings (`option-ticks`) — still open, blocked on an open option
+   position generating live ticks (see section 6).
+2. **New**: section 9 (chart backfill + live candles) is implemented and deployed, but not yet
+   live-verified against real Schwab data/frames (9a's `price-history` response, 9c's
+   `CHART_EQUITY`/`CHART_OPTIONS` field indices, 9d's same-day 0DTE history question) — same "code
+   looks right, needs a live check" status as item 1. Will update this file once verified.
+3. Everything else (auth contract, CORS, OAuth connect, orders/accounts/positions, account
    balances, all four reported bugs including the streaming crash loop) — confirmed live on
    preprod and prod.
 
 ## Changelog
 
+- **2026-09-02 (chart backfill + live candle streaming — section 9 implemented)**: Built the full
+  chart contract the frontend asked for: `GET .../market-data/price-history` (thin authenticated
+  proxy to Schwab's `/pricehistory`, normalized response, 60/60s rate limit), `subscribe-option-chart`
+  client→server event (shared tracked-option `CHART_OPTIONS` subscription, last-request-wins,
+  independent of the underlying), automatic `CHART_EQUITY` subscription piggybacked onto every
+  `subscribe-underlying` call (no new client event needed for the underlying's own chart), and
+  `chart-candle` server→client broadcasts for both asset types using Schwab's documented field
+  maps. Also hardened the option-chart subscription to survive a backend-side streamer reconnect
+  (re-armed automatically on re-login, matching how the equity quote/chart subscriptions already
+  behaved). Deployed to preprod + prod; local module-wiring verified (no DI/circular-dependency
+  issues, learned the hard way from the auth/http module cycle earlier). **Not yet live-verified
+  against real Schwab candle data** — see section 9 for exactly what's confirmed-by-code vs.
+  confirmed-live, and 9d for the still-open same-day-0DTE-history question.
 - **2026-09-02 (after-hours behavior + 0DTE day-rollover fix)**: After the streaming fix below,
   frontend asked why no option prices were showing at ~6:30pm ET. Confirmed live: this is expected,
   not a bug — equity **options** have no after-hours session (unlike SPY/QQQ/IWM itself, which

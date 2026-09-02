@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 
 import { SchwabAuthModule } from './auth/schwab-auth.module';
 import schwabConfig from './config/schwab.config';
+import { MarketDataModule } from './market-data/market-data.module';
 import { OrdersModule } from './orders/orders.module';
 import { SchwabStreamingModule } from './streaming/schwab-streaming.module';
 
@@ -12,6 +13,7 @@ import { SchwabStreamingModule } from './streaming/schwab-streaming.module';
     SchwabAuthModule,
     SchwabStreamingModule,
     OrdersModule,
+    MarketDataModule,
   ],
 })
 export class SchwabModule {}

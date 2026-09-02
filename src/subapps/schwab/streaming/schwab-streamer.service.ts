@@ -15,6 +15,12 @@ import { SchwabAuthService } from '@schwab/auth/schwab-auth.service';
 import schwabConfig from '@schwab/config/schwab.config';
 
 import {
+  CHART_EQUITY_FIELD_KEYS,
+  CHART_EQUITY_FIELDS,
+  CHART_OPTIONS_FIELD_KEYS,
+  CHART_OPTIONS_FIELDS,
+} from './chart-fields';
+import {
   LEVEL_ONE_EQUITY_FIELD_KEYS,
   LEVEL_ONE_EQUITY_FIELDS,
   LEVEL_ONE_OPTIONS_FIELD_KEYS,
@@ -104,6 +110,9 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
   private currentWindowSymbols = new Set<string>();
   private pendingOptionTicks: Array<Record<string, unknown>> = [];
   private pendingUnderlyingPrice: number | null = null;
+  /** OSI symbol of the single tracked-option premium chart (`subscribe-
+   * option-chart`, section 9b) - `null` when nothing is subscribed. */
+  private optionChartSymbol: string | null = null;
 
   constructor(
     private readonly httpService: HttpService,
@@ -277,6 +286,10 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
         this.handleEquityTicks(dataItem.content ?? []);
       } else if (dataItem.service === 'LEVELONE_OPTIONS') {
         this.pendingOptionTicks.push(...(dataItem.content ?? []));
+      } else if (dataItem.service === 'CHART_EQUITY') {
+        this.handleChartEquityCandles(dataItem.content ?? []);
+      } else if (dataItem.service === 'CHART_OPTIONS') {
+        this.handleChartOptionCandles(dataItem.content ?? []);
       }
     }
   }
@@ -298,6 +311,33 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
         fields: LEVEL_ONE_EQUITY_FIELD_KEYS,
       },
     });
+    // Piggybacked per section 9b: the underlying's 1m candle stream starts
+    // automatically alongside its quote stream, no separate client event.
+    this.sendRequest({
+      service: 'CHART_EQUITY',
+      command: 'SUBS',
+      requestid: this.nextRequestId(),
+      parameters: {
+        keys: this.underlyingSymbol,
+        fields: CHART_EQUITY_FIELD_KEYS,
+      },
+    });
+
+    // Schwab subscriptions don't survive a socket reconnect - re-arm the
+    // tracked option chart (if any) here rather than relying on the client
+    // to re-send `subscribe-option-chart`, mirroring how LEVELONE_EQUITIES/
+    // CHART_EQUITY above are unconditionally re-subscribed on every login.
+    if (this.optionChartSymbol) {
+      this.sendRequest({
+        service: 'CHART_OPTIONS',
+        command: 'SUBS',
+        requestid: this.nextRequestId(),
+        parameters: {
+          keys: this.optionChartSymbol,
+          fields: CHART_OPTIONS_FIELD_KEYS,
+        },
+      });
+    }
 
     try {
       const initialPrice = await this.fetchInitialUnderlyingPrice();
@@ -356,6 +396,12 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
       requestid: this.nextRequestId(),
       parameters: { keys: this.underlyingSymbol },
     });
+    this.sendRequest({
+      service: 'CHART_EQUITY',
+      command: 'UNSUBS',
+      requestid: this.nextRequestId(),
+      parameters: { keys: this.underlyingSymbol },
+    });
     if (this.currentWindowSymbols.size > 0) {
       this.sendRequest({
         service: 'LEVELONE_OPTIONS',
@@ -381,6 +427,15 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
         fields: LEVEL_ONE_EQUITY_FIELD_KEYS,
       },
     });
+    this.sendRequest({
+      service: 'CHART_EQUITY',
+      command: 'SUBS',
+      requestid: this.nextRequestId(),
+      parameters: {
+        keys: this.underlyingSymbol,
+        fields: CHART_EQUITY_FIELD_KEYS,
+      },
+    });
 
     try {
       const initialPrice = await this.fetchInitialUnderlyingPrice();
@@ -400,6 +455,87 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
           ? 'Index underlying price feed via LEVELONE_EQUITIES is unverified against live Schwab data - confirm before trading real money'
           : undefined,
     };
+  }
+
+  /**
+   * Starts/swaps/stops the single tracked-option premium chart stream
+   * (`subscribe-option-chart`, section 9b) - shared across all connected
+   * clients, last request wins, mirroring `switchUnderlying`'s pattern.
+   * Independent of the underlying's own `CHART_EQUITY` stream, which is
+   * started/swapped automatically alongside `subscribe-underlying` and
+   * isn't affected by this call.
+   */
+  async subscribeOptionChart(
+    requestedSymbol: string | null,
+  ): Promise<SwitchUnderlyingResult> {
+    const symbol = requestedSymbol?.toUpperCase()?.trim() || null;
+
+    if (symbol === this.optionChartSymbol) {
+      return { status: 'ok', symbol: symbol ?? '' };
+    }
+
+    if (!this.loggedIn) {
+      return {
+        status: 'error',
+        symbol: symbol ?? '',
+        message: 'Streamer not connected to Schwab yet',
+      };
+    }
+
+    if (this.optionChartSymbol) {
+      this.sendRequest({
+        service: 'CHART_OPTIONS',
+        command: 'UNSUBS',
+        requestid: this.nextRequestId(),
+        parameters: { keys: this.optionChartSymbol },
+      });
+    }
+
+    if (symbol) {
+      this.sendRequest({
+        service: 'CHART_OPTIONS',
+        command: 'SUBS',
+        requestid: this.nextRequestId(),
+        parameters: { keys: symbol, fields: CHART_OPTIONS_FIELD_KEYS },
+      });
+    }
+
+    this.optionChartSymbol = symbol;
+    return { status: 'ok', symbol: symbol ?? '' };
+  }
+
+  private handleChartEquityCandles(candles: Array<Record<string, any>>): void {
+    for (const candle of candles) {
+      const chartTime = candle[CHART_EQUITY_FIELDS.CHART_TIME];
+      if (typeof chartTime !== 'number') continue;
+      this.optionsGateway.emitChartCandle({
+        symbol: candle[CHART_EQUITY_FIELDS.KEY] ?? this.underlyingSymbol,
+        assetType: 'EQUITY',
+        open: candle[CHART_EQUITY_FIELDS.OPEN],
+        high: candle[CHART_EQUITY_FIELDS.HIGH],
+        low: candle[CHART_EQUITY_FIELDS.LOW],
+        close: candle[CHART_EQUITY_FIELDS.CLOSE],
+        volume: candle[CHART_EQUITY_FIELDS.VOLUME],
+        chartTime,
+      });
+    }
+  }
+
+  private handleChartOptionCandles(candles: Array<Record<string, any>>): void {
+    for (const candle of candles) {
+      const chartTime = candle[CHART_OPTIONS_FIELDS.CHART_TIME];
+      if (typeof chartTime !== 'number') continue;
+      this.optionsGateway.emitChartCandle({
+        symbol: candle[CHART_OPTIONS_FIELDS.KEY] ?? this.optionChartSymbol,
+        assetType: 'OPTION',
+        open: candle[CHART_OPTIONS_FIELDS.OPEN],
+        high: candle[CHART_OPTIONS_FIELDS.HIGH],
+        low: candle[CHART_OPTIONS_FIELDS.LOW],
+        close: candle[CHART_OPTIONS_FIELDS.CLOSE],
+        volume: candle[CHART_OPTIONS_FIELDS.VOLUME],
+        chartTime,
+      });
+    }
   }
 
   private handleEquityTicks(ticks: Array<Record<string, any>>): void {
