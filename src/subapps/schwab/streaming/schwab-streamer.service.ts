@@ -140,6 +140,14 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
     if (!streamerInfo) {
       throw new Error('Schwab userPreference response missing streamerInfo');
     }
+    // TEMPORARY: confirm the exact keys/values Schwab's userPreference
+    // endpoint actually returns, in case our StreamerInfo interface's field
+    // names don't match Schwab's real response shape. No token/secret data
+    // in this payload. Remove once the SUBS "Bad command formatting" bug is
+    // resolved.
+    this.logger.debug(
+      `[TEMP DEBUG] streamerInfo raw: ${JSON.stringify(streamerInfo)}`,
+    );
     return streamerInfo;
   }
 
@@ -526,9 +534,12 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
       SchwabClientCorrelId: this.streamerInfo?.schwabClientCorrelId,
     };
 
+    // TEMPORARY: log the full outgoing frame (Authorization redacted) to
+    // pin down exactly why Schwab is rejecting SUBS with "Bad command
+    // formatting" - remove once resolved.
     this.logger.debug(
-      `-> ${request.service}/${request.command} ${JSON.stringify(
-        request.parameters ?? {},
+      `-> ${JSON.stringify(fullRequest, (key, value) =>
+        key === 'Authorization' ? '<redacted>' : value,
       )}`,
     );
     this.socket.send(JSON.stringify({ requests: [fullRequest] }));
