@@ -175,14 +175,10 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private sendLoginRequest(accessToken: string): void {
-    const { schwabClientCustomerId, schwabClientCorrelId } = this.streamerInfo;
-
     this.sendRequest({
       service: 'ADMIN',
       command: 'LOGIN',
       requestid: this.nextRequestId(),
-      SchwabClientCustomerId: schwabClientCustomerId,
-      SchwabClientCorrelId: schwabClientCorrelId,
       parameters: {
         Authorization: accessToken,
         SchwabClientChannel: this.streamerInfo.schwabClientChannel,
@@ -516,12 +512,26 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
       );
       return;
     }
+    // Schwab requires SchwabClientCustomerId/SchwabClientCorrelId on *every*
+    // request, not just LOGIN - omitting them on SUBS/UNSUBS gets rejected
+    // with `{"code":21,"msg":"Bad command formatting"}`, which Schwab
+    // follows by closing the socket outright. That was the entire root
+    // cause of the streamer connect→login→SUBS→kicked loop: LOGIN built its
+    // own request object with these fields, but every other call went
+    // through this shared helper without them. Centralizing it here means
+    // no future caller can hit the same bug again.
+    const fullRequest = {
+      ...request,
+      SchwabClientCustomerId: this.streamerInfo?.schwabClientCustomerId,
+      SchwabClientCorrelId: this.streamerInfo?.schwabClientCorrelId,
+    };
+
     this.logger.debug(
       `-> ${request.service}/${request.command} ${JSON.stringify(
         request.parameters ?? {},
       )}`,
     );
-    this.socket.send(JSON.stringify({ requests: [request] }));
+    this.socket.send(JSON.stringify({ requests: [fullRequest] }));
   }
 
   private nextRequestId(): string {
