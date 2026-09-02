@@ -1,5 +1,5 @@
 import { HttpModule, HttpService } from '@nestjs/axios';
-import { Injectable, Module, OnModuleInit } from '@nestjs/common';
+import { forwardRef, Injectable, Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule, ConfigType } from '@nestjs/config';
 import type { InternalAxiosRequestConfig } from 'axios';
 
@@ -39,7 +39,11 @@ class SchwabBearerInterceptor implements OnModuleInit {
  */
 @Module({
   imports: [
-    SchwabAuthModule,
+    // Cycle: SchwabHttpModule -> SchwabAuthModule -> OrdersModule ->
+    // SchwabHttpModule (OrdersModule needs this module's HttpService;
+    // SchwabAuthModule needs OrdersService to resolve accountHash on
+    // /auth/status). forwardRef breaks it on both ends.
+    forwardRef(() => SchwabAuthModule),
     HttpModule.registerAsync({
       imports: [ConfigModule.forFeature(schwabConfig)],
       inject: [schwabConfig.KEY],

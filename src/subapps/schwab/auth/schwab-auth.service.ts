@@ -1,5 +1,6 @@
 import { HttpService } from '@nestjs/axios';
 import {
+  forwardRef,
   Inject,
   Injectable,
   Logger,
@@ -13,6 +14,7 @@ import { firstValueFrom } from 'rxjs';
 import { Repository } from 'typeorm';
 
 import schwabConfig from '@schwab/config/schwab.config';
+import { OrdersService } from '@schwab/orders/orders.service';
 
 import { SchwabToken } from './entities/schwab-token.entity';
 import { decryptToken, encryptToken } from './token-encryption.util';
@@ -48,11 +50,16 @@ const RETURN_TO_ALLOWED_SCHEMES = new Set(['exp:', 'myapp:']);
 export class SchwabAuthService {
   private readonly logger = new Logger(SchwabAuthService.name);
   private cachedAccessToken: { value: string; expiresAt: number } | null = null;
+  /** Single-flight guard — see `refreshAccessTokenOnce` for why this exists. */
+  private refreshPromise: Promise<string> | null = null;
+  private cachedAccountHash: string | null = null;
 
   constructor(
     @InjectRepository(SchwabToken)
     private readonly tokenRepository: Repository<SchwabToken>,
     private readonly httpService: HttpService,
+    @Inject(forwardRef(() => OrdersService))
+    private readonly ordersService: OrdersService,
     @Inject(schwabConfig.KEY)
     private readonly config: ConfigType<typeof schwabConfig>,
   ) {}
@@ -120,7 +127,15 @@ export class SchwabAuthService {
       code_verifier: pending.codeVerifier,
     });
 
-    await this.persistTokenResponse(tokenResponse);
+    // Reuse the existing single row's id (if any) instead of blindly
+    // inserting a fresh one. Without this, re-running the connect flow
+    // (e.g. to fix a dead/revoked refresh token) leaves the *old* row
+    // behind, and `getTokenRow()`'s single-row assumption breaks: a later
+    // refresh could read the stale orphaned row and redeem an
+    // already-invalid refresh_token, which is exactly what happened in
+    // production (see `refreshAccessTokenOnce`).
+    const existing = await this.getTokenRow();
+    await this.persistTokenResponse(tokenResponse, existing?.id);
 
     return pending.returnTo || this.config.redirectSuccessUrl;
   }
@@ -180,7 +195,7 @@ export class SchwabAuthService {
     }
 
     try {
-      await this.refreshAccessToken(token);
+      await this.refreshAccessTokenOnce(token);
       this.logger.log('Proactively refreshed Schwab access token');
     } catch (err) {
       this.logger.error(
@@ -207,7 +222,7 @@ export class SchwabAuthService {
 
     const msUntilExpiry = token.accessTokenExpiresAt.getTime() - Date.now();
     if (msUntilExpiry <= this.config.refreshBufferSeconds * 1000) {
-      return this.refreshAccessToken(token);
+      return this.refreshAccessTokenOnce(token);
     }
 
     const accessToken = decryptToken(
@@ -216,6 +231,29 @@ export class SchwabAuthService {
     );
     this.cacheAccessToken(accessToken, token.accessTokenExpiresAt);
     return accessToken;
+  }
+
+  /**
+   * Ensures only one `grant_type=refresh_token` call to Schwab is ever in
+   * flight at a time. `getValidAccessToken()` is called independently by
+   * every outgoing Schwab HTTP request (the Bearer interceptor in
+   * `SchwabHttpModule`, on a ~4s poll from `AccountSnapshotService` alone)
+   * *and* by the raw WS streamer's reconnect path, with no coordination
+   * between them. Without this guard, two callers landing in the same
+   * near-expiry window would each redeem the *same* refresh_token
+   * concurrently — Schwab (like most OAuth providers) rotates the refresh
+   * token on every use and revokes the whole token family if it detects the
+   * same one reused, which is almost certainly what silently killed the
+   * connection in production: every refresh after that point fails with
+   * `invalid_grant` and the user has to reconnect from scratch.
+   */
+  private async refreshAccessTokenOnce(token: SchwabToken): Promise<string> {
+    if (!this.refreshPromise) {
+      this.refreshPromise = this.refreshAccessToken(token).finally(() => {
+        this.refreshPromise = null;
+      });
+    }
+    return this.refreshPromise;
   }
 
   async getConnectionStatus(): Promise<{
@@ -228,20 +266,47 @@ export class SchwabAuthService {
       return {
         connected: false,
         expiresAt: null,
-        accountHash: this.config.accountHash || null,
+        accountHash: null,
       };
     }
     return {
       connected: token.refreshTokenExpiresAt.getTime() > Date.now(),
       expiresAt: token.accessTokenExpiresAt.toISOString(),
-      accountHash: this.config.accountHash || null,
+      accountHash: await this.resolveAccountHash(),
     };
   }
 
-  /** This table holds a single personal-account row; fetch it without
-   * relying on TypeORM's empty-where matching semantics. */
+  /** Same rationale as `AccountSnapshotService.resolveAccountHash`: there's
+   * no per-request caller to supply this on a status-check endpoint, so it's
+   * resolved once via `/accounts/accountNumbers` and cached, rather than
+   * relying on the optional (usually unset) `SCHWAB_ACCOUNT_HASH` config
+   * var. Returns `null` rather than throwing if Schwab isn't connected or
+   * the lookup fails, since this is best-effort metadata on a status
+   * endpoint, not something that should break `/auth/status` itself. */
+  private async resolveAccountHash(): Promise<string | null> {
+    if (this.config.accountHash) return this.config.accountHash;
+    if (this.cachedAccountHash) return this.cachedAccountHash;
+
+    try {
+      const accounts = await this.ordersService.listAccounts();
+      if (!accounts.length) return null;
+      this.cachedAccountHash = accounts[0].hashValue;
+      return this.cachedAccountHash;
+    } catch {
+      return null;
+    }
+  }
+
+  /** This table is meant to hold a single personal-account row. Order by
+   * most-recently-updated so that if a duplicate ever slips in (see
+   * `persistTokenResponse`'s upsert-by-existing-id fix), we always operate
+   * on the freshest credentials instead of whichever row Postgres happens
+   * to return first with no `ORDER BY`. */
   private async getTokenRow(): Promise<SchwabToken | null> {
-    const [token] = await this.tokenRepository.find({ take: 1 });
+    const [token] = await this.tokenRepository.find({
+      take: 1,
+      order: { updatedAt: 'DESC' },
+    });
     return token ?? null;
   }
 
@@ -251,13 +316,30 @@ export class SchwabAuthService {
       this.config.tokenEncryptionKey,
     );
 
-    const tokenResponse = await this.requestToken({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-    });
+    try {
+      const tokenResponse = await this.requestToken({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      });
 
-    await this.persistTokenResponse(tokenResponse, token.id);
-    return tokenResponse.access_token;
+      await this.persistTokenResponse(tokenResponse, token.id);
+      return tokenResponse.access_token;
+    } catch (err) {
+      if (err?.response?.data?.error === 'invalid_grant') {
+        // Refresh token is permanently dead (revoked/reused/expired) —
+        // nothing will make a subsequent refresh succeed. Clear the row so
+        // `/auth/status` stops reporting a stale "connected: true" for up
+        // to 7 more days and the user is clearly prompted to reconnect via
+        // /auth/connect instead of silently getting no live data.
+        await this.tokenRepository.delete({ id: token.id });
+        this.cachedAccessToken = null;
+        this.cachedAccountHash = null;
+        this.logger.error(
+          'Schwab refresh token was rejected as invalid/revoked — cleared stored token, user must reconnect via /auth/connect',
+        );
+      }
+      throw err;
+    }
   }
 
   private async requestToken(
