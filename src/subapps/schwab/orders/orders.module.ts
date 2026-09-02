@@ -9,5 +9,6 @@ import { OrdersService } from './orders.service';
   imports: [SchwabHttpModule],
   controllers: [OrdersController],
   providers: [OrdersService],
+  exports: [OrdersService],
 })
 export class OrdersModule {}
