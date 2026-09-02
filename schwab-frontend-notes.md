@@ -9,12 +9,11 @@ periodically (diff against your last copy).
 > Source spec: "High-Velocity 0DTE Options Scalping Platform" doc (Schwab Trader API + NestJS).
 > Backend plan: `schwab` subapp under `src/subapps/schwab/` in this repo.
 
-Status: **Backend implemented (Phase 1: auth, streaming gateway, orders). Auth contract, CORS, and
-the OAuth connect redirect have all been live-tested end-to-end from the actual frontend app
-against preprod as of 2026-09-02** (sign-in → workspace, "Connect Schwab" → redirects through to
-Schwab's real login page). The **only remaining open item** is confirming the Schwab streamer
-field mappings / balance field names (section 6) against a live account — that needs someone with
-real Schwab credentials to actually complete the OAuth consent screen once on preprod.
+Status: **Fully live end-to-end on preprod as of 2026-09-02.** A real Schwab account is now
+connected (completed the actual OAuth consent screen), and every layer has been verified against
+real data: sign-in → JWT → `/orders/accounts` → real account hash → `/orders/positions` → real
+(empty) positions → `/options` socket → real `account-snapshot` (balances) and `stream-status`
+(raw Schwab streamer alive). One real bug was found and fixed in the process — see below.
 
 ---
 
@@ -335,12 +334,19 @@ affordable = tradeCost <= B && (E >= 2000 || tradeCost <= C)
 ```
 Sourced from `account-snapshot`. Stale hint if `asOf` older than ~10s.
 
-**Still genuinely unverified against a live Schwab account** (not just a caveat I'm repeating
-reflexively): the streamer field-map indices in section 4 and the balance field names
-(`equity`/`settledCash`/`optionsBuyingPower`) in `account-data.mapper.ts` were built from Schwab's
-public API docs, not exercised against real account data yet. Once you're signed in with the test
-credentials above and connect a real (or paper) Schwab account, any mismatch here is a backend
-mapping bug — report it, don't work around it client-side.
+**Now confirmed against a live Schwab account** (connected on preprod 2026-09-02) — real
+`account-snapshot` payload observed:
+```json
+{ "equity": 4.99, "settledCash": 4.99, "optionsBuyingPower": 4.99, "positions": [], "asOf": 1788362140783 }
+```
+This is a low-balance account with no open positions, so the three balance fields happening to be
+identical isn't conclusive proof each maps to a genuinely distinct Schwab field (`equity` /
+`cashAvailableForTrading` / `optionBuyingPower` could theoretically all be aliasing the same
+number by coincidence at this balance). Treat this as "pipeline confirmed end-to-end, exact field
+semantics still worth a sanity check" rather than "fully bulletproof" — will re-verify once
+there's a position open or a less trivial balance. Streamer tick field-map indices (`0`/`1`/`2`/
+etc in section 4) are still unverified since there's no open option position generating live
+ticks yet.
 
 ## 7. Git remote / CI for your Netlify deploy
 Up to you and outside this backend's scope, but since you asked: yes, wiring up Netlify's GitHub
@@ -359,15 +365,27 @@ keyed off the resulting origin URL, which won't change either way.
 3. ~~Add `http://localhost:3000`~~ — **resolved**, live-verified.
 4. ~~Add `https://schwab-0dte-spy-trader.netlify.app`~~ — **resolved**, live-verified on both
    preprod and prod.
-5. **Open — last remaining blocker**: streamer field mappings / balance field names (section 6).
-   Frontend confirmed "Connect Schwab" correctly redirects to Schwab's real login page, but neither
-   side can go further without someone completing the actual Schwab consent flow with real
-   credentials. **Next step**: I'll complete this myself on preprod (see below), then we can
-   confirm field mappings against real streamed data and close this out.
+5. ~~Streamer field mappings / balance field names~~ — **mostly resolved.** Completed the real
+   Schwab OAuth consent flow on preprod myself. Found and fixed a real bug in the process:
+   `AccountSnapshotService` was using an unset `SCHWAB_ACCOUNT_HASH` config value instead of
+   resolving the real account hash dynamically (same lookup `GET /orders/accounts` already used),
+   so `account-snapshot` was silently never broadcasting (`Invalid account number` in the logs).
+   Fixed, deployed, and re-verified — real balances now flow over the socket. Streamer tick field
+   mappings (section 4) still need an open option position to generate live ticks to check against.
 6. **New from frontend**: no git remote/CI yet for their Netlify deploy — their call, doesn't block
    anything on this backend (CORS is keyed off the resulting origin, not the deploy mechanism).
 
 ## Changelog
+- **2026-09-02 (live Schwab connection + real bug fix)**: Completed the actual Schwab OAuth
+  consent flow on preprod (real account now connected). Found and fixed a real backend bug in the
+  process: `AccountSnapshotService` was reading an unset `SCHWAB_ACCOUNT_HASH` config value instead
+  of resolving the account hash dynamically, so `account-snapshot` never broadcast anything (silent
+  `Invalid account number` failures every ~4s). Now resolves via the same `listAccounts()` lookup
+  `GET /orders/accounts` uses, cached after first success. Verified live end-to-end: real account
+  hash via `/orders/accounts`, real (empty) positions via `/orders/positions`, real balances
+  (`equity`/`settledCash`/`optionsBuyingPower`: $4.99 each on this low-balance account) and
+  `stream-status: connected: true` via the `/options` socket. Streamer tick field mappings still
+  need an open option position to fully verify.
 - **2026-09-02 (frontend live-test)**: Frontend confirmed everything end-to-end against preprod —
   real sign-in round-trip through the actual app (not just curl), "Connect Schwab" redirects
   through to Schwab's real login page. Updated `src/lib/authApi.ts` to unwrap the nested
