@@ -21,6 +21,10 @@ import {
   CHART_OPTIONS_FIELDS,
 } from './chart-fields';
 import {
+  computeNearestStrike,
+  shouldRecenterLadder,
+} from './ladder-recenter.util';
+import {
   LEVEL_ONE_EQUITY_FIELD_KEYS,
   LEVEL_ONE_EQUITY_FIELDS,
   LEVEL_ONE_OPTIONS_FIELD_KEYS,
@@ -551,22 +555,30 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Re-centers the 16-strike (8 ITM / 8 OTM) window whenever the spot price
-   * drifts more than one strike increment away from the current center, OR
-   * the calendar day has rolled over since the window was last built (0DTE
-   * contracts expire at today's close, so yesterday's symbols are dead and
-   * must be replaced with today's even if price hasn't moved) - diffing old
-   * vs. new symbol sets to issue minimal UNSUBS/SUBS calls either way.
+   * drifts `RECENTER_BUFFER_STRIKES` increments away from the current
+   * center, OR the calendar day has rolled over since the window was last
+   * built (0DTE contracts expire at today's close, so yesterday's symbols
+   * are dead and must be replaced with today's even if price hasn't moved)
+   * - diffing old vs. new symbol sets to issue minimal UNSUBS/SUBS calls
+   * either way. The buffer (rather than rebuilding on *any* strike change)
+   * is deliberate hysteresis - see `ladder-recenter.util.ts` for why a
+   * tighter threshold thrashes the subscription and blanks out the chain.
    */
   private recenterLadder(spotPrice: number): void {
-    const nearestStrike =
-      Math.round(spotPrice / this.strikeIncrement) * this.strikeIncrement;
+    const nearestStrike = computeNearestStrike(spotPrice, this.strikeIncrement);
     const expiration = new Date();
     const todayKey = formatDateKey(expiration);
+    const dayRolledOver =
+      this.currentExpirationDateKey !== null &&
+      this.currentExpirationDateKey !== todayKey;
 
     if (
-      this.centerStrike !== null &&
-      Math.abs(nearestStrike - this.centerStrike) < this.strikeIncrement &&
-      this.currentExpirationDateKey === todayKey
+      !shouldRecenterLadder({
+        nearestStrike,
+        centerStrike: this.centerStrike,
+        strikeIncrement: this.strikeIncrement,
+        dayRolledOver,
+      })
     ) {
       return;
     }
