@@ -11,6 +11,16 @@ export interface AccountBalances {
   equity: number;
   settledCash: number;
   optionsBuyingPower: number;
+  /**
+   * Start-of-day account value, from Schwab's `initialBalances` (distinct
+   * from `currentBalances`, which `equity` above reads). Lets the frontend
+   * compute `dayPnl = equity - dayStartEquity` - covering realized *and*
+   * unrealized P&L and surviving reloads - instead of only summing
+   * `positions[].dayProfitLoss`, which drops a closed trade's P&L the
+   * moment it leaves the positions array (frontend contract open item 13 /
+   * section 12).
+   */
+  dayStartEquity: number;
 }
 
 export interface PositionSnapshot {
@@ -29,11 +39,15 @@ export function mapAccountBalances(
 ): AccountBalances {
   const balances =
     schwabAccountResponse?.securitiesAccount?.currentBalances ?? {};
+  const initialBalances =
+    schwabAccountResponse?.securitiesAccount?.initialBalances ?? {};
 
   return {
     equity: balances.equity ?? balances.liquidationValue ?? 0,
     settledCash: balances.cashAvailableForTrading ?? balances.cashBalance ?? 0,
     optionsBuyingPower: balances.optionBuyingPower ?? balances.buyingPower ?? 0,
+    dayStartEquity:
+      initialBalances.liquidationValue ?? initialBalances.accountValue ?? 0,
   };
 }
 

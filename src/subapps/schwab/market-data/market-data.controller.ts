@@ -1,6 +1,7 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 
+import { OptionChainQueryDto } from './dto/option-chain-query.dto';
 import { PriceHistoryQueryDto } from './dto/price-history-query.dto';
 import { MarketDataService } from './market-data.service';
 
@@ -20,5 +21,12 @@ export class MarketDataController {
   @Get('price-history')
   async getPriceHistory(@Query() query: PriceHistoryQueryDto) {
     return this.marketDataService.getPriceHistory(query);
+  }
+
+  /** Option-chain quote snapshot (frontend contract section 11b) - first
+   * paint on load/reconnect, and a fallback when the streamer is degraded. */
+  @Get('chain')
+  async getOptionChain(@Query() query: OptionChainQueryDto) {
+    return this.marketDataService.getOptionChain(query);
   }
 }

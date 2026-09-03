@@ -2,7 +2,12 @@ import { HttpService } from '@nestjs/axios';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
 
+import { OptionChainQueryDto } from './dto/option-chain-query.dto';
 import { PriceHistoryQueryDto } from './dto/price-history-query.dto';
+import {
+  mapOptionChainResponse,
+  OptionChainQuote,
+} from './option-chain.mapper';
 
 export interface NormalizedCandle {
   datetime: number;
@@ -73,6 +78,47 @@ export class MarketDataService {
       );
       throw new BadRequestException(
         error?.response?.data?.message || 'Price history fetch failed',
+      );
+    }
+  }
+
+  /**
+   * Option-chain quote snapshot (frontend contract section 11b) - lets the
+   * ladder paint instantly on load/reconnect instead of waiting for a
+   * `option-ticks` per symbol, and gives a fallback when the streamer is
+   * degraded. Thin proxy to Schwab's `GET /chains`, restricted to today's
+   * expiration to match this app's 0DTE-only ladder (same date the streamer
+   * itself subscribes against in `SchwabStreamerService.recenterLadder`).
+   */
+  async getOptionChain(
+    query: OptionChainQueryDto,
+  ): Promise<OptionChainQuote[]> {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const response = await firstValueFrom(
+        this.httpService.get('/marketdata/v1/chains', {
+          params: {
+            symbol: query.symbol,
+            contractType: 'ALL',
+            strikeCount: query.strikeCount ?? 16,
+            fromDate: today,
+            toDate: today,
+          },
+        }),
+      );
+
+      const quotes = mapOptionChainResponse(response.data);
+      if (!query.symbols) return quotes;
+
+      const wanted = new Set(query.symbols.split(',').map((s) => s.trim()));
+      return quotes.filter((q) => wanted.has(q.symbol));
+    } catch (error) {
+      this.logger.error(
+        'Option chain fetch failed',
+        error?.response?.data || error.message,
+      );
+      throw new BadRequestException(
+        error?.response?.data?.message || 'Option chain fetch failed',
       );
     }
   }

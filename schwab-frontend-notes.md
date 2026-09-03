@@ -47,6 +47,29 @@ other**, both pre-existing and both now fixed and redeployed to preprod + prod:
    the full root cause and **the breaking `option-ticks` contract change** in section 4 that fixes
    it (raw field numbers are gone; ticks are now pre-normalized to named fields server-side).
 
+🔴 **BLOCKER fixed (2026-09-03): chunked `SUBS` was wiping most of the option ladder subscription
+(frontend's open item 12 / section 11).** Frontend reproduced 3/3 that only 6 of 32 ladder symbols
+ever received `option-ticks` — every near-the-money strike was permanently silent, so a hard
+refresh rendered the *entire* option chain `--` with no REST fallback. Root cause matched the
+frontend's own diagnosis: the ladder's `LEVELONE_OPTIONS` subscribe/recenter path issued growing
+symbol sets as a single Schwab `SUBS` request, and Schwab's `SUBS` semantics (or an undocumented
+size limit on a long `SUBS` request — either is consistent with the evidence) meant most of that
+34-symbol batch never actually registered. **Fixed**: subscribe/recenter now sends small `ADD`
+batches (never a bare multi-symbol `SUBS`) — see section 11 and the Changelog. Deployed to preprod
++ prod. **No frontend action needed** — same `option-ticks`/`ladder-recentered` contract, just
+reliable now.
+
+🐛 **Bug fix (2026-09-03): `chart-candle` OHLCV shifted by one field (frontend's open item 11 /
+section 9c).** Same bug family as the option-tick mislabeling above, this time in `CHART_EQUITY`:
+a raw frame captured live on preprod confirmed field `1` is `Sequence` (not `Open`), shifting
+open/high/low/close/volume down by one and producing structurally impossible bars (`low > high`).
+**Fixed** — see section 9c and the Changelog. Deployed to preprod + prod.
+
+✅ **New (2026-09-03): `dayStartEquity` added to `account-snapshot` (frontend's open item 13 /
+section 12)** and **✅ new option-chain quote snapshot endpoint,
+`GET .../market-data/chain` (frontend's open item 14 / section 11b)** — both implemented per the
+frontend's asks, see sections 12 and 11b.
+
 ---
 
 ## ✅ Resolved: this is a web app (TanStack Start), not Expo
@@ -299,12 +322,14 @@ io(`${VITE_SOCKET_URL}${VITE_SOCKET_NAMESPACE}`, {
     equity: number
     settledCash: number
     optionsBuyingPower: number
+    dayStartEquity: number // new 2026-09-03 — see section 12
     positions: Array<{ symbol: string; assetType: string; quantity: number; averagePrice: number; marketValue: number; dayProfitLoss: number }>
     asOf: number
   }
   ```
   **Live-verified** — see section 6 for the real observed payload and a bug that was blocking
-  this entirely until fixed.
+  this entirely until fixed. `dayStartEquity` is new (2026-09-03, frontend's open item 13) — see
+  section 12 for the full writeup and where it's sourced from on Schwab's side.
 - **`order-update`** (new, 2026-09-02 — section 10d) — broadcast whenever a resting order's
   status/fill changes, so the chart can flip entry→closed and clear stop lines without polling
   `GET .../orders/working` itself:
@@ -364,9 +389,9 @@ instead of resolving the hash dynamically (same lookup `GET /orders/accounts` us
 `account-snapshot` was silently never broadcasting (`Invalid account number` in logs, ~every 4s).
 Fixed to resolve + cache the real hash; re-verified live afterward.
 
-**Still open**: streamer **tick** field-map indices (section 4, `'0'`/`'1'`/`'2'`/etc.) —
-unverified, needs an actual open option position generating live ticks. Nothing to do on either
-side until that happens; any mismatch found then is a backend mapping bug.
+~~**Still open**: streamer **tick** field-map indices~~ — **resolved 2026-09-03**. There was a
+real off-by-one bug (see the "option-ticks field mislabeling" changelog entry); backend now emits
+named fields and there's no index table left on either side.
 
 ## 9. Chart backfill + live candle streaming — **implemented 2026-09-02**
 
@@ -443,9 +468,7 @@ itself; the error is Schwab declining to actually stream anything back) — so t
 see an error from the ack, only silence where a `chart-candle` should be. Will update this section
 after the next market open.
 
-### 9c. `chart-candle` (server → client)
-
-Implemented exactly as specced:
+### 9c. `chart-candle` (server → client) — delivery ✅ confirmed RTH, field-shift bug ✅ fixed
 
 ```ts
 {
@@ -462,27 +485,36 @@ Implemented exactly as specced:
 
 Emitted directly (not batched/throttled like `option-ticks` — 1-minute candles are low-frequency
 enough not to need it) as soon as a `CHART_EQUITY`/`CHART_OPTIONS` frame arrives from Schwab.
-Field maps used, matching what the frontend already had documented:
-- `CHART_EQUITY`: `0`=key, `1`=open, `2`=high, `3`=low, `4`=close, `5`=volume, `6`=sequence,
-  `7`=chartTime, `8`=chartDay.
-- `CHART_OPTIONS`: `0`=key, `1`=chartTime, `2`=open, `3`=high, `4`=low, `5`=close, `6`=volume.
 
-**Live-tested 2026-09-02, after-hours — no `chart-candle` observed yet for either asset type**,
-despite `CHART_EQUITY/SUBS` being accepted cleanly (no error) and `underlying-price`/
-`account-snapshot`/`ladder-recentered` all confirmed flowing normally on the same connection over
-a 90s window. Two candidate explanations, neither confirmed yet:
-1. **Thin/zero after-hours volume** (most likely, benign): per Schwab's public field docs,
-   `CHART_EQUITY` is documented to update in both regular *and* AM/PM (extended) hours - but
-   candle-close events may simply require at least one trade in that minute to fire, and at
-   ~7:40pm ET extended-hours SPY volume can be genuinely near-zero for a given minute even while
-   the quote (`underlying-price`) still refreshes.
-2. A code-level issue in `handleChartEquityCandles`/the `CHART_EQUITY` data-routing path that
-   after-hours testing can't rule out from thin volume alone.
-`CHART_OPTIONS` additionally got an explicit Schwab-side rejection - see the 9b callout above.
-**Bottom line: field indices are correct per Schwab's Streamer Guide, the request/subscribe path
-works, but an actual live candle hasn't been observed end-to-end yet.** This needs a retest during
-RTH with real volume before either side treats 9c as fully confirmed - will update this file right
-after.
+🐛 **Bug fixed 2026-09-03: `CHART_EQUITY` was mapped off by one field, matching the frontend's
+report** (same bug family as the `option-tick` mislabeling in section 4/Changelog). The field map
+this backend had - `0`=key, `1`=open, `2`=high, `3`=low, `4`=close, `5`=volume, `6`=sequence -
+turned out to be wrong despite matching a third-party mirror of Schwab's docs. A raw frame
+captured live on preprod during RTH settled it:
+```json
+{"1":311,"2":772.625,"3":772.67,"4":772.41,"5":772.438321,"6":71229,"7":1788451860000,"8":20699,"key":"SPY"}
+```
+Field `1` (311) is far too small to be a SPY price and matches a monotonic per-session minute
+counter (Sequence, not Open); treating `2..5` as open/high/low/close and `6` as volume instead
+produces a fully self-consistent bar (`low <= open/close <= high`, volume a plausible 1-minute
+share count) - exactly the "map fields 2-6" fix the frontend suggested.
+
+**Fixed field map** (`chart-fields.ts`):
+- `CHART_EQUITY`: `0`=key, `1`=sequence, `2`=open, `3`=high, `4`=low, `5`=close, `6`=volume,
+  `7`=chartTime, `8`=chartDay.
+- `CHART_OPTIONS`: **unchanged**, `0`=key, `1`=chartTime, `2`=open, `3`=high, `4`=low, `5`=close,
+  `6`=volume - this one already put `open` at field `2` (not `1`), so it doesn't appear to carry
+  the same off-by-one. Structurally consistent, but **not yet independently confirmed against a
+  live raw `CHART_OPTIONS` frame** (no option-chart subscriber was active during the investigation
+  that caught the `CHART_EQUITY` bug) - flagging as believed-correct rather than verified.
+
+Also added a **runtime `low <= high` sanity guard** (`isSaneCandle` in the new
+`chart-candle.mapper.ts`, unit-tested) that drops and logs a warning for any bar that's still
+structurally impossible after mapping, rather than emitting it - a safety net against this exact
+class of bug shipping silently again, independent of the frontend's own client-side guard.
+Deployed to preprod + prod. **No frontend action needed** for the fix itself - same
+`ChartCandlePayload` shape, just correct now. The frontend's client-side `isSaneCandle` guard
+(`src/lib/candles.ts`) is safe to keep as defense-in-depth; it should simply stop triggering.
 
 ### 9d. Open question — answered (partially)
 
@@ -500,25 +532,24 @@ of how the live check turns out.
 
 ### 9e. Acceptance checks — status
 
-All four implemented; status against preprod after live testing on 2026-09-02 (after-hours):
-1. `price-history` 200 + non-empty candles during RTH — **✅ live-verified** (see 9a, 726 candles,
-   though that specific test ran after-hours against *today's already-closed* session, not live
-   RTH - worth a same-day-during-RTH sanity check too, low risk given it's a straight Schwab proxy).
+Updated 2026-09-03 after an RTH retest (superseding the after-hours-only results from 2026-09-02):
+1. `price-history` 200 + non-empty candles during RTH — **✅ live-verified** (see 9a, 726 candles).
 2. `chart-candle` (`EQUITY`) arriving within ~2min of a new bar after `subscribe-underlying` —
-   **tested, not yet observed** (90s live window, zero `chart-candle` events despite a clean
-   `CHART_EQUITY/SUBS` ack) - see 9c, likely after-hours volume, needs RTH retest.
-3. `chart-candle` (`OPTION`) arriving after `subscribe-option-chart` — **tested, currently
-   blocked**: `CHART_OPTIONS/SUBS` itself was rejected by Schwab (`code: 11`, "Service not
-   available or temporary down") - see 9b. Needs RTH retest with a liquid 0DTE contract.
+   **✅ live-verified RTH 2026-09-03** - candles arrive ~1/min. Field values were shifted by one
+   (see the bug fix above) but delivery itself was confirmed working; both delivery and field
+   correctness are now confirmed.
+3. `chart-candle` (`OPTION`) arriving after `subscribe-option-chart` — **still open**. The
+   after-hours `code: 11` rejection from 2026-09-02 was not re-observed as an error during the RTH
+   session, but no option candle was captured in the investigation window either (no live
+   subscriber was actively watching for one at the time) - needs a dedicated RTH retest with a
+   liquid 0DTE contract to confirm both delivery and the `CHART_OPTIONS` field map.
 4. `subscribe-option-chart({ symbol: null })` stops option candles without killing the equity
-   stream — implemented per 9b (independent SUBS/UNSUBS calls per symbol); the unsubscribe path
-   itself works (confirmed via ack + logs), but since no candles were flowing yet from check 3
-   there's nothing to confirm actually stops.
+   stream — implemented per 9b (independent SUBS/UNSUBS calls per symbol); still unconfirmed end
+   to end pending check 3.
 
-**All four need a market-hours (9:30am–4pm ET) retest before section 9 is fully closed out.**
-Nothing wrong has been confirmed - price-history and the subscribe plumbing all work exactly as
-specced - but live 1-minute candle delivery for both equity and (especially) options is still an
-open question pending real trading-hours volume.
+**Equity chart-candle (checks 1-2) is now fully closed out. Option chart-candle (checks 3-4)
+still needs an RTH retest** - lower priority than the items above since it wasn't part of the
+frontend's latest priority list, but flagging so it doesn't get lost.
 
 ## 8b. ~~Bug~~ RESOLVED: option ladder thrashing (`LEVELONE_OPTIONS` churn, blank chain) — 2026-09-03
 
@@ -639,6 +670,96 @@ execution legs, so it's accurate through partial fills too — `null` until the 
 all five acceptance checks need a live RTH retest against a real resting order before this is
 fully closed out**, same caveat as section 9's live-candle checks.
 
+## 11. ✅ Fixed: chunked `SUBS` wiping most of the option ladder subscription
+
+Frontend reproduced 3/3 during RTH that only 6 of the 32 `LEVELONE_OPTIONS` ladder symbols ever
+received `option-ticks` — the 26 silent ones were every near-the-money strike, i.e. the only ones
+anyone actually trades, while the trailing 6 (furthest OTM, a contiguous slice) ticked normally.
+No subscription churn to explain it (one stable ladder, one recenter event for the whole window).
+Cross-checked against Schwab's own `price-history` for one of the silent symbols — it had traded
+~4k times in a single minute while delivering zero ticks — ruling out thin market activity as an
+explanation. **Escalated to a blocker**: since the ladder paints purely from `option-ticks`, a
+hard refresh throws away the cached values and the silent symbols never send a replacement, so the
+*entire visible chain* renders `--` and the app can't be traded from after a reload, with no REST
+fallback available at the time (see section 11b for the fix to that gap too).
+
+**Root cause matched the frontend's own diagnosis**: subscribing/growing the ladder issued a
+single Schwab `SUBS` request listing every new symbol's key in one comma-separated string.
+Schwab's Streamer Guide is explicit that `SUBS` **replaces** the entire subscription set for a
+service, while `ADD` appends without wiping (and is documented as fine to use even for the very
+first subscription). Whether the precise failure mode was `SUBS`'s replace semantics interacting
+with something else, or an undocumented limit on a long single request's `keys` string, the fix is
+the same either way and removes the ambiguity entirely.
+
+**Fixed**: `SchwabStreamerService` no longer sends a bare multi-symbol `SUBS` to grow the ladder.
+Both the initial subscribe and every recenter now split the symbol list into small chunks (8 per
+request, `OPTIONS_SUBSCRIBE_CHUNK_SIZE` in `ladder-recenter.util.ts`) and send each chunk as its
+own `ADD` request; removals are similarly chunked `UNSUBS` calls. Applied consistently to
+`recenterLadder()` and to the full-ladder teardown on `switchUnderlying()`. New unit tests
+(`chunkArray` in `ladder-recenter.util.spec.ts`) cover the chunking boundaries (exact multiples,
+remainders, empty input). Deployed to preprod + prod. **No frontend action needed** — same
+`option-ticks`/`ladder-recentered` contract as before, just reliably covering the full ladder now.
+Would appreciate a rerun of `scripts/tick-coverage.mjs` to confirm distinct-symbols-ticked now
+equals ladder size during RTH.
+
+### 11b. ✅ Implemented: option-chain quote snapshot endpoint
+
+```
+GET /api/v1/subapps/schwab/market-data/chain?symbol=SPY&strikeCount=16&symbols=<comma-separated OSI list>
+```
+
+Requires the same `Authorization: Bearer <accessToken>` as the rest of `/orders/*`/`market-data/*`.
+`symbol` is required (underlying ticker); `strikeCount` is optional (defaults to 16, matching the
+ladder's own window size); `symbols` is optional — pass the exact array from `ladder-recentered` to
+filter the response down to just that ladder rather than everything Schwab returns.
+
+```ts
+Array<{
+  symbol: string        // OSI, same padding as ladder-recentered
+  bid: number | null
+  ask: number | null
+  last: number | null
+  bidSize: number | null
+  askSize: number | null
+  volume: number | null
+  delta: number | null
+}>
+```
+
+Thin proxy to Schwab's `GET /marketdata/v1/chains`, restricted to **today's expiration only**
+(`fromDate`/`toDate` = today) to match this app's 0DTE-only ladder — same date the streamer itself
+subscribes against. Flattens Schwab's `callExpDateMap`/`putExpDateMap` structure into one array
+(`mapOptionChainResponse` in `option-chain.mapper.ts`, unit-tested). Missing/non-numeric fields
+come back as `null` rather than `0` or omitted, matching this endpoint's own explicit nullable
+contract (deliberately different from `option-ticks`' "omitted = unchanged" partial-update
+semantics, since a snapshot has no previous tick to diff against). Call on mount and on
+reconnect, then let `option-ticks` take over, per the original ask. Deployed to preprod + prod —
+**not yet live-tested against a real chain response** (needs an RTH request against the connected
+account; error handling/shape are implemented and unit-tested, but a live 200 hasn't been observed
+yet).
+
+## 12. ✅ Implemented: `dayStartEquity` on `account-snapshot`
+
+Frontend's Day P&L was reading `$0.00` on a profitable day because `positions[].dayProfitLoss`
+only covers currently-open positions — closing a winning trade removes it from the array and
+takes its P&L with it. Schwab's account response already carries `initialBalances` (distinct from
+`currentBalances`, which the existing `equity` field reads) — the start-of-day account value.
+
+**Implemented**: `account-snapshot` (section 4) now includes `dayStartEquity: number`, read from
+`initialBalances.liquidationValue`, falling back to `initialBalances.accountValue` if the former
+is absent (cash accounts may not have a `liquidationValue`), defaulting to `0` only if
+`initialBalances` itself is missing entirely. Frontend can now compute
+`dayPnl = equity - dayStartEquity`, which covers realized *and* unrealized P&L and survives page
+reloads, without needing the client-side baseline-capture/manual-override workaround. New unit
+tests (`account-data.mapper.spec.ts`) cover both the `liquidationValue` and `accountValue`
+fallback paths plus the all-missing default. Deployed to preprod + prod, but **not yet
+live-verified against a real non-zero `initialBalances`** — the connected test account's exact
+`initialBalances` shape hasn't been captured live yet, so the `liquidationValue`/`accountValue`
+fallback order is based on Schwab's documented account-response schema, not a confirmed live
+sample. The optional `realizedDayPnl` bonus ask wasn't added — didn't want to guess at a field
+name without seeing a live response first; can add it once `dayStartEquity` itself is confirmed
+against real data, if it turns out Schwab exposes something more direct.
+
 ## 7. Git remote / CI, sign-up UI
 Both resolved on the frontend side — GitHub repo + Netlify push-to-deploy wired up, and a Sign In
 / Create Account toggle shipped on `/sign-in`. No backend action needed.
@@ -654,35 +775,68 @@ Current state:
    connection and real ticks flowing. Now emits pre-normalized named fields instead of raw field
    numbers — **this is a breaking payload-shape change, frontend needs to update its `option-ticks`
    handler** (see section 4 for the new contract).
-2. **Section 9 (chart backfill + live candles) is implemented and deployed, partially
+2. **Section 9 (chart backfill + live candles) is implemented and deployed, mostly
    live-verified**:
    - 9a (`price-history`) — **✅ fully live-verified** (726 real SPY candles from preprod).
    - `subscribe-option-chart`/`subscribe-underlying` request plumbing (acks, no crash on Schwab
      rejection) — **✅ live-verified**.
-   - Actual `chart-candle` delivery (9c), for both `EQUITY` and `OPTION` — **not yet observed**,
-     tested after-hours only. `CHART_OPTIONS` was explicitly rejected by Schwab
-     (`code: 11, "Service not available or temporary down"`) in that after-hours test; `CHART_EQUITY`
-     was accepted but produced no candle in a 90s window. Likely just after-hours/thin-volume
-     behavior (matches today's separate finding that 0DTE options have no after-hours session at
-     all) but **not confirmed** — needs a retest during regular market hours (9:30am–4pm ET). See
-     section 9b/9c/9e for full detail. Will update this file immediately after that retest.
-   - 9d (same-day 0DTE history question) — still open, same reason.
-3. Everything else (auth contract, CORS, OAuth connect, orders/accounts/positions, account
-   balances, all four reported bugs including the streaming crash loop) — confirmed live on
-   preprod and prod.
-4. **Section 10 (broker stop-loss + working orders, chart drag-to-stop) is implemented and
+   - `chart-candle` (`EQUITY`) delivery + field mapping — **✅ fully resolved 2026-09-03**:
+     delivery confirmed RTH, and a field-shift bug (OHLCV mapped off by one, `low > high` observed)
+     found + fixed — see section 9c and the Changelog. This was frontend's **open item 11**.
+   - `chart-candle` (`OPTION`) delivery — **still open**, needs an RTH retest with an active
+     subscriber. `CHART_OPTIONS`' field map is believed-correct (structurally consistent, unlike
+     the equity map before its fix) but not yet independently confirmed against a live frame.
+   - 9d (same-day 0DTE history question) — still open, needs a live check against a freshly-listed
+     contract.
+3. **🔴 Open item 12 / section 11 (chunked `SUBS` wiping the option ladder) — ✅ fixed
+   2026-09-03.** Was a blocker: only 6 of 32 ladder symbols ever ticked, and a hard refresh
+   rendered the entire option chain `--` with no fallback. Fixed by switching ladder
+   subscribe/recenter to small chunked `ADD` requests instead of a bare multi-symbol `SUBS` — see
+   section 11 and the Changelog. Deployed to preprod + prod.
+4. **Open item 13 / section 12 (`dayStartEquity` on `account-snapshot`) — ✅ implemented
+   2026-09-03.** See section 12. Deployed to preprod + prod, not yet live-verified against a real
+   non-zero `initialBalances`.
+5. **Open item 14 / section 11b (option-chain quote snapshot endpoint) — ✅ implemented
+   2026-09-03.** `GET .../market-data/chain` — see section 11b. Deployed to preprod + prod, not
+   yet live-tested against a real chain response.
+6. Everything else (auth contract, CORS, OAuth connect, orders/accounts/positions, account
+   balances, all reported bugs including the streaming crash loop and the option-tick/chart-candle
+   field mislabels) — confirmed live on preprod and prod.
+7. **Section 10 (broker stop-loss + working orders, chart drag-to-stop) is implemented and
    deployed, not yet live-tested**:
    - `fast-execute` extended with `STOP`/`STOP_LIMIT` + `stopPrice`, returns `orderId` — **code
      complete, unit-tested** (DTO validation + payload building), **not yet placed against a real
      Schwab order**.
-   - `GET .../orders/working` and `DELETE .../orders/:orderId` — **code complete**, same
-     not-yet-live-tested caveat.
-   - `order-update` socket event (optional ask, shipped) — **code complete**, same caveat.
-   - Needs an RTH retest with a real open option position to close out all five of section 10f's
-     acceptance checks — see section 10.
+   - `GET .../orders/working` and `DELETE .../orders/:orderId` — **code complete**. Frontend's
+     working-orders panel exercises both against a real `WORKING` `LIMIT` order successfully; cancel
+     hasn't yet been exercised against a real resting order.
+   - `order-update` socket event (optional ask, shipped) — **code complete**, not yet exercised.
+   - Needs an RTH retest with a real STOP order to close out the remaining section 10f acceptance
+     checks — see section 10.
 
 ## Changelog
 
+- **2026-09-03 (four items from a frontend session: blocker fix + 3 asks/fixes)**: Frontend sent
+  four prioritized items from a live testing session (frontend's sections 11/11b/12/9c). All four
+  addressed same-day:
+  1. **🔴 Blocker — chunked `SUBS` wiping the option ladder (open item 12 / section 11)**: fixed by
+     switching to small chunked `ADD` requests for subscribe/recenter, never a bare multi-symbol
+     `SUBS`. New `chunkArray`/`OPTIONS_SUBSCRIBE_CHUNK_SIZE` util, unit-tested. See section 11.
+  2. **`chart-candle` OHLCV field shift (open item 11 / section 9c)**: root-caused with a raw-frame
+     capture on preprod (same technique used for the earlier option-tick mislabel) - confirmed
+     `CHART_EQUITY` field `1` is `Sequence`, not `Open`; fixed field map to `2..6` = OHLCV. New
+     `chart-candle.mapper.ts` with a runtime `low <= high` sanity guard, unit-tested. See section 9c.
+  3. **`dayStartEquity` on `account-snapshot` (open item 13 / section 12)**: added, sourced from
+     Schwab's `initialBalances.liquidationValue`/`accountValue`. See section 12.
+  4. **Option-chain quote snapshot endpoint (open item 14 / section 11b)**: added
+     `GET .../market-data/chain`, thin proxy to Schwab's `GET /marketdata/v1/chains`, flattened to
+     the same shape `option-ticks` uses. See section 11b.
+
+  All four deployed to preprod + prod same-day. Items 2-4 are implemented but not yet live-verified
+  against real non-trivial data (need an RTH chain response, a non-zero `initialBalances`, and a
+  live `CHART_OPTIONS` frame respectively) - flagged individually in "Open items" above. Item 1 (the
+  blocker) is deployed and should be reverified with the frontend's own `scripts/tick-coverage.mjs`
+  repro.
 - **2026-09-03 (bug fix: `option-ticks` field mislabeling — the *actual* remaining cause of the
   blank options chain)**: After the ladder-thrashing fix below shipped, frontend reported the chain
   was *still* all `--` with a live position on the line. Confirmed via a direct socket probe against

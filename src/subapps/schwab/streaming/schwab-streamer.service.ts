@@ -15,10 +15,12 @@ import { SchwabAuthService } from '@schwab/auth/schwab-auth.service';
 import schwabConfig from '@schwab/config/schwab.config';
 
 import {
+  mapChartEquityCandle,
+  mapChartOptionCandle,
+} from './chart-candle.mapper';
+import {
   CHART_EQUITY_FIELD_KEYS,
-  CHART_EQUITY_FIELDS,
   CHART_OPTIONS_FIELD_KEYS,
-  CHART_OPTIONS_FIELDS,
 } from './chart-fields';
 import {
   chunkArray,
@@ -504,50 +506,33 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
     return { status: 'ok', symbol: symbol ?? '' };
   }
 
-  // TEMP DEBUG (remove after next deploy): frontend reports CHART_EQUITY
-  // OHLCV shifted by one field (low > high observed). Log the first raw
-  // frame verbatim to confirm true field numbering empirically before
-  // changing CHART_EQUITY_FIELDS, same approach used to root-cause the
-  // LEVELONE_OPTIONS field mislabel.
-  private chartEquityRawLogged = false;
-
   private handleChartEquityCandles(candles: Array<Record<string, any>>): void {
-    if (!this.chartEquityRawLogged && candles.length > 0) {
-      this.chartEquityRawLogged = true;
-      this.logger.warn(
-        `TEMP DEBUG raw CHART_EQUITY frame: ${JSON.stringify(candles[0])}`,
-      );
-    }
-    for (const candle of candles) {
-      const chartTime = candle[CHART_EQUITY_FIELDS.CHART_TIME];
-      if (typeof chartTime !== 'number') continue;
-      this.optionsGateway.emitChartCandle({
-        symbol: candle[CHART_EQUITY_FIELDS.KEY] ?? this.underlyingSymbol,
-        assetType: 'EQUITY',
-        open: candle[CHART_EQUITY_FIELDS.OPEN],
-        high: candle[CHART_EQUITY_FIELDS.HIGH],
-        low: candle[CHART_EQUITY_FIELDS.LOW],
-        close: candle[CHART_EQUITY_FIELDS.CLOSE],
-        volume: candle[CHART_EQUITY_FIELDS.VOLUME],
-        chartTime,
-      });
+    for (const raw of candles) {
+      const candle = mapChartEquityCandle(raw, this.underlyingSymbol);
+      if (!candle) {
+        this.logger.warn(
+          `Dropped structurally invalid CHART_EQUITY candle: ${JSON.stringify(
+            raw,
+          )}`,
+        );
+        continue;
+      }
+      this.optionsGateway.emitChartCandle(candle);
     }
   }
 
   private handleChartOptionCandles(candles: Array<Record<string, any>>): void {
-    for (const candle of candles) {
-      const chartTime = candle[CHART_OPTIONS_FIELDS.CHART_TIME];
-      if (typeof chartTime !== 'number') continue;
-      this.optionsGateway.emitChartCandle({
-        symbol: candle[CHART_OPTIONS_FIELDS.KEY] ?? this.optionChartSymbol,
-        assetType: 'OPTION',
-        open: candle[CHART_OPTIONS_FIELDS.OPEN],
-        high: candle[CHART_OPTIONS_FIELDS.HIGH],
-        low: candle[CHART_OPTIONS_FIELDS.LOW],
-        close: candle[CHART_OPTIONS_FIELDS.CLOSE],
-        volume: candle[CHART_OPTIONS_FIELDS.VOLUME],
-        chartTime,
-      });
+    for (const raw of candles) {
+      const candle = mapChartOptionCandle(raw, this.optionChartSymbol ?? '');
+      if (!candle) {
+        this.logger.warn(
+          `Dropped structurally invalid CHART_OPTIONS candle: ${JSON.stringify(
+            raw,
+          )}`,
+        );
+        continue;
+      }
+      this.optionsGateway.emitChartCandle(candle);
     }
   }
 

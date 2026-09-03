@@ -40,6 +40,8 @@ export interface AccountSnapshotPayload {
   equity: number;
   settledCash: number;
   optionsBuyingPower: number;
+  /** Start-of-day account value - see `AccountBalances.dayStartEquity`. */
+  dayStartEquity: number;
   positions: PositionSnapshot[];
   asOf: number;
 }
