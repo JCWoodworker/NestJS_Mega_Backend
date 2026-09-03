@@ -1,5 +1,7 @@
 import {
+  chunkArray,
   computeNearestStrike,
+  OPTIONS_SUBSCRIBE_CHUNK_SIZE,
   RECENTER_BUFFER_STRIKES,
   shouldRecenterLadder,
 } from './ladder-recenter.util';
@@ -105,5 +107,41 @@ describe('shouldRecenterLadder', () => {
         dayRolledOver: false,
       }),
     ).toBe(true);
+  });
+});
+
+describe('chunkArray', () => {
+  it('splits a 32-symbol ladder into chunks of the configured size', () => {
+    const symbols = Array.from({ length: 32 }, (_, i) => `SYM${i}`);
+    const chunks = chunkArray(symbols, OPTIONS_SUBSCRIBE_CHUNK_SIZE);
+
+    expect(chunks.flat()).toEqual(symbols);
+    for (const chunk of chunks.slice(0, -1)) {
+      expect(chunk.length).toBe(OPTIONS_SUBSCRIBE_CHUNK_SIZE);
+    }
+    expect(chunks[chunks.length - 1].length).toBeLessThanOrEqual(
+      OPTIONS_SUBSCRIBE_CHUNK_SIZE,
+    );
+  });
+
+  it('returns an empty array for empty input (no request should be sent)', () => {
+    expect(chunkArray([], OPTIONS_SUBSCRIBE_CHUNK_SIZE)).toEqual([]);
+  });
+
+  it('returns a single chunk when input is smaller than the chunk size', () => {
+    expect(chunkArray(['a', 'b'], 8)).toEqual([['a', 'b']]);
+  });
+
+  it('handles exact multiples of the chunk size without a trailing empty chunk', () => {
+    const symbols = Array.from({ length: 16 }, (_, i) => `SYM${i}`);
+    const chunks = chunkArray(symbols, 8);
+    expect(chunks.length).toBe(2);
+    expect(chunks[0].length).toBe(8);
+    expect(chunks[1].length).toBe(8);
+  });
+
+  it('throws for a non-positive chunk size', () => {
+    expect(() => chunkArray(['a'], 0)).toThrow();
+    expect(() => chunkArray(['a'], -1)).toThrow();
   });
 });

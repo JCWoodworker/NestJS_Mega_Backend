@@ -45,3 +45,36 @@ export function shouldRecenterLadder(params: {
     strikeIncrement * RECENTER_BUFFER_STRIKES
   );
 }
+
+/**
+ * Max symbols per `LEVELONE_OPTIONS` subscription request. Frontend
+ * reproduced 3/3 that, of a 32-symbol ladder built via a single request
+ * listing all 32 keys, only the trailing 6 (a contiguous slice) ever
+ * received ticks - every near-the-money strike, i.e. the ones that matter,
+ * went permanently silent with no error response and no subscription
+ * churn to explain it (`scripts/tick-coverage.mjs`, 3 runs over ~40min
+ * RTH, identical silent set every time). Schwab's Streamer Guide
+ * distinguishes `SUBS` ("overwrites all previously subscribed symbols for
+ * a service") from `ADD` ("does NOT wipe out previous symbols... OK to use
+ * ADD for first subscription command instead of SUBS") - splitting into
+ * small chunks and using `ADD` for every chunk (never a bare multi-symbol
+ * `SUBS`) avoids relying on Schwab to correctly register a single request
+ * with a long `keys` string, regardless of whether the exact failure mode
+ * is a request-size limit or something else undocumented on Schwab's side.
+ */
+export const OPTIONS_SUBSCRIBE_CHUNK_SIZE = 8;
+
+/** Splits `items` into consecutive chunks of at most `chunkSize`, preserving
+ * order. Returns `[]` for an empty input rather than `[[]]`. */
+export function chunkArray<T>(items: T[], chunkSize: number): T[][] {
+  if (chunkSize <= 0) {
+    throw new Error(`chunkSize must be positive, got ${chunkSize}`);
+  }
+  if (items.length === 0) return [];
+
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += chunkSize) {
+    chunks.push(items.slice(i, i + chunkSize));
+  }
+  return chunks;
+}

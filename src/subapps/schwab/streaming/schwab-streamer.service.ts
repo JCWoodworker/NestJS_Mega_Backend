@@ -21,7 +21,9 @@ import {
   CHART_OPTIONS_FIELDS,
 } from './chart-fields';
 import {
+  chunkArray,
   computeNearestStrike,
+  OPTIONS_SUBSCRIBE_CHUNK_SIZE,
   shouldRecenterLadder,
 } from './ladder-recenter.util';
 import {
@@ -407,14 +409,7 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
       requestid: this.nextRequestId(),
       parameters: { keys: this.underlyingSymbol },
     });
-    if (this.currentWindowSymbols.size > 0) {
-      this.sendRequest({
-        service: 'LEVELONE_OPTIONS',
-        command: 'UNSUBS',
-        requestid: this.nextRequestId(),
-        parameters: { keys: [...this.currentWindowSymbols].join(',') },
-      });
-    }
+    this.unsubscribeOptions([...this.currentWindowSymbols]);
 
     this.underlyingSymbol = symbol;
     this.optionRoot = OPTION_ROOT_OVERRIDES[symbol] ?? symbol;
@@ -509,7 +504,20 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
     return { status: 'ok', symbol: symbol ?? '' };
   }
 
+  // TEMP DEBUG (remove after next deploy): frontend reports CHART_EQUITY
+  // OHLCV shifted by one field (low > high observed). Log the first raw
+  // frame verbatim to confirm true field numbering empirically before
+  // changing CHART_EQUITY_FIELDS, same approach used to root-cause the
+  // LEVELONE_OPTIONS field mislabel.
+  private chartEquityRawLogged = false;
+
   private handleChartEquityCandles(candles: Array<Record<string, any>>): void {
+    if (!this.chartEquityRawLogged && candles.length > 0) {
+      this.chartEquityRawLogged = true;
+      this.logger.warn(
+        `TEMP DEBUG raw CHART_EQUITY frame: ${JSON.stringify(candles[0])}`,
+      );
+    }
     for (const candle of candles) {
       const chartTime = candle[CHART_EQUITY_FIELDS.CHART_TIME];
       if (typeof chartTime !== 'number') continue;
@@ -612,25 +620,8 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
       (s) => !this.currentWindowSymbols.has(s),
     );
 
-    if (toUnsub.length > 0) {
-      this.sendRequest({
-        service: 'LEVELONE_OPTIONS',
-        command: 'UNSUBS',
-        requestid: this.nextRequestId(),
-        parameters: { keys: toUnsub.join(',') },
-      });
-    }
-    if (toSub.length > 0) {
-      this.sendRequest({
-        service: 'LEVELONE_OPTIONS',
-        command: 'SUBS',
-        requestid: this.nextRequestId(),
-        parameters: {
-          keys: toSub.join(','),
-          fields: LEVEL_ONE_OPTIONS_FIELD_KEYS,
-        },
-      });
-    }
+    this.unsubscribeOptions(toUnsub);
+    this.addOptionSubscriptions(toSub);
 
     this.centerStrike = nearestStrike;
     this.currentExpirationDateKey = todayKey;
@@ -639,6 +630,52 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
       centerStrike: nearestStrike,
       symbols: [...newSymbols],
     });
+  }
+
+  /**
+   * Removes symbols from the `LEVELONE_OPTIONS` subscription, chunked to
+   * `OPTIONS_SUBSCRIBE_CHUNK_SIZE` per request - see `addOptionSubscriptions`
+   * for why chunking matters even though `UNSUBS` doesn't have `SUBS`'s
+   * "replaces everything" semantics; kept the same size for consistency and
+   * because a long `keys` string is the shared suspect either way.
+   */
+  private unsubscribeOptions(symbols: string[]): void {
+    for (const chunk of chunkArray(symbols, OPTIONS_SUBSCRIBE_CHUNK_SIZE)) {
+      this.sendRequest({
+        service: 'LEVELONE_OPTIONS',
+        command: 'UNSUBS',
+        requestid: this.nextRequestId(),
+        parameters: { keys: chunk.join(',') },
+      });
+    }
+  }
+
+  /**
+   * Adds symbols to the `LEVELONE_OPTIONS` subscription via chunked `ADD`
+   * requests - **never** a bare multi-symbol `SUBS`. Frontend reproduced 3/3
+   * that building the 32-symbol ladder via one `SUBS` request listing all 32
+   * keys left only the trailing 6 (a contiguous slice, every time) actually
+   * receiving ticks - every near-the-money strike went permanently silent
+   * with zero errors and zero subscription churn to explain it. Schwab's own
+   * Streamer Guide documents `SUBS` as replacing the entire subscription set
+   * for a service and explicitly says `ADD` is fine to use even for the
+   * first subscription, so growing the ladder via small `ADD` batches avoids
+   * relying on Schwab correctly registering one request with a long `keys`
+   * string, regardless of whether the exact failure mode was `SUBS`
+   * semantics or an undocumented request-size limit.
+   */
+  private addOptionSubscriptions(symbols: string[]): void {
+    for (const chunk of chunkArray(symbols, OPTIONS_SUBSCRIBE_CHUNK_SIZE)) {
+      this.sendRequest({
+        service: 'LEVELONE_OPTIONS',
+        command: 'ADD',
+        requestid: this.nextRequestId(),
+        parameters: {
+          keys: chunk.join(','),
+          fields: LEVEL_ONE_OPTIONS_FIELD_KEYS,
+        },
+      });
+    }
   }
 
   private flushBufferedUpdates(): void {
