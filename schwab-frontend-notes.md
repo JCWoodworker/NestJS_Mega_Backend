@@ -33,13 +33,19 @@ chart drag-to-stop) is now implemented** — `fast-execute` accepts `STOP`/`STOP
 `DELETE .../orders/:orderId` cancels one (trail = cancel + re-place). The optional `order-update`
 socket event also shipped. See section 10 below for the full contract as implemented.
 
-🐛 **Bug fix (2026-09-03): blank options chain, root-caused and fixed same day.** Frontend
-reported the options chain rendering completely empty during RTH right after this section 10
-work landed. Turned out to be unrelated to section 10 — a real, pre-existing bug in the option
-ladder's re-centering logic (see the new Changelog entry and section 8 addendum below) that was
-live on preprod well before today. Fixed and redeployed to preprod + prod, confirmed live: zero
-`LEVELONE_OPTIONS` subscription churn in a 2.5-minute post-deploy window that previously showed
-dozens of churn events in the same span.
+🐛 **Bug fix (2026-09-03): blank options chain — two separate bugs, both now fixed.** Frontend
+reported the options chain rendering completely empty during RTH right after the section 10 work
+landed above. This turned out to be **two independent, unrelated bugs stacked on top of each
+other**, both pre-existing and both now fixed and redeployed to preprod + prod:
+1. A subscription-churn bug in the option ladder's re-centering logic (fixed first, confirmed zero
+   `LEVELONE_OPTIONS` churn afterward) — see the Changelog and section 8b.
+2. **The chain was still blank after that fix.** Root cause: `option-ticks` field mislabeling — an
+   off-by-one in `LEVELONE_OPTIONS`'s field numbering vs. equities meant `bid`/`ask`/`last` were
+   being read from field numbers that are essentially never populated, even though real ticks were
+   flowing the entire time (confirmed via a direct socket probe: 769 ticks/25s with genuine bid/ask/
+   last movement). **This is what was actually causing the all-`--` chain** — see the Changelog for
+   the full root cause and **the breaking `option-ticks` contract change** in section 4 that fixes
+   it (raw field numbers are gone; ticks are now pre-normalized to named fields server-side).
 
 ---
 
@@ -256,14 +262,29 @@ io(`${VITE_SOCKET_URL}${VITE_SOCKET_NAMESPACE}`, {
 
 ### Server → client events
 - **`underlying-price`** — `{ symbol: string, price: number, timestamp: number }`.
-- **`option-ticks`** — batched array, ~50ms throttle:
+- **`option-ticks`** — batched array, ~50ms throttle. **⚠️ Breaking change from the previous copy of
+  this file (2026-09-03) — see the "option-ticks field mislabeling" changelog entry for why.** The
+  raw Schwab field-number object (`OptionTickRaw` below) is gone; the backend now normalizes every
+  tick into named fields server-side, so there's no field-number table to cross-reference anymore:
   ```ts
-  type OptionTickRaw = {
-    '0': string; '1': number; '2': number; '3': number // symbol, bid, ask, last
-    '4'?: number; '5'?: number; '8'?: number; '9'?: number; '16'?: number; '17'?: number
-    // bid size, ask size, volume, OI, delta, gamma
+  type OptionTick = {
+    symbol: string // matches the OSI-format strings in ladder-recentered's `symbols` array
+    bid?: number
+    ask?: number
+    last?: number
+    bidSize?: number
+    askSize?: number
+    volume?: number
+    openInterest?: number
+    delta?: number
   }
   ```
+  Schwab's delivery type for this stream is "Change" — **only fields that changed since the last
+  tick for that symbol are present**, same as before. Merge each tick into per-symbol state by
+  `symbol` rather than assuming every field is always populated; a field being `undefined` means
+  "unchanged," not "zero." Live-verified against real preprod tick data 2026-09-03 (see changelog):
+  769 ticks/25s on the current 0DTE SPY put/call ladder with sane bid/ask/last (e.g. `bid: 1.13,
+  ask: 1.14, last: 1.14`) and a monotonically-increasing `volume`.
 - **`ladder-recentered`** — `{ centerStrike: number, symbols: string[] }`. **Live-verified** with
   real ticking option symbols (see the streaming bug fix in the Changelog). Also now sent
   immediately on connect if the ladder is already established (see "late-joiner replay" below) —
@@ -627,8 +648,12 @@ Both resolved on the frontend side — GitHub repo + Netlify push-to-deploy wire
 ## Open items — status
 
 Current state:
-1. Streamer **tick** field mappings (`option-ticks`) — still open, blocked on an open option
-   position generating live ticks (see section 6).
+1. Streamer **tick** field mappings (`option-ticks`) — **✅ fixed and live-verified 2026-09-03**.
+   Was mislabeled (an off-by-one vs. Schwab's real `LEVELONE_OPTIONS` field numbering — see
+   Changelog), which is what made the options chain render all `--` even with a healthy streamer
+   connection and real ticks flowing. Now emits pre-normalized named fields instead of raw field
+   numbers — **this is a breaking payload-shape change, frontend needs to update its `option-ticks`
+   handler** (see section 4 for the new contract).
 2. **Section 9 (chart backfill + live candles) is implemented and deployed, partially
    live-verified**:
    - 9a (`price-history`) — **✅ fully live-verified** (726 real SPY candles from preprod).
@@ -658,6 +683,36 @@ Current state:
 
 ## Changelog
 
+- **2026-09-03 (bug fix: `option-ticks` field mislabeling — the *actual* remaining cause of the
+  blank options chain)**: After the ladder-thrashing fix below shipped, frontend reported the chain
+  was *still* all `--` with a live position on the line. Confirmed via a direct socket probe against
+  preprod (signed in, subscribed, listened for 25s) that real ticks *were* flowing the whole time —
+  769 `option-ticks` batches with genuine bid/ask/last movement and a monotonically-increasing
+  volume counter — so this was never a connectivity/streamer problem. The bug was in how those ticks
+  were labeled: `LEVELONE_OPTIONS` has a "Description" field at index 1 that `LEVELONE_EQUITIES`
+  doesn't, which shifts every price/size field up by one (bid=2 not 1, ask=3 not 2, last=4 not 3,
+  total volume=8 not 9, bid/ask size=16/17 not 4/8). This backend's internal field map — and the
+  `OptionTickRaw` contract previously documented in section 4 below — copied the equities numbering
+  onto options unchanged, so the frontend was reading `bid`/`ask`/`last` from field numbers that are
+  virtually never present in a real tick (field 1 only ever appears once, as a *string* description,
+  on a symbol's very first snapshot). Every batch after that landed with those keys simply absent,
+  which is indistinguishable from "no data" — exactly the all-`--` symptom, on every option, the
+  entire time, regardless of how healthy the streamer connection was. Verified the correct numbering
+  against Schwab's own published Streamer Guide field table (independently corroborated by two other
+  open-source Schwab client references) before changing anything, then confirmed it empirically:
+  field 8 was monotonically increasing across ticks (Total Volume, not the near-static Open
+  Interest the old map claimed) and fields 16/17 fluctuated in the low hundreds (Bid/Ask Size, not
+  Open Interest/Delta). **Fixed the root cause properly rather than just correcting numbers on both
+  sides of the contract again**: `option-ticks` no longer sends Schwab's raw field-number object at
+  all — the backend now normalizes every tick server-side into named fields (`{ symbol, bid, ask,
+  last, bidSize, askSize, volume, openInterest, delta }`) via a new, unit-tested `mapOptionTick`
+  helper, so there's no field-number table for the frontend to keep in sync with ever again. Partial
+  "Change"-delivery semantics are preserved — a field is omitted (not defaulted to `0`) when Schwab
+  didn't send it on that particular tick. **This is a breaking change to the `option-ticks` payload
+  shape** — see the corrected contract in section 4. Deployed to preprod + prod.
+  **Frontend action needed**: update `option-ticks` handling to read the new named fields instead of
+  numeric keys; there is no backwards-compatible transition since the old shape was never actually
+  usable.
 - **2026-09-03 (bug fix: option ladder thrashing / blank options chain)**: Frontend reported the
   options chain rendering completely blank during RTH. Root-caused via live preprod logs to
   `recenterLadder()` rebuilding the entire 16-strike `LEVELONE_OPTIONS` subscription any time the

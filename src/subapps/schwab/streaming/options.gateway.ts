@@ -14,6 +14,7 @@ import jwtConfig from '@iam/config/jwt.config';
 
 import { PositionSnapshot } from '@schwab/shared/account-data.mapper';
 
+import { OptionTick } from './option-tick.mapper';
 import {
   SchwabStreamerService,
   SwitchUnderlyingResult,
@@ -175,7 +176,7 @@ export class OptionsGateway implements OnGatewayConnection {
     return this.streamerService.subscribeOptionChart(body?.symbol ?? null);
   }
 
-  emitOptionTicks(ticks: Array<Record<string, unknown>>): void {
+  emitOptionTicks(ticks: OptionTick[]): void {
     this.server?.emit('option-ticks', ticks);
   }
 

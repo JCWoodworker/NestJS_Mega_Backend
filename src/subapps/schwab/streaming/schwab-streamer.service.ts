@@ -29,6 +29,7 @@ import {
   LEVEL_ONE_EQUITY_FIELDS,
   LEVEL_ONE_OPTIONS_FIELD_KEYS,
 } from './level-one-fields';
+import { mapOptionTicks, OptionTick } from './option-tick.mapper';
 import { OptionsGateway } from './options.gateway';
 import { buildOsiSymbol } from './osi-symbol.util';
 
@@ -112,7 +113,7 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
    * to yesterday's dead, already-expired symbols indefinitely. */
   private currentExpirationDateKey: string | null = null;
   private currentWindowSymbols = new Set<string>();
-  private pendingOptionTicks: Array<Record<string, unknown>> = [];
+  private pendingOptionTicks: OptionTick[] = [];
   private pendingUnderlyingPrice: number | null = null;
   /** OSI symbol of the single tracked-option premium chart (`subscribe-
    * option-chart`, section 9b) - `null` when nothing is subscribed. */
@@ -289,7 +290,7 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
       if (dataItem.service === 'LEVELONE_EQUITIES') {
         this.handleEquityTicks(dataItem.content ?? []);
       } else if (dataItem.service === 'LEVELONE_OPTIONS') {
-        this.pendingOptionTicks.push(...(dataItem.content ?? []));
+        this.pendingOptionTicks.push(...mapOptionTicks(dataItem.content ?? []));
       } else if (dataItem.service === 'CHART_EQUITY') {
         this.handleChartEquityCandles(dataItem.content ?? []);
       } else if (dataItem.service === 'CHART_OPTIONS') {
