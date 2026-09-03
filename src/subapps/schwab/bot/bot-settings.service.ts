@@ -35,6 +35,11 @@ export interface BotSettingsView {
 
 @Injectable()
 export class BotSettingsService {
+  /** Guards the lazy-create-on-first-read below against a boot-time race
+   * where two concurrent callers both see no row and both insert one —
+   * observed in practice (duplicate `bot_state` rows on first deploy). */
+  private creatingRow: Promise<BotSettings> | null = null;
+
   constructor(
     @InjectRepository(BotSettings)
     private readonly settingsRepository: Repository<BotSettings>,
@@ -46,7 +51,15 @@ export class BotSettingsService {
       order: { updatedAt: 'DESC' },
     });
     if (existing) return existing;
-    return this.settingsRepository.save(this.settingsRepository.create({}));
+
+    if (!this.creatingRow) {
+      this.creatingRow = this.settingsRepository
+        .save(this.settingsRepository.create({}))
+        .finally(() => {
+          this.creatingRow = null;
+        });
+    }
+    return this.creatingRow;
   }
 
   async getSettings(): Promise<BotSettingsView> {

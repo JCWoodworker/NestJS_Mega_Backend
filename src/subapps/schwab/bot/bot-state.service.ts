@@ -55,6 +55,9 @@ export class BotStateService {
   private liveEquity = 0;
   private liveSettledCash = 0;
   private liveDayStartEquity = 0;
+  /** Guards the lazy-create-on-first-read below against a boot-time race
+   * where two concurrent callers both see no row and both insert one. */
+  private creatingRow: Promise<BotState> | null = null;
 
   constructor(
     @InjectRepository(BotState)
@@ -98,16 +101,24 @@ export class BotStateService {
       order: { updatedAt: 'DESC' },
     });
     if (existing) return existing;
-    return this.stateRepository.save(
-      this.stateRepository.create({
-        mode: BotMode.MANUAL,
-        lane: null,
-        running: false,
-        lockout: false,
-        lockoutReason: null,
-        liveArmed: false,
-      }),
-    );
+
+    if (!this.creatingRow) {
+      this.creatingRow = this.stateRepository
+        .save(
+          this.stateRepository.create({
+            mode: BotMode.MANUAL,
+            lane: null,
+            running: false,
+            lockout: false,
+            lockoutReason: null,
+            liveArmed: false,
+          }),
+        )
+        .finally(() => {
+          this.creatingRow = null;
+        });
+    }
+    return this.creatingRow;
   }
 
   async save(row: BotState): Promise<BotState> {
