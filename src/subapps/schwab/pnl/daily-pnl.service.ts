@@ -6,7 +6,7 @@ import { SchwabDailyPnl } from './entities/schwab-daily-pnl.entity';
 import { SchwabRealizedTrade } from './entities/schwab-realized-trade.entity';
 import { SchwabTransaction } from './entities/schwab-transaction.entity';
 import { TransactionCategory } from './enums/transaction-category.enum';
-import { etDateKey, etDayBounds } from './et-date.util';
+import { etDateKey, etDayBounds, transferEtDateKey } from './et-date.util';
 import { computeTradingPnl } from './fifo-matcher.util';
 import { transferSignedAmount } from './transaction-classify.util';
 
@@ -32,39 +32,81 @@ export class DailyPnlService {
     equity: number,
     dayStartEquity: number,
   ): Promise<void> {
-    try {
-      const date = etDateKey();
-      const { start, end } = etDayBounds(date);
+    const date = etDateKey();
+    await this.upsertDayRow(accountHash, date, {
+      equity: Number(equity),
+      dayStartEquity: Number(dayStartEquity),
+    });
+  }
 
-      const transfers = await this.transactionRepository.find({
+  /**
+   * Recompute netTransfers / tradingPnl / realizedPnl for an ET calendar day.
+   * Keeps existing start/end equity (used after MANUAL transfer
+   * create/update/delete so the daily row updates immediately).
+   */
+  async recomputeDay(
+    accountHash: string,
+    dateKey: string = etDateKey(),
+  ): Promise<void> {
+    const existing = await this.dailyRepository.findOne({
+      where: { accountHash, date: dateKey },
+    });
+    if (!existing) {
+      return;
+    }
+    await this.upsertDayRow(accountHash, dateKey, {
+      equity: Number(existing.endEquity),
+      dayStartEquity: Number(existing.startEquity),
+    });
+  }
+
+  private async upsertDayRow(
+    accountHash: string,
+    date: string,
+    sample: { equity: number; dayStartEquity: number },
+  ): Promise<void> {
+    try {
+      const { start, end } = etDayBounds(date);
+      // Widen ±1 day so UTC-midnight MANUAL dates intended for this ET day
+      // still load, then filter with transferEtDateKey (SCHWAB_SYNC + MANUAL).
+      const windowStart = new Date(start.getTime() - 24 * 60 * 60 * 1000);
+      const windowEnd = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+
+      const transferCandidates = await this.transactionRepository.find({
         where: {
           accountHash,
           category: In([
             TransactionCategory.TRANSFER_IN,
             TransactionCategory.TRANSFER_OUT,
           ]),
-          transactionDate: Between(start, end),
+          transactionDate: Between(windowStart, windowEnd),
         },
       });
+      const transfers = transferCandidates.filter(
+        (tx) => transferEtDateKey(tx.transactionDate, tx.source) === date,
+      );
       const netTransfers = transfers.reduce(
         (sum, tx) =>
           sum + transferSignedAmount(tx.category, Number(tx.netAmount)),
         0,
       );
 
-      const closedToday = await this.realizedRepository.find({
+      const closedCandidates = await this.realizedRepository.find({
         where: {
           accountHash,
-          closedAt: Between(start, end),
+          closedAt: Between(windowStart, windowEnd),
         },
       });
-      const realizedPnl = closedToday.reduce(
-        (sum, t) => sum + Number(t.realizedPnl),
-        0,
-      );
+      const realizedPnl = closedCandidates
+        .filter((t) => {
+          const ms = t.closedAt.getTime();
+          return ms >= start.getTime() && ms < end.getTime();
+        })
+        .reduce((sum, t) => sum + Number(t.realizedPnl), 0);
 
-      const startEquity = Number(dayStartEquity) || Number(equity);
-      const endEquity = Number(equity);
+      const startEquity =
+        Number(sample.dayStartEquity) || Number(sample.equity);
+      const endEquity = Number(sample.equity);
       const tradingPnl = computeTradingPnl(
         startEquity,
         endEquity,
@@ -97,7 +139,7 @@ export class DailyPnlService {
       }
     } catch (err) {
       this.logger.warn(
-        `Failed to record equity sample for daily P&L: ${err.message}`,
+        `Failed to upsert daily P&L for ${date}: ${err.message}`,
       );
     }
   }

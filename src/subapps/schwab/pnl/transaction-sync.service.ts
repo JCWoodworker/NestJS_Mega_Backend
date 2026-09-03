@@ -178,6 +178,7 @@ export class TransactionSyncService implements OnModuleInit {
           `/trader/v1/accounts/${accountHash}/transactions`,
           {
             params: {
+              // Schwab docs use `types` (plural) as a single enum value per call.
               types: type,
               startDate: startDate.toISOString(),
               endDate: endDate.toISOString(),
@@ -187,10 +188,17 @@ export class TransactionSyncService implements OnModuleInit {
       );
       return Array.isArray(response.data) ? response.data : [];
     } catch (err) {
-      // Some types return 400 when empty / unsupported for the account —
-      // treat as empty rather than aborting the whole sync.
       const status = err?.response?.status;
+      const body = err?.response?.data;
+      // Some types return 400 when empty / unsupported for the account —
+      // treat as empty rather than aborting the whole sync, but log so we
+      // can tell "API rejected the query" from "account truly has no rows."
       if (status === 400 || status === 404) {
+        this.logger.warn(
+          `Schwab transactions type=${type} returned ${status}: ${JSON.stringify(
+            body,
+          )}`,
+        );
         return [];
       }
       throw err;

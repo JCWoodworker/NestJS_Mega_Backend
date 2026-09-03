@@ -17,6 +17,7 @@ import {
 import schwabConfig from '@schwab/config/schwab.config';
 import { OrdersService } from '@schwab/orders/orders.service';
 
+import { DailyPnlService } from './daily-pnl.service';
 import {
   CreateManualTransactionDto,
   UpdateManualTransactionDto,
@@ -33,7 +34,11 @@ import { SchwabRealizedTrade } from './entities/schwab-realized-trade.entity';
 import { SchwabTransaction } from './entities/schwab-transaction.entity';
 import { TransactionCategory } from './enums/transaction-category.enum';
 import { TransactionSource } from './enums/transaction-source.enum';
-import { etDateKey } from './et-date.util';
+import {
+  etDateKey,
+  parseEtCalendarDate,
+  transferEtDateKey,
+} from './et-date.util';
 import { transferSignedAmount } from './transaction-classify.util';
 import { TransactionSyncService } from './transaction-sync.service';
 
@@ -44,6 +49,7 @@ export class PnlService {
   constructor(
     private readonly ordersService: OrdersService,
     private readonly transactionSyncService: TransactionSyncService,
+    private readonly dailyPnlService: DailyPnlService,
     @InjectRepository(SchwabDailyPnl)
     private readonly dailyRepository: Repository<SchwabDailyPnl>,
     @InjectRepository(SchwabTransaction)
@@ -157,6 +163,7 @@ export class PnlService {
 
   async createManualTransaction(dto: CreateManualTransactionDto) {
     const accountHash = await this.resolveAccountHash(dto.accountHash);
+    const transactionDate = parseEtCalendarDate(dto.date);
     const row = await this.transactionRepository.save({
       accountHash,
       schwabTransactionId: null,
@@ -166,10 +173,13 @@ export class PnlService {
       netAmount: dto.amount,
       symbol: dto.symbol ?? null,
       description: dto.description ?? null,
-      transactionDate: new Date(dto.date),
+      transactionDate,
       raw: null,
       note: dto.note ?? null,
     });
+
+    await this.refreshDailyForTransfer(accountHash, transactionDate);
+
     return {
       id: row.id,
       category: row.category,
@@ -187,14 +197,22 @@ export class PnlService {
       throw new BadRequestException('Only MANUAL transactions can be edited');
     }
 
+    const previousDate = row.transactionDate;
+
     if (dto.category !== undefined) row.category = dto.category;
     if (dto.amount !== undefined) row.netAmount = dto.amount;
-    if (dto.date !== undefined) row.transactionDate = new Date(dto.date);
+    if (dto.date !== undefined) {
+      row.transactionDate = parseEtCalendarDate(dto.date);
+    }
     if (dto.note !== undefined) row.note = dto.note;
     if (dto.symbol !== undefined) row.symbol = dto.symbol;
     if (dto.description !== undefined) row.description = dto.description;
 
     const saved = await this.transactionRepository.save(row);
+
+    await this.refreshDailyForTransfer(row.accountHash, previousDate);
+    await this.refreshDailyForTransfer(row.accountHash, saved.transactionDate);
+
     return {
       id: saved.id,
       category: saved.category,
@@ -212,6 +230,7 @@ export class PnlService {
       throw new BadRequestException('Only MANUAL transactions can be deleted');
     }
     await this.transactionRepository.delete({ id });
+    await this.refreshDailyForTransfer(row.accountHash, row.transactionDate);
     return { deleted: true, id };
   }
 
@@ -280,6 +299,20 @@ export class PnlService {
   async triggerSync(): Promise<{ ok: true }> {
     await this.transactionSyncService.syncRecent();
     return { ok: true };
+  }
+
+  private async refreshDailyForTransfer(
+    accountHash: string,
+    transactionDate: Date,
+  ): Promise<void> {
+    const dayKey = transferEtDateKey(transactionDate, TransactionSource.MANUAL);
+    await this.dailyPnlService.recomputeDay(accountHash, dayKey);
+    // Also refresh "today" in case the transfer was meant for today but the
+    // stored timestamp keyed a neighboring day before normalization.
+    const today = etDateKey();
+    if (dayKey !== today) {
+      await this.dailyPnlService.recomputeDay(accountHash, today);
+    }
   }
 
   private dateRange(from?: string, to?: string) {

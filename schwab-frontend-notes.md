@@ -70,11 +70,13 @@ section 12)** and **✅ new option-chain quote snapshot endpoint,
 `GET .../market-data/chain` (frontend's open item 14 / section 11b)** — both implemented per the
 frontend's asks, see sections 12 and 11b.
 
-✅ **New (2026-09-03): Daily P&L tracking + trade/transfer history (section 13).** Backend now
-persists Schwab transactions, separates capital transfers from trading P&L, FIFO-matches fills into
-per-trade realized P&L, rolls up daily equity/P&L, and keeps terminal order history. New REST
-surface under `/api/v1/subapps/schwab/pnl/*` — see section 13. Frontend history page is the next
-consumer of this contract.
+✅ **New (2026-09-03): Daily P&L tracking + trade/transfer history (section 13) — live on
+preprod + prod.** REST under `/api/v1/subapps/schwab/pnl/*`. Live-verified: `/pnl/summary`,
+`/pnl/daily`, `/pnl/orders`, manual `TRANSFER_IN` create/delete (correctly moves
+`netDeposits`/`allTimeTradingPnl`). **Frontend can start the history page now** — full contract +
+suggested UI layout in section 13. **13b fixed:** daily `netTransfers` now includes MANUAL
+transfers on the intended ET day. Note: Schwab `/transactions` sync still returns empty
+(`/pnl/trades` may stay `[]`; prefer `/pnl/orders` FIFO fallback until app permission is confirmed).
 
 ---
 
@@ -768,57 +770,121 @@ against real data, if it turns out Schwab exposes something more direct.
 
 ## 13. ✅ Implemented: Daily P&L tracking + trade/transfer history
 
-Backend-persisted history so the frontend can build a history page that answers: **how much did we
-earn from trading vs how much did we transfer in?** Charts on the frontend should plot
-`GET /pnl/daily` (equity curve) and overlay `GET /pnl/trades` markers on existing
-`GET /market-data/price-history` candles — no extra chart endpoint here.
+**Status: live on preprod + prod (2026-09-03).** Frontend can build the history page against this
+contract now. Hand this whole section (or the file) to the frontend agent.
 
-All endpoints require `Authorization: Bearer <accessToken>` (same as `/orders/*`). Optional
-`accountHash` query/body falls back to the linked account when omitted.
+**Goal of the page:** show how we're doing, *how* we got there, and cleanly separate **money
+transferred in** from **money earned trading**.
 
-### Model
+### Auth + base path
 
-- **Transfers** (`TRANSFER_IN` / `TRANSFER_OUT`) come from Schwab transaction types
-  (`ACH_RECEIPT`, `WIRE_IN`, `CASH_RECEIPT`, `ACH_DISBURSEMENT`, `WIRE_OUT`, `CASH_DISBURSEMENT`,
-  sign-dependent `ELECTRONIC_FUND`) plus **manual** rows you can POST for a starting-balance
-  backfill that predates Schwab sync history.
-- **Trading P&L (daily)** = `endEquity - startEquity - netTransfers` (America/New_York calendar day).
-- **Per-trade realized P&L** = FIFO lot-matching on synced trade fills (options use the 100x
-  multiplier when the symbol looks like OSI).
-- **Order history** persists terminal statuses (`FILLED` / `CANCELED` / `REJECTED` / `EXPIRED` /
-  `REPLACED`) from the existing `order-update` poller — `GET /orders/working` alone only shows
-  live orders.
+Same as every other Schwab REST call:
 
-Sync runs on boot (~15s after start) and every 15 minutes (`POST /pnl/sync` for a manual kick).
-Daily rows are upserted from the existing `account-snapshot` poll.
+```
+Authorization: Bearer <accessToken>
+```
+
+Base (preprod):
+`https://nestjs-mega-backend-preprod-420ae4c0c109.herokuapp.com/api/v1/subapps/schwab/pnl/...`
+
+Optional `accountHash` query/body falls back to the linked Schwab account when omitted — same
+pattern as `/orders/*`. Rate limit for this controller: 60 req / 60s.
+
+### What already has live data (build UI against these first)
+
+| Endpoint | Live on preprod? | Notes |
+|---|---|---|
+| `GET /pnl/summary` | ✅ | Real equity / todayPnl from snapshot rollup |
+| `GET /pnl/daily` | ✅ | Today’s row already updating during RTH |
+| `GET /pnl/orders` | ✅ | Real FILLED/REJECTED orders from today’s session |
+| `POST/PATCH/DELETE /pnl/transactions` (MANUAL) | ✅ | Starting-balance backfill works; moves summary |
+| `GET /pnl/transactions` (Schwab-synced) | ⚠️ often `[]` | Schwab `/transactions` returns empty (likely app permission) — see 13b |
+| `GET /pnl/trades` (FIFO) | ⚠️ often `[]` | Depends on synced fills; use `/pnl/orders` FIFO fallback until then |
+| `POST /pnl/sync` | ✅ | Kicks sync; may still upsert 0 until Schwab permission is fixed |
+
+Until Schwab sync populates fills, the history page should still be useful from **summary + daily
+equity curve + order history + manual transfers**. Show empty states for trades/synced ledger,
+not errors.
+
+### Model (read this before wiring numbers)
+
+- **Transfers** (`TRANSFER_IN` / `TRANSFER_OUT`): Schwab ACH/WIRE/CASH (+ sign-dependent
+  `ELECTRONIC_FUND`) **plus manual rows**. Manual is how you set a **starting balance** that
+  predates sync history.
+- **Daily trading P&L** = `endEquity - startEquity - netTransfers` (America/New_York calendar day).
+- **All-time trading P&L** = `currentEquity - netDeposits` where `netDeposits = totalTransfersIn -
+  totalTransfersOut`. Depositing money must **not** look like trading profit.
+- **Per-trade realized P&L** = FIFO lot-matching on synced fills (options ×100 when symbol looks
+  like OSI). Overlay these on `GET /market-data/price-history` candles if desired — no extra chart
+  endpoint.
+- **Order history** = terminal statuses only (`FILLED` / `CANCELED` / `CANCELLED` / `REJECTED` /
+  `EXPIRED` / `REPLACED`). Live resting orders stay on `GET /orders/working`.
+
+Backend sync: on boot (~15s) + every 15 min; `POST /pnl/sync` for a manual kick. Daily rows upsert
+from the existing `account-snapshot` poll.
+
+### Suggested page layout (one history route)
+
+Recommended sections (one job each):
+
+1. **Header / summary strip** — `GET /pnl/summary`
+   - Current equity
+   - Today’s P&L (`todayPnl`)
+   - All-time trading P&L (`allTimeTradingPnl`) — label clearly as *trading*, not equity change
+   - Net deposits (`netDeposits`) with optional breakdown in/out
+2. **Equity / daily P&L chart** — `GET /pnl/daily?from=&to=`
+   - Line: `endEquity` over `date`
+   - Optional bars: `tradingPnl` per day
+3. **Closed trades** — `GET /pnl/trades?from=&to=&symbol=`
+   - Win/loss, holding time (`holdingMs`), direction, qty, open/close prices
+   - Empty-state OK until Schwab sync fills this
+4. **Transfers / starting balance** — `GET /pnl/transactions?category=TRANSFER_IN` and
+   `...TRANSFER_OUT` (two calls; category is a single enum value, not a list)
+   - Form: `POST /pnl/transactions` with `category: 'TRANSFER_IN'`, `amount`, `date`, `note`
+   - Edit/delete only when `source === 'MANUAL'`
+5. **Order log** — `GET /pnl/orders?from=&to=&symbol=&status=`
+   - Already has real rows; good first table to wire
+
+Optional later: full ledger (`GET /pnl/transactions` without category), “Sync now” button →
+`POST /pnl/sync`.
 
 ### Endpoints
 
 ```
-GET  /api/v1/subapps/schwab/pnl/summary
-GET  /api/v1/subapps/schwab/pnl/daily?from=YYYY-MM-DD&to=YYYY-MM-DD
-GET  /api/v1/subapps/schwab/pnl/transactions?from=&to=&category=
-POST /api/v1/subapps/schwab/pnl/transactions
-PATCH /api/v1/subapps/schwab/pnl/transactions/:id   # MANUAL only
+GET    /api/v1/subapps/schwab/pnl/summary
+GET    /api/v1/subapps/schwab/pnl/daily?from=YYYY-MM-DD&to=YYYY-MM-DD&accountHash=
+GET    /api/v1/subapps/schwab/pnl/transactions?from=&to=&category=&accountHash=
+POST   /api/v1/subapps/schwab/pnl/transactions
+PATCH  /api/v1/subapps/schwab/pnl/transactions/:id   # MANUAL only
 DELETE /api/v1/subapps/schwab/pnl/transactions/:id  # MANUAL only
-GET  /api/v1/subapps/schwab/pnl/trades?from=&to=&symbol=
-GET  /api/v1/subapps/schwab/pnl/orders?from=&to=&symbol=&status=
-POST /api/v1/subapps/schwab/pnl/sync
+GET    /api/v1/subapps/schwab/pnl/trades?from=&to=&symbol=&accountHash=
+GET    /api/v1/subapps/schwab/pnl/orders?from=&to=&symbol=&status=&accountHash=
+POST   /api/v1/subapps/schwab/pnl/sync
 ```
 
-**`GET /pnl/summary`**
+`from` / `to` are ISO date strings (`YYYY-MM-DD` or full ISO). `category` must be one of:
+`TRADE` | `TRANSFER_IN` | `TRANSFER_OUT` | `INCOME` | `FEE` | `OTHER`.
+
+---
+
+**`GET /pnl/summary`** — live example shape from preprod:
 
 ```ts
 {
-  currentEquity: number
-  totalTransfersIn: number
-  totalTransfersOut: number
-  netDeposits: number              // in - out
-  allTimeTradingPnl: number        // currentEquity - netDeposits
-  todayPnl: number                 // today's trading_pnl rollup
-  asOfDate: string                 // YYYY-MM-DD (ET)
+  currentEquity: 115.45,
+  totalTransfersIn: 0,
+  totalTransfersOut: 0,
+  netDeposits: 0,              // in - out
+  allTimeTradingPnl: 115.45,   // currentEquity - netDeposits
+  todayPnl: 110.46,            // today's trading_pnl rollup
+  asOfDate: "2026-09-03"       // YYYY-MM-DD (America/New_York)
 }
 ```
+
+After a manual `TRANSFER_IN` of `10000`, the same account showed:
+`netDeposits: 10000`, `allTimeTradingPnl: -9884.55` (equity unchanged — deposit is **not** profit).
+
+---
 
 **`GET /pnl/daily`** — equity curve / daily bars
 
@@ -829,11 +895,16 @@ Array<{
   endEquity: number
   netTransfers: number
   tradingPnl: number               // end - start - netTransfers
-  realizedPnl: number              // sum of FIFO closed trades that day
+  realizedPnl: number              // sum of FIFO closed trades that day (0 if sync empty)
 }>
 ```
 
-**`GET /pnl/transactions`** — ledger (transfers + trades + fees + income + other)
+Live example: `[{ date: "2026-09-03", startEquity: 4.99, endEquity: 115.45, netTransfers: 0,
+tradingPnl: 110.46, realizedPnl: 0 }]`.
+
+---
+
+**`GET /pnl/transactions`** — ledger
 
 ```ts
 Array<{
@@ -849,24 +920,39 @@ Array<{
 }>
 ```
 
-**`POST /pnl/transactions`** — manual starting point / correction
+**`POST /pnl/transactions`** — manual starting point / correction → `201`
 
 ```ts
-// body
+// request body
 {
   category: 'TRANSFER_IN' | 'TRANSFER_OUT' | 'INCOME' | 'FEE' | 'OTHER' | 'TRADE'
   amount: number
-  date: string                     // ISO date
+  date: string                     // ISO date/datetime
   note?: string
   symbol?: string
   description?: string
   accountHash?: string
 }
+
+// response
+{
+  id: string
+  category: string
+  source: 'MANUAL'
+  netAmount: number
+  transactionDate: string
+  note: string | null
+}
 ```
 
-Only `source: 'MANUAL'` rows can be `PATCH`ed / `DELETE`d.
+**`PATCH /pnl/transactions/:id`** — same optional fields as create (`category`, `amount`, `date`,
+`note`, `symbol`, `description`). **`400` if `source !== 'MANUAL'`.**
 
-**`GET /pnl/trades`** — FIFO-matched closed round trips
+**`DELETE /pnl/transactions/:id`** → `{ deleted: true, id }` — **`400` if not MANUAL.**
+
+---
+
+**`GET /pnl/trades`** — FIFO-matched closed round trips (may be `[]` until sync works)
 
 ```ts
 Array<{
@@ -876,41 +962,84 @@ Array<{
   quantity: number
   openPrice: number
   closePrice: number
-  openedAt: string
-  closedAt: string
+  openedAt: string                 // ISO
+  closedAt: string                 // ISO
   realizedPnl: number
   holdingMs: number
 }>
 ```
 
-**`GET /pnl/orders`** — terminal order history
+---
+
+**`GET /pnl/orders`** — terminal order history (already populated live)
 
 ```ts
 Array<{
   id: string
   orderId: string
-  symbol: string
-  instruction: string
-  orderType: string
-  status: string
+  symbol: string                   // often OSI, e.g. "SPY   260903C00776000"
+  instruction: string              // e.g. BUY_TO_OPEN / SELL_TO_CLOSE
+  orderType: string                // LIMIT / MARKET / STOP / ...
+  status: string                   // FILLED / REJECTED / ...
   quantity: number
   filledQuantity: number
   price: number | null
   stopPrice: number | null
   averageFillPrice: number | null
-  enteredTime: string | null
-  closedAt: string | null
+  enteredTime: string | null       // ISO
+  closedAt: string | null          // ISO (when we persisted the terminal update)
 }>
 ```
 
-### Frontend acceptance sketch
+**`POST /pnl/sync`** → `{ ok: true }` — fire-and-forget refresh of Schwab transactions.
 
-1. Seed a starting balance: `POST /pnl/transactions` with `category: TRANSFER_IN` for funding that
-   predates sync (or rely on Schwab-synced ACH/WIRE rows once they appear).
-2. History page: summary header from `/pnl/summary`, equity chart from `/pnl/daily`, trade list from
-   `/pnl/trades`, transfer ledger filtered with `category=TRANSFER_IN|TRANSFER_OUT`, order log from
-   `/pnl/orders`.
-3. `allTimeTradingPnl` should move with closed trades and **not** jump when you only deposit/withdraw.
+### Frontend acceptance checks
+
+1. Summary header shows equity, today P&L, all-time **trading** P&L, and net deposits as separate
+   numbers — depositing via manual `TRANSFER_IN` must change deposits/trading-P&L math without
+   inventing fake trade profit on the equity chart alone.
+2. Daily chart loads from `/pnl/daily` (even a single day is fine).
+3. Order log shows today’s filled/rejected orders from `/pnl/orders`.
+4. Manual starting-balance form: create → appears in transfers list → editable/deletable; synced
+   rows (when they appear) are read-only.
+5. Trades table handles `[]` gracefully; when sync starts returning fills, same UI lights up with
+   no contract change.
+6. No new socket events for this feature — poll REST on page load / date-range change (and
+   optionally refresh summary periodically). Live day P&L during a trading session can also reuse
+   `account-snapshot` (`equity - dayStartEquity`) for the “today” number if you want it tickier
+   than polling `/pnl/summary`.
+
+### 13b. ✅ Fixed: daily `netTransfers` missed MANUAL transfers (ET date-only bug)
+
+Frontend reported: MANUAL `TRANSFER_IN` of $49 “today” correctly moved `/pnl/summary.netDeposits`,
+but `/pnl/daily` for today still had `netTransfers: 0`, so `tradingPnl` / `todayPnl` counted the
+deposit as trading profit (`115.45 − 4.99 − 0 = 110.46` instead of `115.45 − 4.99 − 49 = 61.46`).
+
+**Root cause:** the daily rollup already queried both MANUAL and Schwab-synced
+`TRANSFER_IN`/`TRANSFER_OUT` rows — it was **not** filtering MANUAL out by `source`. A date-only
+(or `…T00:00:00.000Z`) “today” string was stored as UTC midnight, which is the **previous**
+America/New_York evening during EDT, so it fell outside today’s ET day bounds.
+
+**Fix (deployed):**
+- MANUAL create/update dates are normalized with `parseEtCalendarDate` (date-only / UTC midnight →
+  noon ET that calendar day).
+- Daily rollup matches transfers with `transferEtDateKey` (includes MANUAL + SCHWAB_SYNC; legacy
+  MANUAL UTC-midnight rows still count on the UTC Y-M-D the user picked).
+- MANUAL create/update/delete immediately recomputes that day’s `schwab_daily_pnl` row (no wait for
+  the next account-snapshot poll).
+- `/pnl/summary.todayPnl` continues to read `schwab_daily_pnl.tradingPnl` for today — same formula
+  as daily `tradingPnl` (`endEquity - startEquity - netTransfers`).
+
+**Frontend FYI acknowledged (no backend action):** History page FIFO-matches FILLED opens→closes
+from `/pnl/orders` while `/pnl/trades` is empty; will prefer `/pnl/trades` once Schwab transaction
+sync returns fills. Optional later: commission on trade P&L if/when exposed.
+
+**Schwab `/transactions` sync still empty:** live sync completes with `upserted=0` and HTTP 200
+empty arrays (not a date-format bug in our client). Same pattern other Schwab API users have seen
+when the developer app lacks transaction-history permission / Trading Production approval —
+orders/positions work, `/transactions` silently returns `[]`. Frontend should keep the
+`/pnl/orders`-based fallback. Backend will keep trying sync on cron; once the Schwab app
+permission is confirmed, `/pnl/trades` should light up with no contract change.
 
 ## 7. Git remote / CI, sign-up UI
 Both resolved on the frontend side — GitHub repo + Netlify push-to-deploy wired up, and a Sign In
@@ -965,14 +1094,28 @@ Current state:
    - `order-update` socket event (optional ask, shipped) — **code complete**, not yet exercised.
    - Needs an RTH retest with a real STOP order to close out the remaining section 10f acceptance
      checks — see section 10.
-8. **Section 13 (daily P&L + transfer/trade history) — ✅ implemented 2026-09-03.** New
-   `/pnl/*` REST surface + DB tables for transfers vs trading P&L, FIFO realized trades, daily
-   rollups, and terminal order history. See section 13. Frontend history page still to be built
-   against this contract; live verification of Schwab `/transactions` sync pending first RTH sync
-   against the connected account.
+8. **Section 13 (daily P&L + transfer/trade history) — ✅ live on preprod + prod 2026-09-03.**
+   `/pnl/summary`, `/pnl/daily`, `/pnl/orders`, and manual transfer CRUD live-verified with real
+   account data. Frontend history page is unblocked — see section 13 for contract + suggested UI.
+   **13b ✅ fixed:** daily `netTransfers` now includes MANUAL transfers on the intended ET day
+   (was a UTC-midnight date-label bug, not a source filter). See section 13b.
+   **Still open:** Schwab `/transactions` sync still returns empty (`upserted=0`) — likely app
+   permission / Trading Production scope; frontend’s `/pnl/orders` FIFO fallback is the right
+   interim. Prefer `/pnl/trades` when sync starts returning fills.
 
 ## Changelog
 
+- **2026-09-03 (section 13b: MANUAL transfers in daily netTransfers)**: Fixed daily rollup so a
+  MANUAL `TRANSFER_IN`/`TRANSFER_OUT` dated “today” is subtracted from that day’s `tradingPnl` /
+  `todayPnl`. Root cause was UTC-midnight date-only storage landing on the previous ET evening.
+  Normalize MANUAL dates to noon ET; match transfers with `transferEtDateKey`; recompute daily row
+  immediately on MANUAL CRUD. Documented frontend `/pnl/orders` FIFO fallback + Schwab transactions
+  permission suspicion. See section 13b.
+- **2026-09-03 (section 13 frontend handoff + live verify)**: Expanded section 13 with auth/base
+  path, live-vs-empty data table, suggested history-page layout, live example payloads from
+  preprod, PATCH/DELETE rules, and acceptance checks so the frontend agent can start the UI.
+  Confirmed live: summary/daily/orders + manual TRANSFER_IN. Noted outstanding empty Schwab
+  transaction sync.
 - **2026-09-03 (daily P&L tracking + history — section 13)**: New `PnlModule` with Postgres tables
   (`schwab_transactions`, `schwab_trade_fills`, `schwab_realized_trades`, `schwab_daily_pnl`,
   `schwab_order_history`), Schwab transaction sync (cron + boot), FIFO realized-P&L matcher,
