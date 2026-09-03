@@ -8,6 +8,7 @@ import { SchwabAuthModule } from '@schwab/auth/schwab-auth.module';
 import schwabConfig from '@schwab/config/schwab.config';
 import { SchwabHttpModule } from '@schwab/http/schwab-http.module';
 import { OrdersModule } from '@schwab/orders/orders.module';
+import { PnlModule } from '@schwab/pnl/pnl.module';
 
 import { AccountSnapshotService } from './account-snapshot.service';
 import { OptionsGateway } from './options.gateway';
@@ -22,6 +23,7 @@ import { SchwabStreamerService } from './schwab-streamer.service';
     SchwabAuthModule,
     SchwabHttpModule,
     OrdersModule,
+    PnlModule,
   ],
   providers: [
     OptionsGateway,

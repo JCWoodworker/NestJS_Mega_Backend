@@ -13,6 +13,7 @@ import {
   mapOrderUpdate,
   orderUpdateFingerprint,
 } from '@schwab/orders/working-order.mapper';
+import { OrderHistoryService } from '@schwab/pnl/order-history.service';
 
 import { OptionsGateway } from './options.gateway';
 
@@ -38,6 +39,7 @@ export class OrderUpdatesService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly ordersService: OrdersService,
     private readonly optionsGateway: OptionsGateway,
+    private readonly orderHistoryService: OrderHistoryService,
     @Inject(schwabConfig.KEY)
     private readonly config: ConfigType<typeof schwabConfig>,
   ) {}
@@ -80,6 +82,11 @@ export class OrderUpdatesService implements OnModuleInit, OnModuleDestroy {
 
         this.lastSeen.set(update.orderId, fingerprint);
         this.optionsGateway.emitOrderUpdate({ ...update, accountHash, asOf });
+        void this.orderHistoryService.upsertFromRawOrder(
+          accountHash,
+          rawOrder,
+          update,
+        );
       }
     } catch (err) {
       const message = err?.response?.data?.message || err.message;

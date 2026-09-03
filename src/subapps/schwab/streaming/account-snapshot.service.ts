@@ -11,6 +11,7 @@ import { firstValueFrom } from 'rxjs';
 
 import schwabConfig from '@schwab/config/schwab.config';
 import { OrdersService } from '@schwab/orders/orders.service';
+import { DailyPnlService } from '@schwab/pnl/daily-pnl.service';
 import {
   mapAccountBalances,
   mapAccountPositions,
@@ -41,6 +42,7 @@ export class AccountSnapshotService implements OnModuleInit, OnModuleDestroy {
     private readonly httpService: HttpService,
     private readonly optionsGateway: OptionsGateway,
     private readonly ordersService: OrdersService,
+    private readonly dailyPnlService: DailyPnlService,
     @Inject(schwabConfig.KEY)
     private readonly config: ConfigType<typeof schwabConfig>,
   ) {}
@@ -84,11 +86,17 @@ export class AccountSnapshotService implements OnModuleInit, OnModuleDestroy {
 
   private async pollAndBroadcast(): Promise<void> {
     try {
+      const accountHash = await this.resolveAccountHash();
       const snapshot = await this.fetchSnapshot();
       this.optionsGateway.emitAccountSnapshot({
         ...snapshot,
         asOf: Date.now(),
       });
+      void this.dailyPnlService.recordEquitySample(
+        accountHash,
+        snapshot.equity,
+        snapshot.dayStartEquity,
+      );
     } catch (err) {
       const message = err?.response?.data?.message || err.message;
       if (message?.includes('not connected')) {
