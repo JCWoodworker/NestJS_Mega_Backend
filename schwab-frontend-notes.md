@@ -33,6 +33,14 @@ chart drag-to-stop) is now implemented** — `fast-execute` accepts `STOP`/`STOP
 `DELETE .../orders/:orderId` cancels one (trail = cancel + re-place). The optional `order-update`
 socket event also shipped. See section 10 below for the full contract as implemented.
 
+🐛 **Bug fix (2026-09-03): blank options chain, root-caused and fixed same day.** Frontend
+reported the options chain rendering completely empty during RTH right after this section 10
+work landed. Turned out to be unrelated to section 10 — a real, pre-existing bug in the option
+ladder's re-centering logic (see the new Changelog entry and section 8 addendum below) that was
+live on preprod well before today. Fixed and redeployed to preprod + prod, confirmed live: zero
+`LEVELONE_OPTIONS` subscription churn in a 2.5-minute post-deploy window that previously showed
+dozens of churn events in the same span.
+
 ---
 
 ## ✅ Resolved: this is a web app (TanStack Start), not Expo
@@ -491,6 +499,31 @@ Nothing wrong has been confirmed - price-history and the subscribe plumbing all 
 specced - but live 1-minute candle delivery for both equity and (especially) options is still an
 open question pending real trading-hours volume.
 
+## 8b. ~~Bug~~ RESOLVED: option ladder thrashing (`LEVELONE_OPTIONS` churn, blank chain) — 2026-09-03
+
+Distinct from the item 8 streamer crash-loop above (that one killed the whole socket; this one
+left the socket healthy but the option ladder subscription unstable). Frontend reported the
+options chain rendering completely blank during RTH. Root cause: `recenterLadder()` rebuilt the
+entire 16-strike `LEVELONE_OPTIONS` window any time the nearest whole-dollar strike changed by
+even $1, with zero hysteresis. Spot price hovering right at a strike boundary (e.g. SPY bouncing
+$565.99 ↔ $566.01) flips the rounded "nearest strike" back and forth on every tick, so the
+backend was issuing a full `UNSUBS`/`SUBS` cycle for the shifting edge strikes every 1–8 seconds —
+confirmed live via preprod logs, ~300 churn events across a 13-minute window right after market
+open. The at-the-money symbols the frontend cares about most were being torn down and
+re-subscribed before Schwab ever got a chance to stream a quote for them, which is what made the
+chain render blank (not a frontend rendering bug, and not a connection/auth problem — `stream-
+status` stayed `connected: true` the whole time).
+
+**Fixed**: added real hysteresis — the ladder now only rebuilds once the nearest strike has
+drifted **3 strike increments** away from the current center (or on an actual day rollover), not
+on every single-increment change. Extracted into a small pure/unit-tested helper
+(`shouldRecenterLadder` in `ladder-recenter.util.ts`) rather than inline math, specifically so this
+class of bug is covered by tests going forward. Deployed to preprod + prod. **Live-verified**:
+zero `LEVELONE_OPTIONS` churn events in a 2.5-minute post-deploy log window that previously showed
+dozens of events in a comparable span. **No frontend action needed** — this was entirely a
+backend streamer bug; the chain should populate normally now. Worth a fresh live sanity check on
+your end now that it's redeployed, but nothing to change client-side.
+
 ## 10. Broker stop-loss + working orders (chart drag-to-stop) — **implemented 2026-09-02**
 
 Implements the frontend's section 10 ask in full: `fast-execute` extended with `STOP`/
@@ -625,6 +658,16 @@ Current state:
 
 ## Changelog
 
+- **2026-09-03 (bug fix: option ladder thrashing / blank options chain)**: Frontend reported the
+  options chain rendering completely blank during RTH. Root-caused via live preprod logs to
+  `recenterLadder()` rebuilding the entire 16-strike `LEVELONE_OPTIONS` subscription any time the
+  rounded nearest-strike changed by even $1, with no hysteresis — SPY hovering at a whole-dollar
+  boundary flipped the nearest strike back and forth every tick, producing ~300 `UNSUBS`/`SUBS`
+  churn events in a 13-minute window and tearing down the at-the-money symbols before Schwab could
+  ever stream a quote for them. Fixed by requiring a 3-strike-increment drift before rebuilding
+  (extracted into a unit-tested `shouldRecenterLadder` helper). Deployed to preprod + prod,
+  live-verified: zero churn events in a 2.5-minute post-deploy window. Pre-existing bug, unrelated
+  to section 10 — see section 8b for the full writeup. **No frontend action needed.**
 - **2026-09-02 (broker stop-loss + working orders — section 10 implemented)**: Built the full
   contract the frontend asked for to support chart drag-to-stop on live trades: extended
   `fast-execute`'s `FastOrderDto`/`OrderType` with `STOP`/`STOP_LIMIT` + `stopPrice` (chose to
