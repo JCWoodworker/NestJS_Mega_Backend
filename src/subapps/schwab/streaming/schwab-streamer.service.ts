@@ -155,6 +155,26 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  /** Synchronous read of the last-seen SPY spot price for the bot loop's
+   * soft-stop/profit checks — avoids requiring a second internal listener
+   * just to cache the same value `AccountSnapshotService`-adjacent code
+   * would otherwise have to maintain independently. */
+  getLastKnownSpotPrice(): number | null {
+    return this.lastKnownSpotPrice;
+  }
+
+  isStreamConnected(): boolean {
+    return this.loggedIn;
+  }
+
+  /** Epoch ms of the last streamed frame Schwab sent us, of any kind
+   * (heartbeat or data) — lets callers reject decisions made on stale
+   * quotes (e.g. the bot's ~2s freshness gate) even though the streamer
+   * itself is still technically "connected". */
+  getLastFrameAt(): number | null {
+    return this.lastFrameAt;
+  }
+
   onModuleInit(): void {
     this.flushTimer = setInterval(
       () => this.flushBufferedUpdates(),

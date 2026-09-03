@@ -31,6 +31,6 @@ import { SchwabStreamerService } from './schwab-streamer.service';
     AccountSnapshotService,
     OrderUpdatesService,
   ],
-  exports: [OptionsGateway],
+  exports: [OptionsGateway, SchwabStreamerService],
 })
 export class SchwabStreamingModule {}

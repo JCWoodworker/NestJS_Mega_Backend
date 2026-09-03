@@ -1,4 +1,5 @@
 import { FillInstruction } from './enums/fill-instruction.enum';
+import { OrderSource } from './enums/order-source.enum';
 import { TradeDirection } from './enums/trade-direction.enum';
 import {
   computeTradingPnl,
@@ -188,6 +189,88 @@ describe('matchFills', () => {
     const qqq = matches.find((m) => m.symbol === 'QQQ')!;
     expect(spy.realizedPnl).toBe(1);
     expect(qqq.realizedPnl).toBe(-2);
+  });
+
+  it('defaults unset source to MANUAL_LIVE on the resulting match', () => {
+    const matches = matchFills([
+      fill({
+        id: '1',
+        instruction: FillInstruction.BUY,
+        quantity: 1,
+        price: 10,
+      }),
+      fill({
+        id: '2',
+        instruction: FillInstruction.SELL,
+        quantity: 1,
+        price: 11,
+        transactionDate: new Date('2026-09-03T15:00:00Z'),
+      }),
+    ]);
+    expect(matches[0].source).toBe(OrderSource.MANUAL_LIVE);
+  });
+
+  it('never cross-matches fills from different sources on the same symbol', () => {
+    const matches = matchFills([
+      fill({
+        id: 'bot-open',
+        instruction: FillInstruction.BUY,
+        quantity: 1,
+        price: 1.0,
+        transactionDate: new Date('2026-09-03T14:00:00Z'),
+        source: OrderSource.BOT_LIVE,
+      }),
+      fill({
+        id: 'manual-open',
+        instruction: FillInstruction.BUY,
+        quantity: 1,
+        price: 2.0,
+        transactionDate: new Date('2026-09-03T14:01:00Z'),
+        source: OrderSource.MANUAL_LIVE,
+      }),
+      // Only the BOT_LIVE lot has a matching close — the MANUAL_LIVE lot
+      // must remain open (unmatched), not get closed against this fill.
+      fill({
+        id: 'bot-close',
+        instruction: FillInstruction.SELL,
+        quantity: 1,
+        price: 1.5,
+        transactionDate: new Date('2026-09-03T14:30:00Z'),
+        source: OrderSource.BOT_LIVE,
+      }),
+    ]);
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0].source).toBe(OrderSource.BOT_LIVE);
+    expect(matches[0].openFillId).toBe('bot-open');
+    expect(matches[0].closeFillId).toBe('bot-close');
+  });
+
+  it('partitions BOT_PAPER fills into their own realized-trade ledger', () => {
+    const symbol = 'SPY   260903C00770000';
+    const matches = matchFills([
+      fill({
+        id: '1',
+        symbol,
+        instruction: FillInstruction.BUY,
+        quantity: 2,
+        price: 1.0,
+        transactionDate: new Date('2026-09-03T14:00:00Z'),
+        source: OrderSource.BOT_PAPER,
+      }),
+      fill({
+        id: '2',
+        symbol,
+        instruction: FillInstruction.SELL,
+        quantity: 2,
+        price: 1.2,
+        transactionDate: new Date('2026-09-03T14:10:00Z'),
+        source: OrderSource.BOT_PAPER,
+      }),
+    ]);
+    expect(matches).toHaveLength(1);
+    expect(matches[0].source).toBe(OrderSource.BOT_PAPER);
+    expect(matches[0].realizedPnl).toBeCloseTo(40, 5); // (1.2-1.0)*2*100
   });
 });
 

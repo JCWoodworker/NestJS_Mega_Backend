@@ -1,4 +1,5 @@
 import { FillInstruction } from './enums/fill-instruction.enum';
+import { OrderSource } from './enums/order-source.enum';
 import { TradeDirection } from './enums/trade-direction.enum';
 
 export interface FifoFillInput {
@@ -10,6 +11,8 @@ export interface FifoFillInput {
   transactionDate: Date;
   /** When present, OPENING/CLOSING hints override buy/sell direction inference. */
   positionEffect?: 'OPENING' | 'CLOSING' | null;
+  /** Defaults to MANUAL_LIVE when omitted (legacy fills). */
+  source?: OrderSource;
 }
 
 export interface RealizedTradeMatch {
@@ -23,6 +26,7 @@ export interface RealizedTradeMatch {
   realizedPnl: number;
   openFillId: string;
   closeFillId: string;
+  source: OrderSource;
 }
 
 interface OpenLot {
@@ -60,21 +64,26 @@ function signedQty(fill: FifoFillInput): number {
 }
 
 /**
- * FIFO-matches fills per symbol into closed round-trips.
+ * FIFO-matches fills per (symbol, source) into closed round-trips.
  * Handles longs, shorts, and partial fills. Open lots that never close are
  * left unmatched (unrealized) and omitted from the result.
+ * BOT_LIVE / MANUAL_LIVE / BOT_PAPER fills on the same symbol never cross-match.
  */
 export function matchFills(fills: FifoFillInput[]): RealizedTradeMatch[] {
-  const bySymbol = new Map<string, FifoFillInput[]>();
+  const byKey = new Map<string, FifoFillInput[]>();
   for (const fill of fills) {
-    const list = bySymbol.get(fill.symbol) ?? [];
+    const source = fill.source ?? OrderSource.MANUAL_LIVE;
+    const key = `${fill.symbol}::${source}`;
+    const list = byKey.get(key) ?? [];
     list.push(fill);
-    bySymbol.set(fill.symbol, list);
+    byKey.set(key, list);
   }
 
   const matches: RealizedTradeMatch[] = [];
 
-  for (const [symbol, symbolFills] of bySymbol) {
+  for (const [key, symbolFills] of byKey) {
+    const [symbol, sourceRaw] = key.split('::');
+    const source = (sourceRaw as OrderSource) || OrderSource.MANUAL_LIVE;
     const sorted = [...symbolFills].sort(
       (a, b) =>
         a.transactionDate.getTime() - b.transactionDate.getTime() ||
@@ -113,6 +122,7 @@ export function matchFills(fills: FifoFillInput[]): RealizedTradeMatch[] {
           realizedPnl,
           openFillId: lot.fillId,
           closeFillId: fill.id,
+          source,
         });
 
         lot.remaining -= closeQty;

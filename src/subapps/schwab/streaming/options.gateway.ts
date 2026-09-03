@@ -8,6 +8,7 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
+import { EventEmitter } from 'events';
 import { Server, Socket } from 'socket.io';
 
 import jwtConfig from '@iam/config/jwt.config';
@@ -70,6 +71,23 @@ export interface ChartCandlePayload {
   chartTime: number;
 }
 
+export interface BotStatusPayload {
+  mode: string;
+  lane: string | null;
+  running: boolean;
+  lockout: boolean;
+  lockoutReason: string | null;
+  equity: number;
+  settledCash: number;
+  minEquityOk: boolean;
+  openPosition: unknown;
+  lastSignal: unknown;
+  lastError: string | null;
+  todayBotPnl: number;
+  tradesToday: number;
+  liveArmed?: boolean;
+}
+
 const allowedOrigins =
   process.env.ENVIRONMENT === 'development'
     ? process.env.ALLOWED_ORIGINS_DEVELOPMENT?.split(',').map((o) =>
@@ -87,12 +105,20 @@ const allowedOrigins =
  * (the same one guarding the REST endpoints) via the Socket.io handshake -
  * either `auth: { token }`, a `token` query param, or an Authorization
  * header. Unauthenticated sockets are disconnected immediately.
+ *
+ * Also extends Node's EventEmitter so in-process consumers (BotEngineService,
+ * BotMarketDataService) can subscribe to the same payloads this gateway
+ * broadcasts over the socket, without a second Schwab subscription or a
+ * circular module dependency.
  */
 @WebSocketGateway({
   namespace: '/options',
   cors: { origin: allowedOrigins, credentials: true },
 })
-export class OptionsGateway implements OnGatewayConnection {
+export class OptionsGateway
+  extends EventEmitter
+  implements OnGatewayConnection
+{
   private readonly logger = new Logger(OptionsGateway.name);
 
   @WebSocketServer()
@@ -104,7 +130,10 @@ export class OptionsGateway implements OnGatewayConnection {
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
     @Inject(forwardRef(() => SchwabStreamerService))
     private readonly streamerService: SchwabStreamerService,
-  ) {}
+  ) {
+    super();
+    this.setMaxListeners(20);
+  }
 
   async handleConnection(client: Socket): Promise<void> {
     const token = this.extractToken(client);
@@ -180,31 +209,44 @@ export class OptionsGateway implements OnGatewayConnection {
 
   emitOptionTicks(ticks: OptionTick[]): void {
     this.server?.emit('option-ticks', ticks);
+    this.emit('option-ticks', ticks);
   }
 
   emitUnderlyingPrice(payload: UnderlyingPricePayload): void {
     this.server?.emit('underlying-price', payload);
+    this.emit('underlying-price', payload);
   }
 
   emitLadderRecentered(payload: LadderRecenteredPayload): void {
     this.server?.emit('ladder-recentered', payload);
+    this.emit('ladder-recentered', payload);
   }
 
   emitStreamStatus(payload: StreamStatusPayload): void {
     this.server?.emit('stream-status', payload);
+    this.emit('stream-status', payload);
   }
 
   emitAccountSnapshot(payload: AccountSnapshotPayload): void {
     this.server?.emit('account-snapshot', payload);
+    this.emit('account-snapshot', payload);
   }
 
   emitChartCandle(payload: ChartCandlePayload): void {
     this.server?.emit('chart-candle', payload);
+    this.emit('chart-candle', payload);
   }
 
   /** Frontend contract section 10d — lets the chart flip entry→closed and
    * clear stop lines without polling `GET /orders/working` itself. */
   emitOrderUpdate(payload: OrderUpdatePayload): void {
     this.server?.emit('order-update', payload);
+    this.emit('order-update', payload);
+  }
+
+  /** Bot control-plane telemetry (BotModule §14) — mirrors `GET /bot/status`. */
+  emitBotStatus(payload: BotStatusPayload): void {
+    this.server?.emit('bot-status', payload);
+    this.emit('bot-status', payload);
   }
 }

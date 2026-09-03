@@ -8,6 +8,7 @@ import {
 
 import { FillAssetType } from '../enums/fill-asset-type.enum';
 import { FillInstruction } from '../enums/fill-instruction.enum';
+import { OrderSource } from '../enums/order-source.enum';
 import { PositionEffect } from '../enums/position-effect.enum';
 
 @Entity('schwab_trade_fills')
@@ -66,6 +67,13 @@ export class SchwabTradeFill {
 
   @Column({ type: 'timestamptz', name: 'transaction_date' })
   transactionDate: Date;
+
+  @Column({
+    type: 'enum',
+    enum: OrderSource,
+    default: OrderSource.MANUAL_LIVE,
+  })
+  source: OrderSource;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

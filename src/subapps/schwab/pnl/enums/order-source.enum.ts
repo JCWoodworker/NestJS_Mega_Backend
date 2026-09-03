@@ -1,0 +1,6 @@
+export enum OrderSource {
+  MANUAL_LIVE = 'MANUAL_LIVE',
+  MANUAL_PAPER = 'MANUAL_PAPER',
+  BOT_LIVE = 'BOT_LIVE',
+  BOT_PAPER = 'BOT_PAPER',
+}

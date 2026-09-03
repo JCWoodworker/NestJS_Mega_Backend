@@ -1041,6 +1041,157 @@ orders/positions work, `/transactions` silently returns `[]`. Frontend should ke
 `/pnl/orders`-based fallback. Backend will keep trying sync on cron; once the Schwab app
 permission is confirmed, `/pnl/trades` should light up with no contract change.
 
+## 14. ✅ Implemented: automated 0DTE SPY scalping bot (`BotModule`)
+
+Server-side bot loop for automated 0DTE SPY scalping. **The React app never places bot orders** —
+it only sends mode/lane/settings/kill commands and displays `BotStatus` telemetry. All entries,
+exits, sizing, and risk gates run in this backend.
+
+### Auth + base path
+
+Same Bearer JWT (global `AuthenticationGuard`) and rate limit (`120 req/60s`, matching `/orders/*`)
+as the rest of the Schwab subapp:
+
+```
+/api/v1/subapps/schwab/bot
+```
+
+### Endpoints
+
+| Method | Path | Body | Notes |
+|--------|------|------|-------|
+| GET | `/status` | — | `BotStatus` (see below); poll this or listen for `bot-status`. |
+| POST | `/mode` | `{ mode: 'MANUAL' \| 'BOT' }` | `MANUAL`/`BOT` are mutually exclusive. |
+| POST | `/lane` | `{ lane: 'BOT_PAPER' \| 'BOT_LIVE', confirmLive?: boolean }` | `BOT_LIVE` requires `confirmLive: true` **and** a prior `/live/enable`, else **400**. Switching lanes while a bot position is open in the *other* lane returns **409**. |
+| POST | `/kill` | `{ scope: 'ALL' \| 'PAPER' \| 'LIVE' }` | Flattens any open bot position in scope, cancels bot-tagged working orders (live), and sets `lockout: true`. |
+| POST | `/live/enable` | `{ confirm: true }` | Arms live trading; `confirm !== true` → **400**. Arming alone does not start trading — `lane` must still be set to `BOT_LIVE`. |
+| POST | `/live/disable` | `{}` | Disarms live; if currently `BOT_LIVE`, flattens + halts (scope `LIVE`) first, then clears the lane. |
+| GET | `/settings` | — | `BotSettings` (see below). |
+| PUT | `/settings` | partial `BotSettings` patch | Server is the source of truth; unspecified fields are unchanged. |
+
+Optional socket on the existing `/options` namespace (same JWT-gated connection as the rest of the
+streaming contract): emits `bot-status` on every control-plane change and roughly once per
+7s heartbeat while running, mirroring `GET /status` exactly. No new socket connection needed if the
+frontend already has `/options` open.
+
+### `BotStatus` shape
+
+```ts
+{
+  mode: 'MANUAL' | 'BOT'
+  lane: 'BOT_PAPER' | 'BOT_LIVE' | null
+  running: boolean
+  lockout: boolean
+  lockoutReason: string | null      // e.g. 'MAX_LOSS_USD', 'HARD_FLATTEN_EOD', 'KILL_SWITCH', 'RECON_MISMATCH', 'SOCKET_LOSS'
+  equity: number
+  settledCash: number
+  minEquityOk: boolean              // equity >= $100
+  openPosition: null | {
+    symbol: string; quantity: number; entryPrice: number
+    stopUnderlying: number | null; targetUnderlying: number | null
+    source: 'BOT_PAPER' | 'BOT_LIVE'
+  }
+  lastSignal: null | {
+    at: number
+    strategies: Array<'VWAP_PULLBACK' | 'ORB_5M'>
+    direction: 'CALL' | 'PUT'
+    reason: string                  // includes '(SKIP_BUDGET)' when a signal fired but sizing skipped it
+  }
+  lastError: string | null
+  todayBotPnl: number               // sum of today's realized trades tagged BOT_PAPER/BOT_LIVE (matches current lane)
+  tradesToday: number
+  liveArmed: boolean                // additive field: whether /live/enable has been called (not in the original spec, safe to ignore)
+}
+```
+
+### `BotSettings` shape (defaults in parentheses)
+
+- `strategiesEnabled`: array of `'VWAP_PULLBACK' | 'ORB_5M'` (both enabled by default)
+- `combineMode`: `'CONFIRMING'` only (AND — all enabled strategies must agree on direction)
+- `riskPct` 0.1–100 (10) — applies to the *next* entry only
+- Loss gates: `useMaxLossUsd`/`maxLossUsd`, `useMaxLossPct`/`maxLossPct` (nullable values, both off by default)
+- Profit gates: `useProfitUsd`/`profitUsd`, `useProfitPctDayStart`/`profitPctDayStart`, `useProfitPctCurrent`/`profitPctCurrent` (all off by default; halts on the *first* gate that hits)
+- Strike filters: `minPremium` (0.60), `maxPremium` (2.50), `maxSpreadPct` (5), `deltaMin` (0.40), `deltaMax` (0.60)
+- Windows (ET, `HH:MM`): `tradeWindowStart` (10:00), `tradeWindowEnd` (15:00), `hardFlattenTime` (15:30)
+- `cooldownMins` (30) — minimum gap between bot entries
+- `atrPeriod` (14)
+- `paperSlippageCents` (1) — paper fills are `ask + slippage` on entry, `bid - slippage` on exit
+
+### Strategy loop (server-internal, no frontend action needed)
+
+- 100-bar ring buffer of 1m SPY OHLCV, seeded from `price-history` on boot and appended from the
+  same internal `chart-candle` event this backend already emits over `/options`.
+- VWAP (session anchored 9:30 ET), ATR(14), and 9:30–9:35 ET opening-range high/low, recomputed on
+  every closed 1m candle.
+- `VWAP_PULLBACK` (pullback into VWAP with the prevailing trend) and `ORB_5M` (breakout of the
+  opening range) each independently emit `CALL`/`PUT`/no-signal; `CONFIRMING` mode requires every
+  *enabled* strategy to agree before a trade fires.
+- No entries outside `tradeWindowStart`–`tradeWindowEnd`; hard-flattens any open bot position at
+  `hardFlattenTime` regardless of P&L.
+- Entries are skipped (not queued/retried) if the live streamer connection is stale (no frame in
+  the last ~2s) — same connection health this backend already surfaces via `stream-status`.
+
+### Execution
+
+- **Entry (`BOT_LIVE`)**: walk-limit from mid toward ask, cancel/replace every 2s, abandons after
+  ~10s if unfilled. Orders are tagged `source: BOT_LIVE` via the same tagging mechanism `fast-execute`
+  uses for `MANUAL_LIVE` (see section 3/13), so they show up correctly in History immediately.
+- **Entry (`BOT_PAPER`)**: simulated fill at `ask + paperSlippageCents` — no Schwab order is ever
+  placed. Written straight into the same fills/order-history tables as real trades, tagged
+  `source: BOT_PAPER`, so `/pnl/orders` and `/pnl/trades` show paper activity identically to live.
+- **Exit (either lane)**: triggered by the underlying SPY price crossing the position's
+  `stopUnderlying`/`targetUnderlying` (a *soft* stop computed and watched server-side — no resting
+  Schwab `STOP` order is ever placed for a bot position). Live exits use a marketable limit
+  sell-to-close; paper exits simulate `bid - paperSlippageCents`.
+- Reconciles the live lane's position against Schwab's actual account positions on each ~7s
+  heartbeat; any mismatch triggers an immediate flatten + halt (`RECON_MISMATCH`).
+- Idempotent: checks for an existing bot-tagged working order before entering, so a slow tick or
+  retry can't double-enter.
+
+### History integration
+
+Every order/fill/trade across the whole Schwab subapp — not just the bot's — now carries a
+`source: 'MANUAL_LIVE' | 'MANUAL_PAPER' | 'BOT_LIVE' | 'BOT_PAPER'` tag. `fast-execute` (manual
+trading) tags `MANUAL_LIVE`. Both existing history endpoints accept a repeatable `source` filter:
+
+```
+GET /api/v1/subapps/schwab/pnl/orders?source=BOT_LIVE&source=BOT_PAPER
+GET /api/v1/subapps/schwab/pnl/trades?source=BOT_LIVE
+```
+
+Omitting `source` returns everything (backward compatible — no frontend change required unless you
+want to add bot filters to the existing History page from section 13).
+
+### Manual acceptance pass (2026-09-03, code-level — not yet run against live Schwab)
+
+1. **`BOT_PAPER` loop never hits Schwab order placement** — ✅ traced: `BotExecutionService.enter`/
+   `exit` branch on `lane` before touching `OrdersService`; the `BOT_PAPER` branch only calls the
+   trade-fill/order-history repositories directly. No `OrdersService.sendDirectOrder` call is
+   reachable from the paper path.
+2. **`BOT_LIVE` without `confirm`/`confirmLive` → 400** — ✅ unit-tested (`bot-state.service.spec.ts`):
+   `setLane(BOT_LIVE)` and `setLane(BOT_LIVE, false)` both throw `BadRequestException`; `enableLive(false)`
+   also throws. `BOT_LIVE` additionally requires a prior `/live/enable` even with `confirmLive: true`.
+3. **Kill `ALL` + live/disable work without UI** — ✅ both are plain REST/JSON endpoints behind the
+   same JWT guard as every other Schwab route, so `curl -X POST .../bot/kill -d '{"scope":"ALL"}'`
+   and `curl -X POST .../bot/live/disable` work standalone; unit-tested that `kill()` delegates to
+   `BotEngineService.flattenAndHalt` and `disableLive()` flattens `LIVE` scope before clearing the
+   lane/armed flag.
+4. **Budget skip; hard flatten 15:30; max-loss halt** — ✅ unit-tested: `sizePosition()` returns `0`
+   (`SKIP_BUDGET`, no upsize) when the budget can't afford one contract; `BotEngineService.heartbeat`
+   checks `isAtOrPast(nowHhMm, hardFlattenTime)` before any loss/profit gate and flattens+halts
+   unconditionally; `checkLossAndProfitGates` flattens+halts on `useMaxLossUsd`/`useMaxLossPct`
+   before evaluating any profit gate.
+5. **`CONFIRMING` agreement; History shows source on bot fills** — ✅ unit-tested:
+   `combineSignals()` only fires when every *enabled* strategy agrees on direction (returns `null`
+   on disagreement or a missing signal from an enabled strategy); FIFO matcher partitions by
+   `symbol + source` so bot and manual lots never cross-match, and paper fills are written with
+   `source: BOT_PAPER` end-to-end (fill → order-history → realized-trade).
+
+**Not yet live-verified** (needs a real Schwab connection + market hours): actual walk-limit fills
+against Schwab's order book, live reconciliation against real account positions, and a full-day
+`BOT_PAPER` run against real streaming SPY data. Recommend running `BOT_PAPER` for at least one full
+session on preprod before ever arming `BOT_LIVE`.
+
 ## 7. Git remote / CI, sign-up UI
 Both resolved on the frontend side — GitHub repo + Netlify push-to-deploy wired up, and a Sign In
 / Create Account toggle shipped on `/sign-in`. No backend action needed.
@@ -1102,9 +1253,30 @@ Current state:
    **Still open:** Schwab `/transactions` sync still returns empty (`upserted=0`) — likely app
    permission / Trading Production scope; frontend’s `/pnl/orders` FIFO fallback is the right
    interim. Prefer `/pnl/trades` when sync starts returning fills.
+9. **Section 14 (automated 0DTE SPY scalping bot, `BotModule`) — code complete, unit-tested,
+   not yet deployed.** Server-owns entries/exits/sizing/risk-gates entirely; frontend only sends
+   mode/lane/settings/kill and reads `BotStatus`. See section 14 for the full contract, manual
+   acceptance pass, and the "not yet live-verified" caveats. **Default mode on deploy is `MANUAL`**
+   — the bot does nothing until explicitly switched to `BOT` + a lane.
 
 ## Changelog
 
+- **2026-09-03 (section 14: automated 0DTE SPY scalping bot — `BotModule`)**: New `BotModule` under
+  the Schwab subapp. Server-side `BotStateService`/`BotSettingsService` (singleton rows, same
+  pattern as `SchwabToken`) enforce every product invariant (`MANUAL`/`BOT` exclusivity,
+  `BOT_PAPER` XOR `BOT_LIVE`, `confirmLive`/live-arming gating, min-equity, budget sizing, max-loss/
+  profit halts, hard-flatten-at-EOD, recon/socket-loss flatten). `BotEngineService` runs the
+  strategy loop (VWAP pullback + 5m opening-range breakout, `CONFIRMING`/AND combine mode) off a
+  100-bar 1m SPY ring buffer fed by the existing streamer's internal `EventEmitter`, selects 0DTE
+  strikes by delta/premium/spread, and executes via `BotExecutionService` (walk-limit entry +
+  marketable-limit exit for `BOT_LIVE`; fully simulated ledger for `BOT_PAPER` — no Schwab order
+  ever placed). Every order/fill/trade across the subapp now carries a `source` tag
+  (`MANUAL_LIVE`/`MANUAL_PAPER`/`BOT_LIVE`/`BOT_PAPER`); FIFO P&L matching partitions by
+  `symbol + source` so lanes never cross-match. `GET/PUT /pnl/orders|trades` gained a repeatable
+  `source` filter. 8 new REST routes under `/bot/*` + optional `bot-status` socket emission on
+  `/options`. Unit-tested (strategy/strike-selection utils, FIFO partitioning, state-machine
+  invariants — 133 passing specs across the Schwab subapp). See section 14 for the full contract
+  and acceptance pass; **not yet deployed or live-verified against real Schwab market data.**
 - **2026-09-03 (section 13b: MANUAL transfers in daily netTransfers)**: Fixed daily rollup so a
   MANUAL `TRANSFER_IN`/`TRANSFER_OUT` dated “today” is subtracted from that day’s `tradingPnl` /
   `todayPnl`. Root cause was UTC-midnight date-only storage landing on the previous ET evening.

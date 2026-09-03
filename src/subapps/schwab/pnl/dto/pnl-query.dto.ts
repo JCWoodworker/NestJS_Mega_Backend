@@ -1,5 +1,7 @@
+import { Transform } from 'class-transformer';
 import { IsDateString, IsEnum, IsOptional, IsString } from 'class-validator';
 
+import { OrderSource } from '../enums/order-source.enum';
 import { TransactionCategory } from '../enums/transaction-category.enum';
 
 export class PnlDateRangeQueryDto {
@@ -22,10 +24,21 @@ export class PnlTransactionsQueryDto extends PnlDateRangeQueryDto {
   category?: TransactionCategory;
 }
 
+function toSourceArray(value: unknown): OrderSource[] | undefined {
+  if (value == null || value === '') return undefined;
+  if (Array.isArray(value)) return value as OrderSource[];
+  return [value as OrderSource];
+}
+
 export class PnlTradesQueryDto extends PnlDateRangeQueryDto {
   @IsOptional()
   @IsString()
   symbol?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => toSourceArray(value))
+  @IsEnum(OrderSource, { each: true })
+  source?: OrderSource[];
 }
 
 export class PnlOrdersQueryDto extends PnlDateRangeQueryDto {
@@ -36,4 +49,9 @@ export class PnlOrdersQueryDto extends PnlDateRangeQueryDto {
   @IsOptional()
   @IsString()
   status?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => toSourceArray(value))
+  @IsEnum(OrderSource, { each: true })
+  source?: OrderSource[];
 }

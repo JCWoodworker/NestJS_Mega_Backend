@@ -6,6 +6,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
+import { OrderSource } from '../enums/order-source.enum';
 import { TradeDirection } from '../enums/trade-direction.enum';
 
 @Entity('schwab_realized_trades')
@@ -55,6 +56,13 @@ export class SchwabRealizedTrade {
 
   @Column({ type: 'uuid', name: 'close_fill_id', nullable: true })
   closeFillId: string | null;
+
+  @Column({
+    type: 'enum',
+    enum: OrderSource,
+    default: OrderSource.MANUAL_LIVE,
+  })
+  source: OrderSource;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

@@ -5,6 +5,8 @@ import { Repository } from 'typeorm';
 import { OrderUpdate } from '@schwab/orders/working-order.mapper';
 
 import { SchwabOrderHistory } from './entities/schwab-order-history.entity';
+import { OrderSource } from './enums/order-source.enum';
+import { OrderSourceTagService } from './order-source-tag.service';
 
 const TERMINAL_STATUSES = new Set([
   'FILLED',
@@ -22,6 +24,7 @@ export class OrderHistoryService {
   constructor(
     @InjectRepository(SchwabOrderHistory)
     private readonly orderHistoryRepository: Repository<SchwabOrderHistory>,
+    private readonly orderSourceTagService: OrderSourceTagService,
   ) {}
 
   isTerminalStatus(status: string): boolean {
@@ -39,6 +42,9 @@ export class OrderHistoryService {
       const existing = await this.orderHistoryRepository.findOne({
         where: { accountHash, orderId: update.orderId },
       });
+      const source =
+        existing?.source ??
+        (await this.orderSourceTagService.lookup(update.orderId));
 
       const payload: Partial<SchwabOrderHistory> = {
         accountHash,
@@ -56,6 +62,7 @@ export class OrderHistoryService {
           ? new Date(enteredTime)
           : existing?.enteredTime ?? null,
         closedAt: new Date(),
+        source,
       };
 
       if (existing) {
@@ -83,6 +90,9 @@ export class OrderHistoryService {
       const existing = await this.orderHistoryRepository.findOne({
         where: { accountHash, orderId: update.orderId },
       });
+      const source =
+        existing?.source ??
+        (await this.orderSourceTagService.lookup(update.orderId));
 
       const payload: Partial<SchwabOrderHistory> = {
         accountHash,
@@ -102,6 +112,7 @@ export class OrderHistoryService {
           ? new Date(rawOrder.enteredTime)
           : existing?.enteredTime ?? null,
         closedAt: new Date(),
+        source,
       };
 
       if (existing) {
@@ -113,6 +124,36 @@ export class OrderHistoryService {
       this.logger.warn(
         `Failed to persist order history for ${update.orderId}: ${err.message}`,
       );
+    }
+  }
+
+  /** Direct write for paper / bot-simulated orders (no Schwab raw payload). */
+  async upsertPaperOrder(params: {
+    accountHash: string;
+    orderId: string;
+    symbol: string;
+    instruction: string;
+    orderType: string;
+    status: string;
+    quantity: number;
+    filledQuantity: number;
+    price: number | null;
+    averageFillPrice: number | null;
+    enteredTime: Date;
+    closedAt: Date | null;
+    source: OrderSource;
+  }): Promise<void> {
+    const existing = await this.orderHistoryRepository.findOne({
+      where: { accountHash: params.accountHash, orderId: params.orderId },
+    });
+    const payload: Partial<SchwabOrderHistory> = {
+      ...params,
+      stopPrice: null,
+    };
+    if (existing) {
+      await this.orderHistoryRepository.save({ ...existing, ...payload });
+    } else {
+      await this.orderHistoryRepository.save(payload);
     }
   }
 }

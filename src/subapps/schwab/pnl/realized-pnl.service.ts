@@ -34,6 +34,7 @@ export class RealizedPnlService {
         price: Number(f.price),
         transactionDate: f.transactionDate,
         positionEffect: f.positionEffect,
+        source: f.source,
       })),
     );
 
@@ -53,6 +54,7 @@ export class RealizedPnlService {
           realizedPnl: m.realizedPnl,
           openFillId: m.openFillId,
           closeFillId: m.closeFillId,
+          source: m.source,
         })),
       );
     }

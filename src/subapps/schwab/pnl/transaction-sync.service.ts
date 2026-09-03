@@ -11,7 +11,9 @@ import { OrdersService } from '@schwab/orders/orders.service';
 
 import { SchwabTradeFill } from './entities/schwab-trade-fill.entity';
 import { SchwabTransaction } from './entities/schwab-transaction.entity';
+import { OrderSource } from './enums/order-source.enum';
 import { TransactionSource } from './enums/transaction-source.enum';
+import { OrderSourceTagService } from './order-source-tag.service';
 import { RealizedPnlService } from './realized-pnl.service';
 import { mapSchwabTransaction } from './schwab-transaction.mapper';
 
@@ -45,6 +47,7 @@ export class TransactionSyncService implements OnModuleInit {
     private readonly httpService: HttpService,
     private readonly ordersService: OrdersService,
     private readonly realizedPnlService: RealizedPnlService,
+    private readonly orderSourceTagService: OrderSourceTagService,
     @InjectRepository(SchwabTransaction)
     private readonly transactionRepository: Repository<SchwabTransaction>,
     @InjectRepository(SchwabTradeFill)
@@ -128,21 +131,28 @@ export class TransactionSyncService implements OnModuleInit {
             schwabTransactionId: mapped.schwabTransactionId,
           });
           if (mapped.fills.length) {
-            await this.fillRepository.save(
-              mapped.fills.map((fill) => ({
-                accountHash,
-                schwabTransactionId: fill.schwabTransactionId,
-                orderId: fill.orderId,
-                symbol: fill.symbol,
-                assetType: fill.assetType,
-                instruction: fill.instruction,
-                quantity: fill.quantity,
-                price: fill.price,
-                amount: fill.amount,
-                positionEffect: fill.positionEffect,
-                transactionDate: fill.transactionDate,
-              })),
+            const fillsWithSource = await Promise.all(
+              mapped.fills.map(async (fill) => {
+                const source = fill.orderId
+                  ? await this.orderSourceTagService.lookup(fill.orderId)
+                  : OrderSource.MANUAL_LIVE;
+                return {
+                  accountHash,
+                  schwabTransactionId: fill.schwabTransactionId,
+                  orderId: fill.orderId,
+                  symbol: fill.symbol,
+                  assetType: fill.assetType,
+                  instruction: fill.instruction,
+                  quantity: fill.quantity,
+                  price: fill.price,
+                  amount: fill.amount,
+                  positionEffect: fill.positionEffect,
+                  transactionDate: fill.transactionDate,
+                  source,
+                };
+              }),
             );
+            await this.fillRepository.save(fillsWithSource);
           }
         }
       }

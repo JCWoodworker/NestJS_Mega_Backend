@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Between,
   FindOptionsWhere,
+  In,
   LessThanOrEqual,
   MoreThanOrEqual,
   Repository,
@@ -238,6 +239,7 @@ export class PnlService {
     const accountHash = await this.resolveAccountHash(query.accountHash);
     const where: FindOptionsWhere<SchwabRealizedTrade> = { accountHash };
     if (query.symbol) where.symbol = query.symbol;
+    if (query.source?.length) where.source = In(query.source) as any;
     if (query.from || query.to) {
       where.closedAt = this.dateRange(query.from, query.to) as any;
     }
@@ -259,6 +261,7 @@ export class PnlService {
       closedAt: row.closedAt.toISOString(),
       realizedPnl: Number(row.realizedPnl),
       holdingMs: row.closedAt.getTime() - row.openedAt.getTime(),
+      source: row.source,
     }));
   }
 
@@ -267,6 +270,7 @@ export class PnlService {
     const where: FindOptionsWhere<SchwabOrderHistory> = { accountHash };
     if (query.symbol) where.symbol = query.symbol;
     if (query.status) where.status = query.status;
+    if (query.source?.length) where.source = In(query.source) as any;
     if (query.from || query.to) {
       where.enteredTime = this.dateRange(query.from, query.to) as any;
     }
@@ -292,6 +296,7 @@ export class PnlService {
         row.averageFillPrice != null ? Number(row.averageFillPrice) : null,
       enteredTime: row.enteredTime?.toISOString() ?? null,
       closedAt: row.closedAt?.toISOString() ?? null,
+      source: row.source,
     }));
   }
 

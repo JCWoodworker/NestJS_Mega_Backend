@@ -7,6 +7,8 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
+import { OrderSource } from '../enums/order-source.enum';
+
 @Entity('schwab_order_history')
 @Index(['accountHash', 'orderId'], { unique: true })
 @Index(['accountHash', 'enteredTime'])
@@ -69,6 +71,13 @@ export class SchwabOrderHistory {
 
   @Column({ type: 'timestamptz', name: 'closed_at', nullable: true })
   closedAt: Date | null;
+
+  @Column({
+    type: 'enum',
+    enum: OrderSource,
+    default: OrderSource.MANUAL_LIVE,
+  })
+  source: OrderSource;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

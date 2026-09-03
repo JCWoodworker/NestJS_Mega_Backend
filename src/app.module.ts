@@ -27,6 +27,7 @@ import { MywoodappModule } from '@subapps/mywoodapp/mywoodapp.module';
 import { OnlyBizlinksModule } from '@subapps/onlybizlinks/onlybizlinks.module';
 import { RilwModule } from '@subapps/rilw/rilw.module';
 import { SchwabAuthModule } from '@subapps/schwab/auth/schwab-auth.module';
+import { BotModule } from '@subapps/schwab/bot/bot.module';
 import { MarketDataModule } from '@subapps/schwab/market-data/market-data.module';
 import { OrdersModule } from '@subapps/schwab/orders/orders.module';
 import { PnlModule } from '@subapps/schwab/pnl/pnl.module';
@@ -133,6 +134,10 @@ import { AppService } from './app.service';
           {
             path: 'schwab',
             module: PnlModule,
+          },
+          {
+            path: 'schwab',
+            module: BotModule,
           },
         ],
       },

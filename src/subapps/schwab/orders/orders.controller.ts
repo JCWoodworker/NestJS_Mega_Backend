@@ -11,6 +11,9 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 
+import { OrderSource } from '@schwab/pnl/enums/order-source.enum';
+import { OrderSourceTagService } from '@schwab/pnl/order-source-tag.service';
+
 import { FastOrderDto } from './dto/fast-order.dto';
 import { FlattenPositionDto } from './dto/flatten-position.dto';
 import { ReversePositionDto } from './dto/reverse-position.dto';
@@ -28,24 +31,58 @@ import { OrdersService } from './orders.service';
 @Throttle({ default: { limit: 120, ttl: 60000 } })
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly orderSourceTagService: OrderSourceTagService,
+  ) {}
 
   @Post('fast-execute')
   @HttpCode(HttpStatus.OK)
   async executeFastOrder(@Body() dto: FastOrderDto) {
-    return this.ordersService.sendDirectOrder(dto);
+    const result = await this.ordersService.sendDirectOrder(dto);
+    if (result.orderId) {
+      await this.orderSourceTagService.tag(
+        result.orderId,
+        dto.accountHash,
+        OrderSource.MANUAL_LIVE,
+      );
+    }
+    return result;
   }
 
   @Post('flatten')
   @HttpCode(HttpStatus.OK)
   async flattenPosition(@Body() dto: FlattenPositionDto) {
-    return this.ordersService.flattenPosition(dto);
+    const result = await this.ordersService.flattenPosition(dto);
+    if (result.orderId) {
+      await this.orderSourceTagService.tag(
+        result.orderId,
+        dto.accountHash,
+        OrderSource.MANUAL_LIVE,
+      );
+    }
+    return result;
   }
 
   @Post('reverse')
   @HttpCode(HttpStatus.OK)
   async reversePosition(@Body() dto: ReversePositionDto) {
-    return this.ordersService.reversePosition(dto);
+    const result = await this.ordersService.reversePosition(dto);
+    if (result.closed?.orderId) {
+      await this.orderSourceTagService.tag(
+        result.closed.orderId,
+        dto.accountHash,
+        OrderSource.MANUAL_LIVE,
+      );
+    }
+    if (result.opened?.orderId) {
+      await this.orderSourceTagService.tag(
+        result.opened.orderId,
+        dto.accountHash,
+        OrderSource.MANUAL_LIVE,
+      );
+    }
+    return result;
   }
 
   /** Lists Schwab account numbers linked to this app + their `hashValue`

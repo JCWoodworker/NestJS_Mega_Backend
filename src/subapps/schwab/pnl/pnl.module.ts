@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
@@ -9,10 +9,12 @@ import { OrdersModule } from '@schwab/orders/orders.module';
 import { DailyPnlService } from './daily-pnl.service';
 import { SchwabDailyPnl } from './entities/schwab-daily-pnl.entity';
 import { SchwabOrderHistory } from './entities/schwab-order-history.entity';
+import { SchwabOrderSourceTag } from './entities/schwab-order-source-tag.entity';
 import { SchwabRealizedTrade } from './entities/schwab-realized-trade.entity';
 import { SchwabTradeFill } from './entities/schwab-trade-fill.entity';
 import { SchwabTransaction } from './entities/schwab-transaction.entity';
 import { OrderHistoryService } from './order-history.service';
+import { OrderSourceTagService } from './order-source-tag.service';
 import { PnlController } from './pnl.controller';
 import { PnlService } from './pnl.service';
 import { RealizedPnlService } from './realized-pnl.service';
@@ -27,9 +29,10 @@ import { TransactionSyncService } from './transaction-sync.service';
       SchwabRealizedTrade,
       SchwabDailyPnl,
       SchwabOrderHistory,
+      SchwabOrderSourceTag,
     ]),
     SchwabHttpModule,
-    OrdersModule,
+    forwardRef(() => OrdersModule),
   ],
   controllers: [PnlController],
   providers: [
@@ -38,7 +41,14 @@ import { TransactionSyncService } from './transaction-sync.service';
     RealizedPnlService,
     DailyPnlService,
     OrderHistoryService,
+    OrderSourceTagService,
   ],
-  exports: [DailyPnlService, OrderHistoryService, TransactionSyncService],
+  exports: [
+    DailyPnlService,
+    OrderHistoryService,
+    TransactionSyncService,
+    OrderSourceTagService,
+    RealizedPnlService,
+  ],
 })
 export class PnlModule {}
