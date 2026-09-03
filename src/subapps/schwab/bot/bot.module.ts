@@ -12,11 +12,13 @@ import { PnlModule } from '@schwab/pnl/pnl.module';
 import { SchwabStreamingModule } from '@schwab/streaming/schwab-streaming.module';
 
 import { BotEngineService } from './bot-engine.service';
+import { BotEventService } from './bot-event.service';
 import { BotExecutionService } from './bot-execution.service';
 import { BotMarketDataService } from './bot-market-data.service';
 import { BotSettingsService } from './bot-settings.service';
 import { BotStateService } from './bot-state.service';
 import { BotController } from './bot.controller';
+import { BotEvent } from './entities/bot-event.entity';
 import { BotSettings } from './entities/bot-settings.entity';
 import { BotState } from './entities/bot-state.entity';
 
@@ -26,6 +28,7 @@ import { BotState } from './entities/bot-state.entity';
     TypeOrmModule.forFeature([
       BotSettings,
       BotState,
+      BotEvent,
       SchwabTradeFill,
       SchwabRealizedTrade,
     ]),
@@ -39,10 +42,11 @@ import { BotState } from './entities/bot-state.entity';
   providers: [
     BotSettingsService,
     BotStateService,
+    BotEventService,
     BotMarketDataService,
     BotExecutionService,
     BotEngineService,
   ],
-  exports: [BotStateService, BotSettingsService],
+  exports: [BotStateService, BotSettingsService, BotEventService],
 })
 export class BotModule {}

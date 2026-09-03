@@ -18,13 +18,19 @@ import { SchwabRealizedTrade } from '@schwab/pnl/entities/schwab-realized-trade.
 import { OrderSource } from '@schwab/pnl/enums/order-source.enum';
 import { etDateKey, etDayBounds } from '@schwab/pnl/et-date.util';
 import { mapAccountBalances } from '@schwab/shared/account-data.mapper';
+import { BotEventPayload } from '@schwab/streaming/options.gateway';
 
 import { BotEngineService } from './bot-engine.service';
+import { BotEventService } from './bot-event.service';
+import { computePhase } from './bot-phase.util';
+import { BotSettingsService } from './bot-settings.service';
+import { etNowHhMm, isWithinWindow } from './bot-strategy.util';
 import {
   BotLastSignal,
   BotOpenPosition,
   BotState,
 } from './entities/bot-state.entity';
+import { BotEventType, BotPhase } from './enums/bot-event-type.enum';
 import { BotLane } from './enums/bot-lane.enum';
 import { BotMode } from './enums/bot-mode.enum';
 import { KillScope } from './enums/kill-scope.enum';
@@ -33,6 +39,7 @@ export interface BotStatusView {
   mode: BotMode;
   lane: BotLane | null;
   running: boolean;
+  phase: BotPhase;
   lockout: boolean;
   lockoutReason: string | null;
   equity: number;
@@ -44,7 +51,12 @@ export interface BotStatusView {
   todayBotPnl: number;
   tradesToday: number;
   liveArmed: boolean;
+  recentEvents: BotEventPayload[];
 }
+
+/** How many recent events to embed in `GET /status` for late socket joiners
+ * (frontend contract §14j). Full history is `GET /bot/events`. */
+const RECENT_EVENTS_COUNT = 20;
 
 const MIN_EQUITY = 100;
 
@@ -70,6 +82,8 @@ export class BotStateService {
     private readonly config: ConfigType<typeof schwabConfig>,
     @Inject(forwardRef(() => BotEngineService))
     private readonly botEngine: BotEngineService,
+    private readonly botSettingsService: BotSettingsService,
+    private readonly botEventService: BotEventService,
   ) {}
 
   /** Polled from BotEngineService's heartbeat — keeps equity/settledCash
@@ -151,12 +165,37 @@ export class BotStateService {
     const settledCash = isPaper
       ? Number(row.paperSettledCash)
       : this.liveSettledCash;
-    const { todayBotPnl, tradesToday } = await this.todayStats(row.lane);
+    const [{ todayBotPnl, tradesToday }, settings, recentEvents] =
+      await Promise.all([
+        this.todayStats(row.lane),
+        this.botSettingsService.getSettings(),
+        this.botEventService.recent(RECENT_EVENTS_COUNT),
+      ]);
+
+    const nowHhMm = etNowHhMm();
+    const phase = computePhase({
+      mode: row.mode,
+      lane: row.lane,
+      lockout: row.lockout,
+      hasOpenPosition: !!row.openPosition,
+      transientPhase: this.botEngine.getTransientPhase(),
+      withinTradeWindow: isWithinWindow(
+        nowHhMm,
+        settings.tradeWindowStart,
+        settings.tradeWindowEnd,
+      ),
+      inCooldown: Boolean(
+        row.lastTradeAt &&
+          Date.now() - row.lastTradeAt.getTime() <
+            settings.cooldownMins * 60_000,
+      ),
+    });
 
     return {
       mode: row.mode,
       lane: row.lane,
       running: row.running,
+      phase,
       lockout: row.lockout,
       lockoutReason: row.lockoutReason,
       equity,
@@ -168,10 +207,40 @@ export class BotStateService {
       todayBotPnl,
       tradesToday,
       liveArmed: row.liveArmed,
+      recentEvents,
     };
   }
 
+  /**
+   * Lockout is a per-trading-day breaker, not a permanent one — this clears
+   * a stale lockout at the first check after ET midnight so the bot doesn't
+   * require manual DB intervention to resume the next session. Called from
+   * the engine's heartbeat and defensively from `setMode`/`setLane` so a
+   * control-plane action right at rollover isn't stuck on heartbeat lag.
+   */
+  async clearLockoutIfNewDay(): Promise<boolean> {
+    const row = await this.getRow();
+    if (!row.lockout) return false;
+    const today = etDateKey();
+    if (row.lockoutDateKey === today) return false;
+
+    row.lockout = false;
+    row.lockoutReason = null;
+    row.lockoutDateKey = null;
+    if (row.lane === BotLane.BOT_PAPER) {
+      row.paperDayStartEquity = row.paperEquity;
+    }
+    await this.save(row);
+    await this.botEventService.record({
+      lane: row.lane,
+      type: BotEventType.UNLOCK,
+      reason: 'NEW_TRADING_DAY',
+    });
+    return true;
+  }
+
   async setMode(mode: BotMode): Promise<BotStatusView> {
+    await this.clearLockoutIfNewDay();
     const row = await this.getRow();
     row.mode = mode;
     if (mode === BotMode.MANUAL) {
@@ -187,6 +256,7 @@ export class BotStateService {
   }
 
   async setLane(lane: BotLane, confirmLive?: boolean): Promise<BotStatusView> {
+    await this.clearLockoutIfNewDay();
     if (lane === BotLane.BOT_LIVE && confirmLive !== true) {
       throw new BadRequestException('BOT_LIVE requires confirmLive: true');
     }

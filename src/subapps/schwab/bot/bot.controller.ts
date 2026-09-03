@@ -6,12 +6,15 @@ import {
   HttpStatus,
   Post,
   Put,
+  Query,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 
+import { BotEventService } from './bot-event.service';
 import { BotSettingsService } from './bot-settings.service';
 import { BotStateService } from './bot-state.service';
 import { KillDto } from './dto/kill.dto';
+import { ListEventsDto } from './dto/list-events.dto';
 import { LiveEnableDto } from './dto/live-enable.dto';
 import { SetLaneDto } from './dto/set-lane.dto';
 import { SetModeDto } from './dto/set-mode.dto';
@@ -23,11 +26,17 @@ export class BotController {
   constructor(
     private readonly botStateService: BotStateService,
     private readonly botSettingsService: BotSettingsService,
+    private readonly botEventService: BotEventService,
   ) {}
 
   @Get('status')
   async getStatus() {
     return this.botStateService.getStatus();
+  }
+
+  @Get('events')
+  async getEvents(@Query() query: ListEventsDto) {
+    return this.botEventService.list(query.limit ?? 100, query.afterId);
   }
 
   @Post('mode')

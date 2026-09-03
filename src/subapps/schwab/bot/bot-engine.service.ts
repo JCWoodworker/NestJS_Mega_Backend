@@ -9,12 +9,14 @@ import {
 
 import { MarketDataService } from '@schwab/market-data/market-data.service';
 import { OrdersService } from '@schwab/orders/orders.service';
+import { etDateKey } from '@schwab/pnl/et-date.util';
 import {
   OptionsGateway,
   UnderlyingPricePayload,
 } from '@schwab/streaming/options.gateway';
 import { SchwabStreamerService } from '@schwab/streaming/schwab-streamer.service';
 
+import { BotEventService } from './bot-event.service';
 import { BotExecutionService } from './bot-execution.service';
 import { BotMarketDataService } from './bot-market-data.service';
 import { BotSettingsService } from './bot-settings.service';
@@ -36,6 +38,7 @@ import {
   selectContract,
   sizePosition,
 } from './bot-strike-selection.util';
+import { BotEventType, BotPhase } from './enums/bot-event-type.enum';
 import { BotLane } from './enums/bot-lane.enum';
 import { BotMode } from './enums/bot-mode.enum';
 import { KillScope } from './enums/kill-scope.enum';
@@ -51,6 +54,10 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private evaluating = false;
   private lastStatusEmitAt = 0;
+  /** ENTERING/EXITING override the state-derived phase while a walk-limit
+   * order chase is actively running — see `bot-phase.util.computePhase`. */
+  private transientPhase: 'ENTERING' | 'EXITING' | null = null;
+  private lastEmittedPhase: BotPhase | null = null;
 
   constructor(
     @Inject(forwardRef(() => BotStateService))
@@ -58,11 +65,16 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     private readonly botSettingsService: BotSettingsService,
     private readonly botMarketDataService: BotMarketDataService,
     private readonly botExecutionService: BotExecutionService,
+    private readonly botEventService: BotEventService,
     private readonly marketDataService: MarketDataService,
     private readonly ordersService: OrdersService,
     private readonly optionsGateway: OptionsGateway,
     private readonly streamerService: SchwabStreamerService,
   ) {}
+
+  getTransientPhase(): 'ENTERING' | 'EXITING' | null {
+    return this.transientPhase;
+  }
 
   onModuleInit(): void {
     this.botMarketDataService.startListening();
@@ -163,6 +175,14 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       const combined = combineSignals(enabledKeys, results);
       if (!combined) return;
 
+      await this.botEventService.record({
+        lane: row.lane,
+        type: BotEventType.SIGNAL,
+        direction: combined.direction as BotDirection,
+        strategies: combined.strategies,
+        reason: combined.reason,
+      });
+
       await this.executeEntry(combined.direction, combined, settings, status);
     } catch (err) {
       this.logger.warn(`evaluateEntrySignal failed: ${err.message}`);
@@ -186,6 +206,12 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       row.lane === BotLane.BOT_LIVE &&
       (await this.botExecutionService.hasBotWorkingOrder(accountHash))
     ) {
+      await this.botEventService.record({
+        lane: row.lane,
+        type: BotEventType.SKIP,
+        direction: direction as BotDirection,
+        reason: 'BOT_ORDER_ALREADY_WORKING',
+      });
       return;
     }
 
@@ -200,7 +226,15 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       maxPremium: settings.maxPremium,
       maxSpreadPct: settings.maxSpreadPct,
     });
-    if (!contract || contract.ask == null || contract.bid == null) return;
+    if (!contract || contract.ask == null || contract.bid == null) {
+      await this.botEventService.record({
+        lane: row.lane,
+        type: BotEventType.SKIP,
+        direction: direction as BotDirection,
+        reason: 'NO_CONTRACT_MATCH',
+      });
+      return;
+    }
 
     const budget = computeBudget(
       status.settledCash,
@@ -216,6 +250,13 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         reason: `${signal.reason} (SKIP_BUDGET)`,
       };
       await this.botStateService.save(row);
+      await this.botEventService.record({
+        lane: row.lane,
+        type: BotEventType.SKIP,
+        direction: direction as BotDirection,
+        symbol: contract.symbol,
+        reason: 'SKIP_BUDGET',
+      });
       await this.emitStatus(true);
       return;
     }
@@ -226,18 +267,43 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     const targetUnderlying =
       spot != null ? (direction === 'CALL' ? spot + 3 : spot - 3) : null;
 
-    const result = await this.botExecutionService.enter({
-      accountHash,
+    await this.botEventService.record({
       lane: row.lane,
+      type: BotEventType.ENTRY_SUBMIT,
+      direction: direction as BotDirection,
       symbol: contract.symbol,
       quantity: qty,
-      referenceAsk: contract.ask,
-      referenceBid: contract.bid,
-      paperSlippageCents: settings.paperSlippageCents,
-      stopUnderlying,
-      targetUnderlying,
+      underlyingPrice: spot ?? undefined,
     });
-    if (!result.filled) return;
+
+    this.transientPhase = 'ENTERING';
+    let result: Awaited<ReturnType<BotExecutionService['enter']>>;
+    try {
+      result = await this.botExecutionService.enter({
+        accountHash,
+        lane: row.lane,
+        symbol: contract.symbol,
+        quantity: qty,
+        referenceAsk: contract.ask,
+        referenceBid: contract.bid,
+        paperSlippageCents: settings.paperSlippageCents,
+        stopUnderlying,
+        targetUnderlying,
+      });
+    } finally {
+      this.transientPhase = null;
+    }
+    if (!result.filled) {
+      await this.botEventService.record({
+        lane: row.lane,
+        type: BotEventType.SKIP,
+        direction: direction as BotDirection,
+        symbol: contract.symbol,
+        orderId: result.orderId ?? undefined,
+        reason: 'ENTRY_ABANDONED',
+      });
+      return;
+    }
 
     row.openPosition = {
       symbol: contract.symbol,
@@ -259,6 +325,17 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         Number(row.paperSettledCash) - result.fillPrice * qty * 100;
     }
     await this.botStateService.save(row);
+    await this.botEventService.record({
+      lane: row.lane,
+      type: BotEventType.ENTRY_FILL,
+      direction: direction as BotDirection,
+      side: 'BUY',
+      symbol: contract.symbol,
+      quantity: qty,
+      fillPrice: result.fillPrice,
+      underlyingPrice: spot ?? undefined,
+      orderId: result.orderId ?? undefined,
+    });
     await this.emitStatus(true);
   }
 
@@ -291,6 +368,8 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     const row = await this.botStateService.getRow();
     if (!row.openPosition || !row.lane) return;
     const accountHash = await this.botStateService.resolveAccountHash();
+    const direction = row.lastSignal?.direction;
+    const spot = this.streamerService.getLastKnownSpotPrice();
 
     const chain = await this.marketDataService.getOptionChain({
       symbol: 'SPY',
@@ -299,15 +378,31 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     const quote = chain.find((q) => q.symbol === row.openPosition!.symbol);
     const settings = await this.botSettingsService.getSettings();
 
-    const result = await this.botExecutionService.exit({
-      accountHash,
+    await this.botEventService.record({
       lane: row.lane,
+      type: BotEventType.EXIT_SUBMIT,
+      direction,
       symbol: row.openPosition.symbol,
       quantity: row.openPosition.quantity,
-      referenceBid: quote?.bid ?? row.openPosition.entryPrice,
-      referenceAsk: quote?.ask ?? row.openPosition.entryPrice,
-      paperSlippageCents: settings.paperSlippageCents,
+      underlyingPrice: spot ?? undefined,
+      reason: reasonTag,
     });
+
+    this.transientPhase = 'EXITING';
+    let result: Awaited<ReturnType<BotExecutionService['exit']>>;
+    try {
+      result = await this.botExecutionService.exit({
+        accountHash,
+        lane: row.lane,
+        symbol: row.openPosition.symbol,
+        quantity: row.openPosition.quantity,
+        referenceBid: quote?.bid ?? row.openPosition.entryPrice,
+        referenceAsk: quote?.ask ?? row.openPosition.entryPrice,
+        paperSlippageCents: settings.paperSlippageCents,
+      });
+    } finally {
+      this.transientPhase = null;
+    }
 
     if (result.filled && row.lane === BotLane.BOT_PAPER) {
       row.paperSettledCash =
@@ -319,8 +414,21 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     this.logger.log(
       `Closed bot position ${row.openPosition.symbol} (${reasonTag})`,
     );
+    const closedPosition = row.openPosition;
     row.openPosition = null;
     await this.botStateService.save(row);
+    await this.botEventService.record({
+      lane: row.lane,
+      type: BotEventType.EXIT_FILL,
+      direction,
+      side: 'SELL',
+      symbol: closedPosition.symbol,
+      quantity: closedPosition.quantity,
+      fillPrice: result.fillPrice,
+      underlyingPrice: spot ?? undefined,
+      orderId: result.orderId ?? undefined,
+      reason: reasonTag,
+    });
     await this.emitStatus(true);
   }
 
@@ -359,8 +467,17 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     const refreshed = await this.botStateService.getRow();
     refreshed.lockout = true;
     refreshed.lockoutReason = reason;
+    refreshed.lockoutDateKey = etDateKey();
     refreshed.running = false;
     await this.botStateService.save(refreshed);
+    await this.botEventService.record({
+      lane: refreshed.lane,
+      type:
+        reason === 'KILL_SWITCH'
+          ? BotEventType.FLAT_KILL
+          : BotEventType.LOCKOUT,
+      reason,
+    });
     await this.emitStatus(true);
     this.logger.warn(`Bot flattened and halted: ${reason} (scope=${scope})`);
   }
@@ -368,6 +485,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
   private async heartbeat(): Promise<void> {
     try {
       await this.botStateService.refreshLiveBalances();
+      await this.botStateService.clearLockoutIfNewDay();
       const row = await this.botStateService.getRow();
       if (row.mode !== BotMode.BOT || !row.lane || row.lockout) {
         await this.emitStatus(false);
@@ -486,6 +604,19 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     if (!force && now - this.lastStatusEmitAt < 1000) return;
     this.lastStatusEmitAt = now;
     const status = await this.botStateService.getStatus();
+
+    if (
+      this.lastEmittedPhase !== null &&
+      status.phase !== this.lastEmittedPhase
+    ) {
+      await this.botEventService.record({
+        lane: status.lane,
+        type: BotEventType.PHASE,
+        reason: `${this.lastEmittedPhase} → ${status.phase}`,
+      });
+    }
+    this.lastEmittedPhase = status.phase;
+
     this.optionsGateway.emitBotStatus(status);
   }
 }

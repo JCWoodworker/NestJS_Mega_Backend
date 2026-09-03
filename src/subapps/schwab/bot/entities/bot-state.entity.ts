@@ -54,6 +54,17 @@ export class BotState {
   @Column({ type: 'text', name: 'lockout_reason', nullable: true })
   lockoutReason: string | null;
 
+  /** ET calendar day (`YYYY-MM-DD`) the current lockout was set on — lets the
+   * engine auto-clear a stale lockout at the next trading day's rollover
+   * without a dedicated "unlock" endpoint. Null when not locked out. */
+  @Column({
+    type: 'varchar',
+    length: 10,
+    name: 'lockout_date_key',
+    nullable: true,
+  })
+  lockoutDateKey: string | null;
+
   /** Separate from lane: live must be armed via /live/enable before BOT_LIVE. */
   @Column({ type: 'boolean', name: 'live_armed', default: false })
   liveArmed: boolean;

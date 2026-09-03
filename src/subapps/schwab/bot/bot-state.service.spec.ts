@@ -1,5 +1,7 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 
+import { etDateKey } from '@schwab/pnl/et-date.util';
+
 import { BotStateService } from './bot-state.service';
 import { BotLane } from './enums/bot-lane.enum';
 import { BotMode } from './enums/bot-mode.enum';
@@ -44,6 +46,18 @@ function buildService() {
   const botEngine = {
     flattenAndHalt: jest.fn().mockResolvedValue(undefined),
     onControlPlaneChange: jest.fn(),
+    getTransientPhase: jest.fn().mockReturnValue(null),
+  };
+  const botSettingsService = {
+    getSettings: jest.fn().mockResolvedValue({
+      tradeWindowStart: '10:00',
+      tradeWindowEnd: '15:00',
+      cooldownMins: 30,
+    }),
+  };
+  const botEventService = {
+    recent: jest.fn().mockResolvedValue([]),
+    record: jest.fn().mockResolvedValue(undefined),
   };
 
   const service = new BotStateService(
@@ -53,9 +67,11 @@ function buildService() {
     ordersService as any,
     config as any,
     botEngine as any,
+    botSettingsService as any,
+    botEventService as any,
   );
 
-  return { service, botEngine, getRowSnapshot: () => row };
+  return { service, botEngine, botEventService, getRowSnapshot: () => row };
 }
 
 describe('BotStateService invariants', () => {
@@ -161,5 +177,52 @@ describe('BotStateService invariants', () => {
     getRowSnapshot().paperEquity = 1000;
     const status = await service.getStatus();
     expect(status.minEquityOk).toBe(true);
+  });
+
+  it('phase is STOPPED in MANUAL mode / with no lane', async () => {
+    const { service } = buildService();
+    const status = await service.getStatus();
+    expect(status.phase).toBe('STOPPED');
+  });
+
+  it('phase is LOCKOUT once locked out, regardless of mode/lane', async () => {
+    const { service, getRowSnapshot } = buildService();
+    await service.setLane(BotLane.BOT_PAPER);
+    await service.setMode(BotMode.BOT);
+    getRowSnapshot().lockout = true;
+    const status = await service.getStatus();
+    expect(status.phase).toBe('LOCKOUT');
+  });
+
+  it('clearLockoutIfNewDay is a no-op when not locked out', async () => {
+    const { service } = buildService();
+    expect(await service.clearLockoutIfNewDay()).toBe(false);
+  });
+
+  it('clearLockoutIfNewDay clears a stale lockout from a prior day and emits UNLOCK', async () => {
+    const { service, getRowSnapshot, botEventService } = buildService();
+    const row = getRowSnapshot();
+    row.lockout = true;
+    row.lockoutReason = 'MAX_LOSS_USD';
+    row.lockoutDateKey = '2000-01-01'; // long-past ET day
+
+    const cleared = await service.clearLockoutIfNewDay();
+    expect(cleared).toBe(true);
+    expect(getRowSnapshot().lockout).toBe(false);
+    expect(getRowSnapshot().lockoutReason).toBeNull();
+    expect(botEventService.record).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'UNLOCK' }),
+    );
+  });
+
+  it('clearLockoutIfNewDay leaves a same-day lockout alone', async () => {
+    const { service, getRowSnapshot } = buildService();
+    const row = getRowSnapshot();
+    row.lockout = true;
+    row.lockoutDateKey = etDateKey();
+
+    const cleared = await service.clearLockoutIfNewDay();
+    expect(cleared).toBe(false);
+    expect(getRowSnapshot().lockout).toBe(true);
   });
 });

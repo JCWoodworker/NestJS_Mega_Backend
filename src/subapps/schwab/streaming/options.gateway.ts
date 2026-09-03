@@ -75,6 +75,7 @@ export interface BotStatusPayload {
   mode: string;
   lane: string | null;
   running: boolean;
+  phase: string;
   lockout: boolean;
   lockoutReason: string | null;
   equity: number;
@@ -86,6 +87,27 @@ export interface BotStatusPayload {
   todayBotPnl: number;
   tradesToday: number;
   liveArmed?: boolean;
+  recentEvents?: BotEventPayload[];
+}
+
+/** Live watch activity feed row (frontend contract §14j). `lane` is nullable
+ * here even though the frontend type documents it as required — a kill/
+ * lockout event that fires before any lane was ever selected has no lane to
+ * report; treat a missing `lane` on the wire as "not lane-specific". */
+export interface BotEventPayload {
+  id: string;
+  at: number;
+  lane: string | null;
+  type: string;
+  direction?: string;
+  side?: string;
+  symbol?: string;
+  quantity?: number;
+  fillPrice?: number;
+  underlyingPrice?: number;
+  strategies?: string[];
+  reason?: string;
+  orderId?: string;
 }
 
 const allowedOrigins =
@@ -248,5 +270,11 @@ export class OptionsGateway
   emitBotStatus(payload: BotStatusPayload): void {
     this.server?.emit('bot-status', payload);
     this.emit('bot-status', payload);
+  }
+
+  /** Bot live-watch activity feed (§14j) — each new event as it happens. */
+  emitBotEvent(payload: BotEventPayload): void {
+    this.server?.emit('bot-event', payload);
+    this.emit('bot-event', payload);
   }
 }

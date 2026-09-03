@@ -1081,6 +1081,8 @@ frontend already has `/options` open.
   mode: 'MANUAL' | 'BOT'
   lane: 'BOT_PAPER' | 'BOT_LIVE' | null
   running: boolean
+  phase: 'STOPPED' | 'LOCKOUT' | 'WAITING_WINDOW' | 'SCANNING'
+       | 'ENTERING' | 'IN_POSITION' | 'EXITING' | 'COOLDOWN'
   lockout: boolean
   lockoutReason: string | null      // e.g. 'MAX_LOSS_USD', 'HARD_FLATTEN_EOD', 'KILL_SWITCH', 'RECON_MISMATCH', 'SOCKET_LOSS'
   equity: number
@@ -1101,8 +1103,69 @@ frontend already has `/options` open.
   todayBotPnl: number               // sum of today's realized trades tagged BOT_PAPER/BOT_LIVE (matches current lane)
   tradesToday: number
   liveArmed: boolean                // additive field: whether /live/enable has been called (not in the original spec, safe to ignore)
+  recentEvents: BotEvent[]          // last 20 — see "Live watch" below; always present (empty array early on), not conditionally omitted
 }
 ```
+
+`phase` precedence (first match wins): `LOCKOUT` beats everything → `STOPPED` (MANUAL mode or no
+lane) → `ENTERING`/`EXITING` (a walk-limit chase is actively in flight) → `IN_POSITION` →
+`WAITING_WINDOW` (outside `tradeWindowStart`–`tradeWindowEnd`) → `COOLDOWN` (within
+`cooldownMins` of the last trade) → `SCANNING` (armed and actively looking for a signal). Pure
+function is unit-tested in isolation (`bot-phase.util.spec.ts`).
+
+### Live watch — activity feed (`BotEvent`)
+
+Append-only event stream powering a live activity sidebar + chart buy/sell dots. Persisted in a
+Postgres ring buffer (most recent 500 rows) so both `GET /bot/events` and a fresh socket
+connection can catch up on history, not just future events.
+
+```
+GET /api/v1/subapps/schwab/bot/events?limit=100&afterId=<id>
+```
+
+- `limit` (optional, 1–500, default 100).
+- `afterId` (optional) — only rows with `id > afterId`; useful for incremental catch-up after a
+  brief disconnect. Response is **always newest-first** regardless of `afterId`.
+- Response: `BotEvent[]` (see shape below).
+
+Socket (`/options` namespace, same JWT-gated connection as everything else): `bot-event` fires
+once per new event, in addition to the existing `bot-status` snapshot broadcasts.
+
+```ts
+interface BotEvent {
+  id: string
+  at: number                    // epoch ms
+  lane: 'BOT_PAPER' | 'BOT_LIVE' | null   // null only if a kill/lockout fires before any lane was ever selected
+  type: 'SIGNAL' | 'SKIP' | 'ENTRY_SUBMIT' | 'ENTRY_FILL' | 'EXIT_SUBMIT'
+      | 'EXIT_FILL' | 'FLAT_KILL' | 'LOCKOUT' | 'UNLOCK' | 'PHASE'
+  direction?: 'CALL' | 'PUT'
+  side?: 'BUY' | 'SELL'         // present on *_FILL — chart dot direction
+  symbol?: string               // option OSI
+  quantity?: number
+  fillPrice?: number            // option premium
+  underlyingPrice?: number      // SPY at event time
+  strategies?: string[]
+  reason?: string               // e.g. 'SKIP_BUDGET', 'NO_CONTRACT_MATCH', 'BOT_ORDER_ALREADY_WORKING',
+                                 // 'ENTRY_ABANDONED', 'SOFT_STOP_OR_TARGET', 'KILL_SWITCH', 'MAX_LOSS_USD',
+                                 // 'HARD_FLATTEN_EOD', 'NEW_TRADING_DAY', or a `PREV_PHASE → NEXT_PHASE` string for PHASE events
+  orderId?: string
+}
+```
+
+What emits each type: `SIGNAL` when `CONFIRMING` fires (before sizing); `SKIP` for every no-entry
+outcome (budget, no matching contract, idempotency block, abandoned walk-limit chase); `ENTRY_SUBMIT`/
+`EXIT_SUBMIT` right before the executor is called (both lanes — paper included); `ENTRY_FILL`/
+`EXIT_FILL` on confirmed fill (both lanes); `FLAT_KILL` specifically for an explicit `/bot/kill`
+call; `LOCKOUT` for every other automatic halt reason (max-loss, profit target, hard-flatten,
+recon mismatch, socket loss, live-disable); `PHASE` whenever the computed `phase` above transitions
+(throttled to real transitions, not every heartbeat tick).
+
+**`UNLOCK` / day-rollover** — lockout is a *per-trading-day* breaker, not permanent: the engine
+auto-clears a stale lockout (and resets the paper day-start-equity baseline) the first time it
+notices the America/New_York calendar day has changed since the lockout was set — checked every
+heartbeat and defensively on `/mode` and `/lane` calls. This means arming `BOT`/a lane the next
+morning after a max-loss halt "just works" without any manual reset endpoint or DB intervention.
+An `UNLOCK` event is emitted when this happens.
 
 ### `BotSettings` shape (defaults in parentheses)
 
@@ -1186,11 +1249,16 @@ want to add bot filters to the existing History page from section 13).
    on disagreement or a missing signal from an enabled strategy); FIFO matcher partitions by
    `symbol + source` so bot and manual lots never cross-match, and paper fills are written with
    `source: BOT_PAPER` end-to-end (fill → order-history → realized-trade).
+6. **`bot-event` stream + `GET /bot/events` power a live activity sidebar + chart buy/sell dots**
+   — ✅ unit-tested (`bot-phase.util.spec.ts` for the phase state machine) + code-reviewed: every
+   signal/skip/submit/fill/lockout/unlock/phase-transition emits a persisted, broadcast `BotEvent`
+   (see "Live watch" above); `GET /bot/events` ring-buffers the last 500.
 
 **Not yet live-verified** (needs a real Schwab connection + market hours): actual walk-limit fills
-against Schwab's order book, live reconciliation against real account positions, and a full-day
-`BOT_PAPER` run against real streaming SPY data. Recommend running `BOT_PAPER` for at least one full
-session on preprod before ever arming `BOT_LIVE`.
+against Schwab's order book, live reconciliation against real account positions, a full-day
+`BOT_PAPER` run against real streaming SPY data, and a real day-rollover `UNLOCK` (needs the
+process to stay up across an ET midnight while previously locked out). Recommend running
+`BOT_PAPER` for at least one full session on preprod before ever arming `BOT_LIVE`.
 
 ## 7. Git remote / CI, sign-up UI
 Both resolved on the frontend side — GitHub repo + Netlify push-to-deploy wired up, and a Sign In
@@ -1253,14 +1321,29 @@ Current state:
    **Still open:** Schwab `/transactions` sync still returns empty (`upserted=0`) — likely app
    permission / Trading Production scope; frontend’s `/pnl/orders` FIFO fallback is the right
    interim. Prefer `/pnl/trades` when sync starts returning fills.
-9. **Section 14 (automated 0DTE SPY scalping bot, `BotModule`) — code complete, unit-tested,
-   not yet deployed.** Server-owns entries/exits/sizing/risk-gates entirely; frontend only sends
-   mode/lane/settings/kill and reads `BotStatus`. See section 14 for the full contract, manual
-   acceptance pass, and the "not yet live-verified" caveats. **Default mode on deploy is `MANUAL`**
-   — the bot does nothing until explicitly switched to `BOT` + a lane.
+9. **Section 14 (automated 0DTE SPY scalping bot, `BotModule`) — ✅ deployed to preprod + prod
+   2026-09-03**, defaulting to `MANUAL` mode (the bot does nothing until explicitly switched to
+   `BOT` + a lane). **Section 14j (live watch — `phase`, `GET /bot/events`, `bot-event` socket) —
+   code complete + unit-tested 2026-09-03, pending deploy** — see the "Live watch" subsection
+   under section 14 for the `BotEvent` shape and emission points. See section 14 for the full
+   contract, manual acceptance pass, and remaining "not yet live-verified" caveats (real Schwab
+   fills, live reconciliation, a full trading session, a real day-rollover).
 
 ## Changelog
 
+- **2026-09-03 (section 14j: bot live watch — `phase`, `GET /bot/events`, `bot-event`)**: Added the
+  activity-feed contract the frontend needs for a live watch sidebar + chart buy/sell dots.
+  `BotStatus` gained `phase` (an 8-state machine — `STOPPED`/`LOCKOUT`/`WAITING_WINDOW`/`SCANNING`/
+  `ENTERING`/`EXITING`/`IN_POSITION`/`COOLDOWN`, pure-function computed and unit-tested in isolation)
+  and `recentEvents` (last 20). New `bot_events` Postgres ring buffer (trimmed to the most recent
+  500 rows) backs `GET /bot/events?limit=&afterId=` and a new `bot-event` socket broadcast on
+  `/options`; `BotEngineService` now emits a `BotEvent` at every signal, skip, entry/exit submit+fill,
+  kill/lockout, and phase transition. Also closed a real gap found while wiring `LOCKOUT`/`UNLOCK`:
+  lockout previously had no reset path short of manual DB intervention — it's now a per-trading-day
+  breaker that auto-clears (and resets the paper day-start-equity baseline) the first check after an
+  America/New_York calendar-day rollover, emitting `UNLOCK`. New migration adds `bot_state.lockout_date_key`
+  + the `bot_events` table. See the "Live watch" subsection under section 14. Unit-tested
+  (`bot-phase.util.spec.ts` + expanded `bot-state.service.spec.ts`, 61 bot-module specs passing).
 - **2026-09-03 (section 14: automated 0DTE SPY scalping bot — `BotModule`)**: New `BotModule` under
   the Schwab subapp. Server-side `BotStateService`/`BotSettingsService` (singleton rows, same
   pattern as `SchwabToken`) enforce every product invariant (`MANUAL`/`BOT` exclusivity,
