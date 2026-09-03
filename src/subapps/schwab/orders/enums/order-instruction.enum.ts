@@ -8,4 +8,8 @@ export enum OrderInstruction {
 export enum OrderType {
   LIMIT = 'LIMIT',
   MARKET = 'MARKET',
+  /** Broker-resting stop, triggers a MARKET order once `stopPrice` trades. */
+  STOP = 'STOP',
+  /** Broker-resting stop, triggers a LIMIT order at `price` once `stopPrice` trades. */
+  STOP_LIMIT = 'STOP_LIMIT',
 }

@@ -27,6 +27,12 @@ implemented** — `GET .../market-data/price-history`, `subscribe-option-chart`,
 are all live on preprod + prod as of this update. See section 9 below for the full contract as
 implemented, including the answer to the 9d open question.
 
+**New (2026-09-02): the broker stop-loss / working-orders contract (frontend's section 10 ask,
+chart drag-to-stop) is now implemented** — `fast-execute` accepts `STOP`/`STOP_LIMIT` +
+`stopPrice` and returns `orderId`, `GET .../orders/working` lists resting orders, and
+`DELETE .../orders/:orderId` cancels one (trail = cancel + re-place). The optional `order-update`
+socket event also shipped. See section 10 below for the full contract as implemented.
+
 ---
 
 ## ✅ Resolved: this is a web app (TanStack Start), not Expo
@@ -181,13 +187,23 @@ All require `Authorization: Bearer <accessToken>` (section 0).
   symbol: string // 21-char OSI
   instruction: 'BUY_TO_OPEN' | 'SELL_TO_CLOSE' | 'SELL_TO_OPEN' | 'BUY_TO_CLOSE'
   quantity: number
-  orderType: 'LIMIT' | 'MARKET'
-  price?: number
-  slippageTolerance?: number
+  orderType: 'LIMIT' | 'MARKET' | 'STOP' | 'STOP_LIMIT'
+  price?: number       // required for LIMIT (limit price) and STOP_LIMIT (limit leg)
+  stopPrice?: number   // required for STOP and STOP_LIMIT (trigger price)
+  slippageTolerance?: number // LIMIT only; ignored for STOP/STOP_LIMIT
 }
 // response
-{ status: 'SUBMITTED'; statusCode: number; latencyMs: number; orderLocation: string | null }
+{
+  status: 'SUBMITTED'
+  statusCode: number
+  latencyMs: number
+  orderLocation: string | null
+  orderId: string | null // parsed from the Location header — see section 10a
+}
 ```
+> `STOP`/`STOP_LIMIT` + `stopPrice` are the broker-resting-stop extension asked for in section 10
+> (chart drag-to-stop) — **implemented 2026-09-02**, see section 10 for the full contract
+> including `GET .../orders/working` and cancel.
 
 ### `POST /api/v1/subapps/schwab/orders/flatten`
 ```ts
@@ -260,6 +276,27 @@ io(`${VITE_SOCKET_URL}${VITE_SOCKET_NAMESPACE}`, {
   ```
   **Live-verified** — see section 6 for the real observed payload and a bug that was blocking
   this entirely until fixed.
+- **`order-update`** (new, 2026-09-02 — section 10d) — broadcast whenever a resting order's
+  status/fill changes, so the chart can flip entry→closed and clear stop lines without polling
+  `GET .../orders/working` itself:
+  ```ts
+  {
+    accountHash: string
+    orderId: string
+    symbol: string
+    status: string // WORKING | FILLED | CANCELED | REJECTED | ...
+    orderType?: string | null
+    stopPrice?: number | null
+    price?: number | null
+    filledQuantity?: number
+    averageFillPrice?: number | null // quantity-weighted across execution legs; null until any fill
+    asOf: number // epoch ms
+  }
+  ```
+  Backend polls Schwab's orders endpoint on the same ~3s cadence as `account-snapshot` and only
+  emits when something the frontend cares about actually changed (status/fill/price/stopPrice) —
+  not on every poll tick. Not yet live-tested against a real order (needs a real STOP placed
+  during RTH) — see section 10 for the full writeup and open acceptance checks.
 - **Late-joiner replay (new, 2026-09-02)**: `stream-status` and (if already established)
   `ladder-recentered` are now sent directly to a socket immediately on successful connection,
   reflecting current state rather than waiting for the next change. Relevant any time a client
@@ -454,6 +491,100 @@ Nothing wrong has been confirmed - price-history and the subscribe plumbing all 
 specced - but live 1-minute candle delivery for both equity and (especially) options is still an
 open question pending real trading-hours volume.
 
+## 10. Broker stop-loss + working orders (chart drag-to-stop) — **implemented 2026-09-02**
+
+Implements the frontend's section 10 ask in full: `fast-execute` extended with `STOP`/
+`STOP_LIMIT` (10a), `GET .../orders/working` (10b), cancel via `DELETE .../orders/:orderId`
+(10c — cancel+re-place chosen over a separate replace endpoint, per the doc's own "cancel+re-place
+is enough for v1"), and the optional `order-update` socket event (10d, see section 4). Paper
+trading stays entirely frontend-side, as scoped (10e) — no backend surface for it.
+
+### 10a. `fast-execute` — additive `STOP`/`STOP_LIMIT`
+
+Chosen path: **extended the existing `fast-execute`** rather than a new `/orders/stop` endpoint,
+per the doc's stated preference. `LIMIT`/`MARKET` behavior is unchanged (verified via existing
+`marketable-limit.util` tests, which only special-case `LIMIT`). See the request/response shape
+under section 3 above — `stopPrice` maps straight through to Schwab's own `stopPrice` field,
+`price` on a `STOP_LIMIT` maps to Schwab's limit leg untouched (no marketable-limit walk applied —
+that's only meaningful for a plain `LIMIT` order chasing a fill right now).
+
+**Validation implemented exactly as asked** (`FastOrderDto`):
+- `STOP`/`STOP_LIMIT` without `stopPrice` → `400` (`class-validator`, same error shape as section 3).
+- `STOP_LIMIT` without `price` → `400`.
+- `LIMIT` still requires `price`; `MARKET` requires neither. `stopPrice` is simply ignored
+  (no validation error) if sent on a `LIMIT`/`MARKET` order.
+- `orderId` is now returned on every `fast-execute`/`flatten`/`reverse` response, parsed from
+  Schwab's `Location` response header (`.../orders/{orderId}`) — `null` if Schwab didn't return one.
+
+Session/duration: same as every other order type — Schwab `session: 'NORMAL'`,
+`duration: 'DAY'`. Nothing 0DTE-specific needed there.
+
+### 10b. `GET /api/v1/subapps/schwab/orders/working?accountHash=<hash>`
+
+```ts
+Array<{
+  orderId: string
+  symbol: string
+  instruction: string
+  quantity: number
+  filledQuantity: number
+  orderType: string // 'STOP' | 'STOP_LIMIT' | 'LIMIT' | 'MARKET' | ...
+  status: string // WORKING | QUEUED | PENDING_ACTIVATION | ACCEPTED (whatever Schwab's still-open statuses are)
+  price: number | null
+  stopPrice: number | null
+  enteredTime: string | null
+}>
+```
+
+Implemented as a thin proxy to Schwab's `GET .../accounts/{accountHash}/orders`, windowed to
+local midnight→now (Schwab requires an explicit `fromEnteredTime`/`toEnteredTime` on this
+endpoint — a full day easily covers any 0DTE order), then filtered client-side to just the
+still-resting statuses (Schwab's `status` filter only accepts one value at a time, so "working"
+is computed here rather than asked of Schwab directly). Same auth/rate-limit guard as the rest of
+`/orders/*` (section 3).
+
+### 10c. Cancel — `DELETE /api/v1/subapps/schwab/orders/:orderId?accountHash=<hash>`
+
+```ts
+// -> { status: 'CANCELED'; statusCode: number }
+```
+
+Thin proxy to Schwab's `DELETE .../accounts/{accountHash}/orders/{orderId}`. **No separate
+replace/PUT endpoint** — trailing a stop is cancel this endpoint, then `fast-execute` again with
+the new `stopPrice`, exactly the "cancel+re-place is enough for v1" option the doc offered.
+`orderId` for the cancel call should come from the `orderId` on the original `fast-execute`
+response (10a) when available, falling back to a `GET .../orders/working` lookup otherwise.
+
+### 10d. `order-update` socket event — implemented (optional ask, shipped anyway)
+
+See section 4 for the full payload shape. Backend-wide poll (not per-socket), same pattern as
+`account-snapshot`, diffing against the previous poll so it only broadcasts on an actual change
+(new order, status change, fill, or stop/limit price change) rather than every poll tick.
+`averageFillPrice` is a quantity-weighted average across Schwab's `orderActivityCollection`
+execution legs, so it's accurate through partial fills too — `null` until the first fill.
+
+### 10f. Acceptance checks — status
+
+1. `fast-execute` with `orderType: 'STOP'`, `SELL_TO_CLOSE`, `stopPrice` → 2xx, order appears in
+   `GET .../orders/working` as `WORKING` (or equivalent pre-trigger status) — **implemented, not
+   yet live-tested against a real Schwab order** (needs RTH + an open option position to place a
+   real protective stop against; unit tests cover the DTO validation and payload-building logic,
+   see `fast-order.dto.spec.ts` / `working-order.mapper.spec.ts`).
+2. Premium trades through `stopPrice` → position flattens, `account-snapshot` reflects flat, and
+   `order-update` fires `FILLED` — **not yet live-tested**, same reason as (1).
+3. Cancel working stop → gone from `GET .../orders/working`, position still open — **implemented,
+   not yet live-tested**.
+4. Trail (cancel old + place new) → only one working `STOP` for that symbol — **implemented as
+   cancel+re-place per 10c**; frontend is responsible for the cancel-then-place sequencing itself
+   (no atomic replace on this side), not yet live-tested end-to-end.
+5. Existing `MARKET`/`LIMIT` `fast-execute` + `flatten` unchanged — **✅ verified**: full test
+   suite (including pre-existing `marketable-limit.util.spec.ts`) passes unmodified, and the new
+   `orderType`-conditional payload branches leave the `LIMIT`/`MARKET` code paths untouched.
+
+**Bottom line: section 10 is code-complete and deployed, mirroring section 9's rollout pattern —
+all five acceptance checks need a live RTH retest against a real resting order before this is
+fully closed out**, same caveat as section 9's live-candle checks.
+
 ## 7. Git remote / CI, sign-up UI
 Both resolved on the frontend side — GitHub repo + Netlify push-to-deploy wired up, and a Sign In
 / Create Account toggle shipped on `/sign-in`. No backend action needed.
@@ -481,9 +612,39 @@ Current state:
 3. Everything else (auth contract, CORS, OAuth connect, orders/accounts/positions, account
    balances, all four reported bugs including the streaming crash loop) — confirmed live on
    preprod and prod.
+4. **Section 10 (broker stop-loss + working orders, chart drag-to-stop) is implemented and
+   deployed, not yet live-tested**:
+   - `fast-execute` extended with `STOP`/`STOP_LIMIT` + `stopPrice`, returns `orderId` — **code
+     complete, unit-tested** (DTO validation + payload building), **not yet placed against a real
+     Schwab order**.
+   - `GET .../orders/working` and `DELETE .../orders/:orderId` — **code complete**, same
+     not-yet-live-tested caveat.
+   - `order-update` socket event (optional ask, shipped) — **code complete**, same caveat.
+   - Needs an RTH retest with a real open option position to close out all five of section 10f's
+     acceptance checks — see section 10.
 
 ## Changelog
 
+- **2026-09-02 (broker stop-loss + working orders — section 10 implemented)**: Built the full
+  contract the frontend asked for to support chart drag-to-stop on live trades: extended
+  `fast-execute`'s `FastOrderDto`/`OrderType` with `STOP`/`STOP_LIMIT` + `stopPrice` (chose to
+  extend the existing endpoint over a new `/orders/stop`, per the doc's stated preference),
+  now returns `orderId` (parsed from Schwab's `Location` response header) on every
+  `fast-execute`/`flatten`/`reverse` response so the frontend can cancel/replace without an extra
+  round trip. Added `GET .../orders/working` (thin proxy to Schwab's orders endpoint, windowed to
+  today, filtered to still-resting statuses) and `DELETE .../orders/:orderId` to cancel — chose
+  cancel+re-place over a separate PUT replace endpoint for trailing, per the doc's own "cancel+
+  re-place is enough for v1." Also shipped the optional `order-update` socket event (10d): a
+  backend-wide poller (same shape as `AccountSnapshotService`) that diffs Schwab's orders against
+  the previous poll and only broadcasts on an actual status/fill/price change, including a
+  quantity-weighted `averageFillPrice` across partial fills. New unit tests
+  (`fast-order.dto.spec.ts`, `working-order.mapper.spec.ts`) cover the DTO validation rules and
+  payload-building/mapping logic; full existing test suite + `tsc`/`eslint`/`nest build` all pass
+  unmodified, confirming `LIMIT`/`MARKET` `fast-execute`/`flatten` behavior is unchanged. Deployed
+  to preprod + prod. **Not yet live-tested against a real Schwab order** — needs an RTH retest
+  with an open option position to close out section 10f's five acceptance checks; will update this
+  file after that retest, same as section 9's live-candle checks. See section 10 for the full
+  contract as implemented and open items for status.
 - **2026-09-02 (chart backfill + live candle streaming — section 9 implemented)**: Built the full
   chart contract the frontend asked for: `GET .../market-data/price-history` (thin authenticated
   proxy to Schwab's `/pricehistory`, normalized response, 60/60s rate limit), `subscribe-option-chart`

@@ -18,5 +18,6 @@ export default registerAs('schwab', () => ({
   heartbeatTimeoutMs: 30 * 1000,
   tickEmitThrottleMs: 50,
   accountSnapshotPollMs: +process.env.SCHWAB_ACCOUNT_SNAPSHOT_POLL_MS || 4000,
+  orderUpdatePollMs: +process.env.SCHWAB_ORDER_UPDATE_POLL_MS || 3000,
   strikeLadderSize: 16,
 }));

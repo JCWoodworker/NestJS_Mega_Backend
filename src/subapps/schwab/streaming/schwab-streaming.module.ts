@@ -11,6 +11,7 @@ import { OrdersModule } from '@schwab/orders/orders.module';
 
 import { AccountSnapshotService } from './account-snapshot.service';
 import { OptionsGateway } from './options.gateway';
+import { OrderUpdatesService } from './order-updates.service';
 import { SchwabStreamerService } from './schwab-streamer.service';
 
 @Module({
@@ -22,7 +23,12 @@ import { SchwabStreamerService } from './schwab-streamer.service';
     SchwabHttpModule,
     OrdersModule,
   ],
-  providers: [OptionsGateway, SchwabStreamerService, AccountSnapshotService],
+  providers: [
+    OptionsGateway,
+    SchwabStreamerService,
+    AccountSnapshotService,
+    OrderUpdatesService,
+  ],
   exports: [OptionsGateway],
 })
 export class SchwabStreamingModule {}

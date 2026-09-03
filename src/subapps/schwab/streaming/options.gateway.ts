@@ -43,6 +43,19 @@ export interface AccountSnapshotPayload {
   asOf: number;
 }
 
+export interface OrderUpdatePayload {
+  accountHash: string;
+  orderId: string;
+  symbol: string;
+  status: string;
+  orderType?: string | null;
+  stopPrice?: number | null;
+  price?: number | null;
+  filledQuantity?: number;
+  averageFillPrice?: number | null;
+  asOf: number;
+}
+
 export interface ChartCandlePayload {
   symbol: string;
   assetType: 'EQUITY' | 'OPTION';
@@ -184,5 +197,11 @@ export class OptionsGateway implements OnGatewayConnection {
 
   emitChartCandle(payload: ChartCandlePayload): void {
     this.server?.emit('chart-candle', payload);
+  }
+
+  /** Frontend contract section 10d — lets the chart flip entry→closed and
+   * clear stop lines without polling `GET /orders/working` itself. */
+  emitOrderUpdate(payload: OrderUpdatePayload): void {
+    this.server?.emit('order-update', payload);
   }
 }

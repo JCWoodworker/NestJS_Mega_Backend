@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
+  Param,
   Post,
   Query,
 } from '@nestjs/common';
@@ -56,5 +58,24 @@ export class OrdersController {
   @Get('positions')
   async getPositions(@Query('accountHash') accountHash: string) {
     return this.ordersService.getPositions(accountHash);
+  }
+
+  /** Resting orders (frontend contract section 10b) — lets the chart redraw
+   * stop-price lines for the tracked OSI after a page refresh. */
+  @Get('working')
+  async getWorkingOrders(@Query('accountHash') accountHash: string) {
+    return this.ordersService.getWorkingOrders(accountHash);
+  }
+
+  /** Cancels a resting order (section 10c). Trailing a stop is cancel +
+   * re-place via `fast-execute` with the new `stopPrice` — no separate
+   * replace endpoint, per the doc's "cancel+re-place is enough for v1". */
+  @Delete(':orderId')
+  @HttpCode(HttpStatus.OK)
+  async cancelOrder(
+    @Param('orderId') orderId: string,
+    @Query('accountHash') accountHash: string,
+  ) {
+    return this.ordersService.cancelOrder(accountHash, orderId);
   }
 }

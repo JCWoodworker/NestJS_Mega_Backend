@@ -29,11 +29,27 @@ export class FastOrderDto {
   @IsEnum(OrderType)
   orderType: OrderType;
 
-  @ValidateIf((dto: FastOrderDto) => dto.orderType === OrderType.LIMIT)
+  /** Required for LIMIT (limit price) and STOP_LIMIT (limit leg once triggered). */
+  @ValidateIf(
+    (dto: FastOrderDto) =>
+      dto.orderType === OrderType.LIMIT ||
+      dto.orderType === OrderType.STOP_LIMIT,
+  )
   @IsNumber()
   @IsPositive()
   price?: number;
 
+  /** Required trigger price for STOP and STOP_LIMIT orders. */
+  @ValidateIf(
+    (dto: FastOrderDto) =>
+      dto.orderType === OrderType.STOP ||
+      dto.orderType === OrderType.STOP_LIMIT,
+  )
+  @IsNumber()
+  @IsPositive()
+  stopPrice?: number;
+
+  /** Ignored for STOP/STOP_LIMIT — only applies to marketable LIMIT orders. */
   @IsOptional()
   @IsNumber()
   @Min(0)
