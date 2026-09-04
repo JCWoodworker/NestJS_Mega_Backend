@@ -1,15 +1,14 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
- * Decision-audit expansion: new BotEvent types, optional JSON payload, and
- * (retention is enforced in BotEventService — 30 days by `at`, not row count).
+ * Decision-audit expansion: new BotEvent types + optional JSON payload.
+ * Retention is enforced in BotEventService (30 days by `at`).
  *
- * `transaction = false` so Postgres can `ALTER TYPE ... ADD VALUE` (not allowed
- * inside a transaction on many PG versions).
+ * PG 12+ allows ALTER TYPE … ADD VALUE inside a transaction (Heroku PG 14+).
+ * Do not set `transaction = false` — this app's TypeORM global mode is "all"
+ * and forbids per-migration overrides (ForbiddenTransactionModeOverrideError).
  */
 export class ExpandBotEventsAudit1788456900005 implements MigrationInterface {
-  public transaction = false;
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     const values = [
       'GATE_SKIP',
@@ -35,6 +34,5 @@ export class ExpandBotEventsAudit1788456900005 implements MigrationInterface {
     await queryRunner.query(`
       ALTER TABLE "bot_events" DROP COLUMN IF EXISTS "payload"
     `);
-    // Postgres cannot remove enum values safely — leave the type members.
   }
 }
