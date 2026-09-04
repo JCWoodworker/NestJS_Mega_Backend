@@ -3,6 +3,8 @@
 **Nest handoff for the React desk** (updated 2026-09-04). Paste-ready.  
 Companion index: [`schwab-frontend-notes.md`](./schwab-frontend-notes.md) §14.
 
+**Shipped:** preprod **v423** / prod **v263** (`74fe780`) — decision audit + explain + suggested settings + **log browser**.
+
 **Breaking change:** `GET /bot/events` now returns a **pagination envelope** (`{ items, … }`), not a bare array. Update any client that assumed `BotEvent[]`.
 
 ---

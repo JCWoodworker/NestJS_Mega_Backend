@@ -1116,21 +1116,25 @@ function is unit-tested in isolation (`bot-phase.util.spec.ts`).
 
 ### Live watch — activity feed (`BotEvent`)
 
-Append-only event stream powering a live activity sidebar + chart buy/sell dots. Persisted in a
-Postgres ring buffer (most recent 500 rows) so both `GET /bot/events` and a fresh socket
-connection can catch up on history, not just future events.
+Append-only event stream powering a live activity sidebar + chart buy/sell dots. Persisted in
+Postgres with **30-day retention** (not a 500-row ring). Full log-browser contract (envelope,
+filters, date range, search, cursor pagination, decision/operator types, `payload`):
+[`schwab-bot-audit-and-suggested-settings.md`](./schwab-bot-audit-and-suggested-settings.md).
 
 ```
-GET /api/v1/subapps/schwab/bot/events?limit=100&afterId=<id>
+GET /api/v1/subapps/schwab/bot/events?limit=100&beforeId=<id>&afterId=<id>&type=…&from=&to=&q=
 ```
 
-- `limit` (optional, 1–500, default 100).
-- `afterId` (optional) — only rows with `id > afterId`; useful for incremental catch-up after a
-  brief disconnect. Response is **always newest-first** regardless of `afterId`.
-- Response: `BotEvent[]` (see shape below).
+- `limit` (optional, 1–1000, default 100).
+- `beforeId` — older page (`id < beforeId`); `afterId` — newer catch-up (`id > afterId`).
+- Also: `type` (repeatable), `lane`, `reason`, `q`, `from`/`to` (epoch ms on `at`).
+- **Response envelope (breaking vs early §14j):**
+  `{ items, limit, nextBeforeId, nextAfterId, hasMoreOlder, hasMoreNewer }` — not a bare array.
+  `items` always newest-first.
 
 Socket (`/options` namespace, same JWT-gated connection as everything else): `bot-event` fires
-once per new event, in addition to the existing `bot-status` snapshot broadcasts.
+once per new event, in addition to the existing `bot-status` snapshot broadcasts. Use socket for
+live tail; REST for history / filters / date range.
 
 ```ts
 interface BotEvent {
@@ -1139,6 +1143,8 @@ interface BotEvent {
   lane: 'BOT_PAPER' | 'BOT_LIVE' | null   // null only if a kill/lockout fires before any lane was ever selected
   type: 'SIGNAL' | 'SKIP' | 'ENTRY_SUBMIT' | 'ENTRY_FILL' | 'EXIT_SUBMIT'
       | 'EXIT_FILL' | 'FLAT_KILL' | 'LOCKOUT' | 'UNLOCK' | 'PHASE'
+      // + audit: 'GATE_SKIP' | 'NO_SIGNAL' | 'OPERATOR_SETTINGS' | 'OPERATOR_MODE'
+      //         | 'OPERATOR_LANE' | 'OPERATOR_LIVE' | 'ERROR'
   direction?: 'CALL' | 'PUT'
   side?: 'BUY' | 'SELL'         // present on *_FILL — chart dot direction
   symbol?: string               // option OSI
@@ -1150,16 +1156,18 @@ interface BotEvent {
                                  // 'ENTRY_ABANDONED', 'SOFT_STOP_OR_TARGET', 'KILL_SWITCH', 'MAX_LOSS_USD',
                                  // 'HARD_FLATTEN_EOD', 'NEW_TRADING_DAY', or a `PREV_PHASE → NEXT_PHASE` string for PHASE events
   orderId?: string
+  payload?: Record<string, unknown>  // optional — settings diffs, indicator snapshots
 }
 ```
 
 What emits each type: `SIGNAL` when `CONFIRMING` fires (before sizing); `SKIP` for every no-entry
-outcome (budget, no matching contract, idempotency block, abandoned walk-limit chase); `ENTRY_SUBMIT`/
+outcome (budget, no matching contract, idempotency block, abandoned walk-limit chase); `GATE_SKIP` /
+`NO_SIGNAL` for pre-signal / confirming-idle paths (see audit doc); `ENTRY_SUBMIT`/
 `EXIT_SUBMIT` right before the executor is called (both lanes — paper included); `ENTRY_FILL`/
 `EXIT_FILL` on confirmed fill (both lanes); `FLAT_KILL` specifically for an explicit `/bot/kill`
 call; `LOCKOUT` for every other automatic halt reason (max-loss, profit target, hard-flatten,
-recon mismatch, socket loss, live-disable); `PHASE` whenever the computed `phase` above transitions
-(throttled to real transitions, not every heartbeat tick).
+recon mismatch, socket loss, live-disable); `OPERATOR_*` for desk mutations; `PHASE` whenever the
+computed `phase` above transitions (throttled to real transitions, not every heartbeat tick).
 
 **`UNLOCK` / day-rollover** — lockout is a *per-trading-day* breaker, not permanent: the engine
 auto-clears a stale lockout (and resets the paper day-start-equity baseline) the first time it
@@ -1395,6 +1403,11 @@ Current state:
 
 ## Changelog
 
+- **2026-09-04 (log browser on `GET /bot/events`)**: Envelope
+  `{ items, nextBeforeId, nextAfterId, hasMoreOlder, hasMoreNewer }` plus query params
+  `beforeId` / `afterId` / `type` / `lane` / `reason` / `q` / `from` / `to` (epoch ms).
+  Deployed preprod **v423** / prod **v263** (`74fe780`). Details in
+  [`schwab-bot-audit-and-suggested-settings.md`](./schwab-bot-audit-and-suggested-settings.md).
 - **2026-09-04 (decision audit + explain + suggested settings)**: Expanded `bot_events`
   with `GATE_SKIP` / `NO_SIGNAL` / `OPERATOR_*` / `ERROR` + optional `payload` jsonb;
   30-day retention (no 500-row ring). Entry eval now logs why it did not trade.
