@@ -1063,7 +1063,8 @@ as the rest of the Schwab subapp:
 | GET | `/status` | — | `BotStatus` (see below); poll this or listen for `bot-status`. |
 | POST | `/mode` | `{ mode: 'MANUAL' \| 'BOT' }` | `MANUAL`/`BOT` are mutually exclusive. |
 | POST | `/lane` | `{ lane: 'BOT_PAPER' \| 'BOT_LIVE', confirmLive?: boolean }` | `BOT_LIVE` requires `confirmLive: true` **and** a prior `/live/enable`, else **400**. Switching lanes while a bot position is open in the *other* lane returns **409**. |
-| POST | `/kill` | `{ scope: 'ALL' \| 'PAPER' \| 'LIVE' }` | Flattens any open bot position in scope, cancels bot-tagged working orders (live), and sets `lockout: true`. |
+| POST | `/kill` | `{ scope: 'ALL' \| 'PAPER' \| 'LIVE' }` | Flattens any open bot position in scope, cancels bot-tagged working orders (live), and sets `lockout: true`, `lockoutReason: 'KILL_SWITCH'`. |
+| POST | `/unlock` | `{}` | **New 2026-09-04.** Operator recovery from a kill-switch / precautionary lockout, same trading session — see "Clearing a lockout" below. |
 | POST | `/live/enable` | `{ confirm: true }` | Arms live trading; `confirm !== true` → **400**. Arming alone does not start trading — `lane` must still be set to `BOT_LIVE`. |
 | POST | `/live/disable` | `{}` | Disarms live; if currently `BOT_LIVE`, flattens + halts (scope `LIVE`) first, then clears the lane. |
 | GET | `/settings` | — | `BotSettings` (see below). |
@@ -1165,7 +1166,43 @@ auto-clears a stale lockout (and resets the paper day-start-equity baseline) the
 notices the America/New_York calendar day has changed since the lockout was set — checked every
 heartbeat and defensively on `/mode` and `/lane` calls. This means arming `BOT`/a lane the next
 morning after a max-loss halt "just works" without any manual reset endpoint or DB intervention.
-An `UNLOCK` event is emitted when this happens.
+An `UNLOCK` event (`reason: 'NEW_TRADING_DAY'`) is emitted when this happens.
+
+### Clearing a lockout same-session — `POST /bot/unlock` (new 2026-09-04)
+
+**Bug fixed:** an operator `/bot/kill` (or any automatic halt) previously had **no same-day
+recovery path** — `lockoutReason` stuck until the next America/New_York calendar day rolled over
+(see above), and re-`POST`ing `/mode`/`/lane`/`/live/enable` could not clear it (they only
+*defensively* check for a stale *prior-day* lockout, not clear a live one). A real kill-switch
+test got stuck locked out with no way to resume `BOT_LIVE` same day. Fixed by adding:
+
+```
+POST /api/v1/subapps/schwab/bot/unlock
+Authorization: Bearer <JWT>   // same guard + rate limit as /bot/kill
+Content-Type: application/json
+
+{}
+```
+
+Response: updated `BotStatus` (same shape as `GET /status`).
+
+**Behavior:**
+- No-op (200, unchanged status) if not currently locked out.
+- If `lockoutReason` is one of the **operator/precautionary** reasons — `KILL_SWITCH`,
+  `LIVE_DISABLED`, `HARD_FLATTEN_EOD`, `SOCKET_LOSS` — clears `lockout`/`lockoutReason`
+  immediately, re-arms `running: true` if `mode === 'BOT'` and a lane is still set (so the loop
+  resumes `SCANNING` on the very next tick, no need to re-`POST` `/mode` or `/lane`), and emits
+  `BotEvent { type: 'UNLOCK', reason: 'OPERATOR_UNLOCK' }`.
+- **Deliberately excluded — returns 409, not cleared:** `MAX_LOSS_USD`, `MAX_LOSS_PCT`,
+  `PROFIT_TARGET_USD`, `PROFIT_TARGET_PCT_DAY_START`, `PROFIT_TARGET_PCT_CURRENT`,
+  `RECON_MISMATCH`. These are risk-limit / reconciliation halts by design — same-day auto-recovery
+  for those needs an explicit product decision (are we OK re-arming after hitting a daily max
+  loss?), not a single curl. They still only clear via the next trading day's rollover above.
+  409 body: `{ "message": "Cannot unlock a \"MAX_LOSS_USD\" lockout via this endpoint — ...", ... }`.
+
+**Acceptance (live-verified on preprod 2026-09-04):** `kill` → `status.lockout: true,
+lockoutReason: 'KILL_SWITCH'` → `unlock` → `200`, `status.lockout: false`, `phase` no longer
+`LOCKOUT` — loop can `SCAN` again same session, confirmed via `GET /status` immediately after.
 
 ### `BotSettings` shape (defaults in parentheses)
 
@@ -1333,6 +1370,20 @@ Current state:
 
 ## Changelog
 
+- **2026-09-04 (🐛 fix: no same-day recovery from a kill-switch lockout — new `POST /bot/unlock`)**:
+  A real kill-switch test got permanently stuck (`lockout: true, lockoutReason: 'KILL_SWITCH'`)
+  with `lane: 'BOT_LIVE'`/`liveArmed: true` and no way to resume same day — `/mode`/`/lane`/
+  `/live/enable` don't clear a *live* lockout (they only defensively clear a stale *prior-day* one
+  the engine's heartbeat would've caught anyway), so the only documented recovery was waiting for
+  the next America/New_York trading day. Added `POST /bot/unlock` (`{}` body, same auth/rate limit
+  as `/bot/kill`): clears the lockout + re-arms `running` immediately for **operator/precautionary**
+  halts (`KILL_SWITCH`, `LIVE_DISABLED`, `HARD_FLATTEN_EOD`, `SOCKET_LOSS`) and emits `BotEvent
+  { type: 'UNLOCK', reason: 'OPERATOR_UNLOCK' }`; deliberately still refuses (409) to clear
+  risk-limit/reconciliation halts (max-loss, profit targets, recon mismatch) same-day, since
+  auto-recovering from those needs a product decision, not a curl. Live-verified on preprod:
+  kill → locked out → unlock → `lockout: false` same session. See "Clearing a lockout" under
+  section 14 for the full contract + excluded-reasons list. 7 new unit tests
+  (`bot-state.service.spec.ts`).
 - **2026-09-04 (🐛 fix: `PUT /bot/settings` rejected contract fields `strategiesEnabled`/
   `combineMode`)**: Frontend reported `400 Bad Request` (`property strategiesEnabled should not
   exist`, `property combineMode should not exist`) saving settings from the React desk — a real

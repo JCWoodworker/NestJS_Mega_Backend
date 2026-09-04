@@ -57,6 +57,15 @@ export class BotController {
     return this.botStateService.kill(dto.scope);
   }
 
+  /** Operator recovery from a kill-switch / precautionary lockout — same
+   * session, no waiting for the next trading day. See BotStateService.unlock
+   * for which lockout reasons are eligible. */
+  @Post('unlock')
+  @HttpCode(HttpStatus.OK)
+  async unlock() {
+    return this.botStateService.unlock();
+  }
+
   @Post('live/enable')
   @HttpCode(HttpStatus.OK)
   async enableLive(@Body() dto: LiveEnableDto) {

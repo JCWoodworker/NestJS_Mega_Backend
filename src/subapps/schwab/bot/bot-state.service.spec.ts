@@ -225,4 +225,94 @@ describe('BotStateService invariants', () => {
     expect(cleared).toBe(false);
     expect(getRowSnapshot().lockout).toBe(true);
   });
+
+  describe('unlock (operator recovery from KILL_SWITCH — POST /bot/unlock)', () => {
+    it('is a no-op when not locked out', async () => {
+      const { service, botEventService } = buildService();
+      const status = await service.unlock();
+      expect(status.lockout).toBe(false);
+      expect(botEventService.record).not.toHaveBeenCalled();
+    });
+
+    it('clears a same-day KILL_SWITCH lockout, re-arms running, and emits OPERATOR_UNLOCK', async () => {
+      const { service, getRowSnapshot, botEngine, botEventService } =
+        buildService();
+      await service.setLane(BotLane.BOT_PAPER);
+      await service.setMode(BotMode.BOT);
+      const row = getRowSnapshot();
+      row.lockout = true;
+      row.lockoutReason = 'KILL_SWITCH';
+      row.lockoutDateKey = etDateKey();
+      row.running = false;
+
+      const status = await service.unlock();
+      expect(status.lockout).toBe(false);
+      expect(status.lockoutReason).toBeNull();
+      expect(getRowSnapshot().running).toBe(true);
+      expect(botEventService.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'UNLOCK',
+          reason: 'OPERATOR_UNLOCK',
+        }),
+      );
+      expect(botEngine.onControlPlaneChange).toHaveBeenCalled();
+    });
+
+    it('clears LIVE_DISABLED / HARD_FLATTEN_EOD / SOCKET_LOSS the same session too', async () => {
+      for (const reason of [
+        'LIVE_DISABLED',
+        'HARD_FLATTEN_EOD',
+        'SOCKET_LOSS',
+      ]) {
+        const { service, getRowSnapshot } = buildService();
+        const row = getRowSnapshot();
+        row.lockout = true;
+        row.lockoutReason = reason;
+
+        const status = await service.unlock();
+        expect(status.lockout).toBe(false);
+        expect(getRowSnapshot().lockoutReason).toBeNull();
+      }
+    });
+
+    it('rejects unlocking a risk-limit halt (e.g. MAX_LOSS_USD) — needs a product decision', async () => {
+      const { service, getRowSnapshot } = buildService();
+      const row = getRowSnapshot();
+      row.lockout = true;
+      row.lockoutReason = 'MAX_LOSS_USD';
+
+      await expect(service.unlock()).rejects.toThrow(ConflictException);
+      expect(getRowSnapshot().lockout).toBe(true);
+    });
+
+    it('rejects unlocking a RECON_MISMATCH halt', async () => {
+      const { service, getRowSnapshot } = buildService();
+      const row = getRowSnapshot();
+      row.lockout = true;
+      row.lockoutReason = 'RECON_MISMATCH';
+
+      await expect(service.unlock()).rejects.toThrow(ConflictException);
+    });
+
+    it('rejects unlocking a profit-target halt', async () => {
+      const { service, getRowSnapshot } = buildService();
+      const row = getRowSnapshot();
+      row.lockout = true;
+      row.lockoutReason = 'PROFIT_TARGET_USD';
+
+      await expect(service.unlock()).rejects.toThrow(ConflictException);
+    });
+
+    it('does not resume running when mode is MANUAL or no lane is set', async () => {
+      const { service, getRowSnapshot } = buildService();
+      const row = getRowSnapshot();
+      row.lockout = true;
+      row.lockoutReason = 'KILL_SWITCH';
+      row.mode = BotMode.MANUAL;
+      row.lane = null;
+
+      await service.unlock();
+      expect(getRowSnapshot().running).toBe(false);
+    });
+  });
 });

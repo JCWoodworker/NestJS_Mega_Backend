@@ -60,6 +60,21 @@ const RECENT_EVENTS_COUNT = 20;
 
 const MIN_EQUITY = 100;
 
+/**
+ * Lockout reasons an operator can clear same-session via `POST /bot/unlock`
+ * (kill switch / precautionary halts). Risk-limit and reconciliation halts
+ * (max-loss, profit targets, recon mismatch) are deliberately excluded —
+ * clearing those same-day needs an explicit product decision, not a single
+ * curl, so they still only clear via the next trading day's rollover
+ * (`clearLockoutIfNewDay`).
+ */
+const OPERATOR_UNLOCKABLE_REASONS = new Set([
+  'KILL_SWITCH',
+  'LIVE_DISABLED',
+  'HARD_FLATTEN_EOD',
+  'SOCKET_LOSS',
+]);
+
 @Injectable()
 export class BotStateService {
   private readonly logger = new Logger(BotStateService.name);
@@ -313,6 +328,43 @@ export class BotStateService {
 
   async kill(scope: KillScope): Promise<BotStatusView> {
     await this.botEngine.flattenAndHalt('KILL_SWITCH', scope);
+    return this.getStatus();
+  }
+
+  /**
+   * Operator recovery path for a kill-switch / precautionary lockout — see
+   * `OPERATOR_UNLOCKABLE_REASONS`. Distinct from `clearLockoutIfNewDay`:
+   * this clears the lockout immediately, in the same trading session,
+   * on explicit operator request rather than waiting for ET midnight.
+   */
+  async unlock(): Promise<BotStatusView> {
+    const row = await this.getRow();
+    if (!row.lockout) return this.getStatus();
+
+    if (
+      row.lockoutReason &&
+      !OPERATOR_UNLOCKABLE_REASONS.has(row.lockoutReason)
+    ) {
+      throw new ConflictException(
+        `Cannot unlock a "${row.lockoutReason}" lockout via this endpoint — ` +
+          'risk-limit and reconciliation halts require a product decision ' +
+          'or the next trading day to clear.',
+      );
+    }
+
+    row.lockout = false;
+    row.lockoutReason = null;
+    row.lockoutDateKey = null;
+    if (row.mode === BotMode.BOT && row.lane) {
+      row.running = true;
+    }
+    await this.save(row);
+    await this.botEventService.record({
+      lane: row.lane,
+      type: BotEventType.UNLOCK,
+      reason: 'OPERATOR_UNLOCK',
+    });
+    this.botEngine.onControlPlaneChange();
     return this.getStatus();
   }
 
