@@ -40,6 +40,7 @@ import {
   selectContract,
   sizePosition,
 } from './bot-strike-selection.util';
+import { computeExitLevels, decideSoftExit } from './bot-exit.util';
 import { BotEventType, BotPhase } from './enums/bot-event-type.enum';
 import { BotLane } from './enums/bot-lane.enum';
 import { BotMode } from './enums/bot-mode.enum';
@@ -49,6 +50,8 @@ import { BotDirection, BotStrategy } from './enums/strategy.enum';
 const HEARTBEAT_MS = 7_000;
 /** "Refuse entry if option/underlying quote older than ~2s" (plan §Strategy loop). */
 const QUOTE_FRESHNESS_MS = 2_000;
+/** Min gap between option-chain fetches for premium soft-stop while in position. */
+const PREMIUM_QUOTE_MIN_MS = 3_000;
 
 @Injectable()
 export class BotEngineService implements OnModuleInit, OnModuleDestroy {
@@ -60,6 +63,8 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
    * order chase is actively running — see `bot-phase.util.computePhase`. */
   private transientPhase: 'ENTERING' | 'EXITING' | null = null;
   private lastEmittedPhase: BotPhase | null = null;
+  private lastPremiumQuoteAt = 0;
+  private softExitChecking = false;
 
   constructor(
     @Inject(forwardRef(() => BotStateService))
@@ -290,7 +295,13 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         reason: combined.reason,
       });
 
-      await this.executeEntry(combined.direction, combined, settings, status);
+      await this.executeEntry(
+        combined.direction,
+        combined,
+        settings,
+        status,
+        atr,
+      );
     } catch (err) {
       this.logger.warn(`evaluateEntrySignal failed: ${err.message}`);
       await this.recordError(err.message);
@@ -314,6 +325,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     signal: { at: number; strategies: string[]; reason: string },
     settings: Awaited<ReturnType<BotSettingsService['getSettings']>>,
     status: Awaited<ReturnType<BotStateService['getStatus']>>,
+    atr: number | null,
   ): Promise<void> {
     const accountHash = await this.botStateService.resolveAccountHash();
     const row = await this.botStateService.getRow();
@@ -390,10 +402,23 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     }
 
     const spot = this.streamerService.getLastKnownSpotPrice();
+    // Provisional levels from ask; recomputed with fill price after entry.
+    const provisionalLevels = computeExitLevels({
+      entryPremium: contract.ask,
+      spot: spot ?? 0,
+      atr,
+      direction,
+      usePremiumStop: settings.usePremiumStop,
+      premiumStopPct: settings.premiumStopPct,
+      usePremiumTarget: settings.usePremiumTarget,
+      premiumTargetPct: settings.premiumTargetPct,
+      stopAtrMult: settings.stopAtrMult,
+      targetAtrMult: settings.targetAtrMult,
+    });
     const stopUnderlying =
-      spot != null ? (direction === 'CALL' ? spot - 2 : spot + 2) : null;
+      spot != null ? provisionalLevels.stopUnderlying : null;
     const targetUnderlying =
-      spot != null ? (direction === 'CALL' ? spot + 3 : spot - 3) : null;
+      spot != null ? provisionalLevels.targetUnderlying : null;
 
     await this.botEventService.record({
       lane: row.lane,
@@ -433,12 +458,27 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    const levels = computeExitLevels({
+      entryPremium: result.fillPrice,
+      spot: spot ?? 0,
+      atr,
+      direction,
+      usePremiumStop: settings.usePremiumStop,
+      premiumStopPct: settings.premiumStopPct,
+      usePremiumTarget: settings.usePremiumTarget,
+      premiumTargetPct: settings.premiumTargetPct,
+      stopAtrMult: settings.stopAtrMult,
+      targetAtrMult: settings.targetAtrMult,
+    });
+
     row.openPosition = {
       symbol: contract.symbol,
       quantity: qty,
       entryPrice: result.fillPrice,
-      stopUnderlying,
-      targetUnderlying,
+      stopUnderlying: spot != null ? levels.stopUnderlying : null,
+      targetUnderlying: spot != null ? levels.targetUnderlying : null,
+      stopPremium: levels.stopPremium,
+      targetPremium: levels.targetPremium,
       source: row.lane,
     };
     row.lastSignal = {
@@ -463,32 +503,71 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       fillPrice: result.fillPrice,
       underlyingPrice: spot ?? undefined,
       orderId: result.orderId ?? undefined,
+      payload: {
+        atr: levels.atrUsed,
+        stopPremium: levels.stopPremium,
+        targetPremium: levels.targetPremium,
+        stopUnderlying: row.openPosition.stopUnderlying,
+        targetUnderlying: row.openPosition.targetUnderlying,
+        premiumStopPct: settings.usePremiumStop
+          ? settings.premiumStopPct
+          : null,
+        premiumTargetPct: settings.usePremiumTarget
+          ? settings.premiumTargetPct
+          : null,
+        stopAtrMult: settings.stopAtrMult,
+        targetAtrMult: settings.targetAtrMult,
+      },
     });
     await this.emitStatus(true);
   }
 
   private async checkSoftStopAndTargets(spot: number): Promise<void> {
+    if (this.softExitChecking || this.transientPhase) return;
+    this.softExitChecking = true;
     try {
       const row = await this.botStateService.getRow();
       if (!row.openPosition || !row.lane) return;
-      const { stopUnderlying, targetUnderlying } = row.openPosition;
+      const pos = row.openPosition;
       const direction = row.lastSignal?.direction;
 
-      let triggered = false;
-      if (direction === BotDirection.CALL) {
-        if (stopUnderlying != null && spot <= stopUnderlying) triggered = true;
-        if (targetUnderlying != null && spot >= targetUnderlying)
-          triggered = true;
-      } else if (direction === BotDirection.PUT) {
-        if (stopUnderlying != null && spot >= stopUnderlying) triggered = true;
-        if (targetUnderlying != null && spot <= targetUnderlying)
-          triggered = true;
+      let optionBid: number | null = null;
+      const now = Date.now();
+      const needsPremium =
+        (pos.stopPremium != null || pos.targetPremium != null) &&
+        now - this.lastPremiumQuoteAt >= PREMIUM_QUOTE_MIN_MS;
+      if (needsPremium) {
+        this.lastPremiumQuoteAt = now;
+        try {
+          const chain = await this.marketDataService.getOptionChain({
+            symbol: 'SPY',
+            symbols: pos.symbol,
+          });
+          const quote = chain.find((q) => q.symbol === pos.symbol);
+          if (quote?.bid != null) optionBid = Number(quote.bid);
+        } catch (err) {
+          this.logger.warn(
+            `premium quote fetch failed: ${(err as Error).message}`,
+          );
+        }
       }
-      if (!triggered) return;
 
-      await this.closeOpenPosition('SOFT_STOP_OR_TARGET');
+      const reason = decideSoftExit({
+        direction,
+        spot,
+        optionBid,
+        stopPremium: pos.stopPremium ?? null,
+        targetPremium: pos.targetPremium ?? null,
+        stopUnderlying: pos.stopUnderlying,
+        targetUnderlying: pos.targetUnderlying,
+      });
+      if (!reason) return;
+
+      await this.closeOpenPosition(reason);
     } catch (err) {
       this.logger.warn(`checkSoftStopAndTargets failed: ${err.message}`);
+    } finally {
+      this.softExitChecking = false;
     }
   }
 
@@ -639,6 +718,13 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       if (!this.streamerService.isStreamConnected() && row.openPosition) {
         await this.flattenAndHalt('SOCKET_LOSS', KillScope.ALL);
         return;
+      }
+
+      if (row.openPosition) {
+        const spot = this.streamerService.getLastKnownSpotPrice();
+        if (spot != null) {
+          await this.checkSoftStopAndTargets(spot);
+        }
       }
 
       await this.emitStatus(false);

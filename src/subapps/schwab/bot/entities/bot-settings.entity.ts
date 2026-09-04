@@ -196,6 +196,48 @@ export class BotSettings {
   @Column({ type: 'integer', name: 'atr_period', default: 14 })
   atrPeriod: number;
 
+  @Column({ type: 'boolean', name: 'use_premium_stop', default: true })
+  usePremiumStop: boolean;
+
+  @Column({
+    type: 'decimal',
+    precision: 8,
+    scale: 4,
+    name: 'premium_stop_pct',
+    default: 25,
+  })
+  premiumStopPct: number;
+
+  @Column({ type: 'boolean', name: 'use_premium_target', default: true })
+  usePremiumTarget: boolean;
+
+  @Column({
+    type: 'decimal',
+    precision: 8,
+    scale: 4,
+    name: 'premium_target_pct',
+    default: 40,
+  })
+  premiumTargetPct: number;
+
+  @Column({
+    type: 'decimal',
+    precision: 8,
+    scale: 4,
+    name: 'stop_atr_mult',
+    default: 1.5,
+  })
+  stopAtrMult: number;
+
+  @Column({
+    type: 'decimal',
+    precision: 8,
+    scale: 4,
+    name: 'target_atr_mult',
+    default: 2.5,
+  })
+  targetAtrMult: number;
+
   @Column({ type: 'integer', name: 'paper_slippage_cents', default: 1 })
   paperSlippageCents: number;
 

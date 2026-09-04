@@ -48,6 +48,10 @@ export function buildSuggestedSettings(
   suggested.useProfitUsd = false;
   suggested.useProfitPctDayStart = false;
   suggested.useProfitPctCurrent = false;
+  suggested.usePremiumStop = true;
+  suggested.usePremiumTarget = true;
+  suggested.stopAtrMult = 1.5;
+  suggested.targetAtrMult = 2.5;
 
   const directions: BotDirection[] = [];
   if (current.canBuyCalls) directions.push(BotDirection.CALL);
@@ -72,6 +76,8 @@ export function buildSuggestedSettings(
     suggested.profitUsd = Math.round(equity * 0.4);
     suggested.profitPctDayStart = 15;
     suggested.profitPctCurrent = null;
+    suggested.premiumStopPct = 20;
+    suggested.premiumTargetPct = 35;
     rationale.push(
       'MICRO (<$500): single strategy so CONFIRMING is not stuck waiting for ORB + VWAP agreement.',
     );
@@ -102,6 +108,8 @@ export function buildSuggestedSettings(
     suggested.profitUsd = Math.round(equity * 0.35);
     suggested.profitPctDayStart = 12;
     suggested.profitPctCurrent = null;
+    suggested.premiumStopPct = 25;
+    suggested.premiumTargetPct = 40;
     rationale.push(
       'SMALL ($500–$2k): dual strategies OK; modest riskPct and fee-aware premium band.',
     );
@@ -120,6 +128,8 @@ export function buildSuggestedSettings(
     suggested.profitUsd = Math.round(equity * 0.25);
     suggested.profitPctDayStart = 10;
     suggested.profitPctCurrent = null;
+    suggested.premiumStopPct = 25;
+    suggested.premiumTargetPct = 40;
     rationale.push(
       'STANDARD ($2k–$5k): higher minPremium so commission is a smaller % of each trade.',
     );
@@ -138,6 +148,8 @@ export function buildSuggestedSettings(
     suggested.profitUsd = Math.round(equity * 0.2);
     suggested.profitPctDayStart = 8;
     suggested.profitPctCurrent = null;
+    suggested.premiumStopPct = 25;
+    suggested.premiumTargetPct = 40;
     rationale.push(
       'COMFORTABLE (≥$5k): closer to original §14b defaults with room for law-of-large-numbers.',
     );

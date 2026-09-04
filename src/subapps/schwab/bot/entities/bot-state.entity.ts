@@ -15,6 +15,10 @@ export interface BotOpenPosition {
   entryPrice: number;
   stopUnderlying: number | null;
   targetUnderlying: number | null;
+  /** Option premium soft-stop (bid ≤ this → PREMIUM_STOP). */
+  stopPremium?: number | null;
+  /** Option premium target (bid ≥ this → PREMIUM_TARGET). */
+  targetPremium?: number | null;
   source: BotLane;
 }
 

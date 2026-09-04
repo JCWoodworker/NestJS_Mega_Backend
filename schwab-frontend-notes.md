@@ -1235,6 +1235,8 @@ See also the full decision-audit + suggested-settings + **log browser** handoff:
 (`GET /bot/events` envelope with filter/date/search/pagination, `GET /bot/explain`,
 `GET /bot/settings/suggested`, new event types).
 
+Trade post-mortems / bot context: [`schwab-bot-lessons-learned.md`](./schwab-bot-lessons-learned.md).
+
 **Note:** `GET /bot/events` response is now `{ items, nextBeforeId, hasMoreOlder, … }`
 — not a bare array (breaking vs early §14j).
 
@@ -1419,6 +1421,14 @@ Current state:
 
 ## Changelog
 
+- **2026-09-04 (premium soft-stop / ATR exits)**: In-position exits on option bid
+  drawdown/target (`PREMIUM_STOP` / `PREMIUM_TARGET`) plus ATR-scaled SPY stops
+  (`UNDERLYING_*`). Settings: `usePremiumStop`, `premiumStopPct`, etc. See
+  audit soft-exits section + [`schwab-bot-lessons-learned.md`](./schwab-bot-lessons-learned.md).
+- **2026-09-04 (lessons learned doc)**: First live fill post-mortem (SPY 0DTE 770C,
+  manual close / RECON_MISMATCH) in
+  [`schwab-bot-lessons-learned.md`](./schwab-bot-lessons-learned.md) — soft stop is
+  SPY ±2 only; premium can bleed without exit.
 - **2026-09-04 (email allowlist + user lock)**: Global IAM gate — only
   `auth_allowed_emails` may sign up/in (incl. Google); `users.is_locked` for admin
   disable. Bootstrap via `AUTH_BOOTSTRAP_ALLOWED_EMAILS`. Admin:

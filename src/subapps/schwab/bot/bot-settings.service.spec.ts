@@ -40,6 +40,12 @@ function buildService() {
     hardFlattenTime: '15:30',
     cooldownMins: 30,
     atrPeriod: 14,
+    usePremiumStop: true,
+    premiumStopPct: 25,
+    usePremiumTarget: true,
+    premiumTargetPct: 40,
+    stopAtrMult: 1.5,
+    targetAtrMult: 2.5,
     paperSlippageCents: 1,
     updatedAt: new Date(),
   };

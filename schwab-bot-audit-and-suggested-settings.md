@@ -137,12 +137,24 @@ Applying logs `OPERATOR_SETTINGS` like any other settings change.
 
 | Tier | Equity | Intent |
 |------|--------|--------|
-| MICRO | &lt; $500 | Single strategy (`VWAP_PULLBACK`), riskPct ~35, cooler cooldown, fee warnings |
-| SMALL | $500–$2k | Dual strategies OK, riskPct ~20 |
+| MICRO | &lt; $500 | Single strategy (`VWAP_PULLBACK`), riskPct ~35, premiumStopPct **20**, fee warnings |
+| SMALL | $500–$2k | Dual strategies OK, riskPct ~20, premiumStopPct 25 |
 | STANDARD | $2k–$5k | Higher minPremium (~$1+), riskPct ~12 |
 | COMFORTABLE | ≥ $5k | Closer to original §14b defaults |
 
 Respects `canBuyPuts` — never suggests PUT in `directionsEnabled` when capability is false.
+
+### Soft exits (premium bleed fix)
+
+While `IN_POSITION`, Nest exits on option **bid** and/or ATR-scaled SPY levels (not fixed ±2):
+
+| Setting | Default | Meaning |
+|---------|---------|---------|
+| `usePremiumStop` / `premiumStopPct` | true / 25 | Exit when bid ≤ entry × (1 − pct/100) → reason `PREMIUM_STOP` |
+| `usePremiumTarget` / `premiumTargetPct` | true / 40 | Exit when bid ≥ entry × (1 + pct/100) → `PREMIUM_TARGET` |
+| `stopAtrMult` / `targetAtrMult` | 1.5 / 2.5 | CALL stop = spot − ATR×mult; target = spot + ATR×mult → `UNDERLYING_*` |
+
+`ENTRY_FILL.payload` includes the computed levels. See [`schwab-bot-lessons-learned.md`](./schwab-bot-lessons-learned.md).
 
 ---
 

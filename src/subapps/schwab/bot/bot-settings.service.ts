@@ -45,6 +45,12 @@ export interface BotSettingsView {
   hardFlattenTime: string;
   cooldownMins: number;
   atrPeriod: number;
+  usePremiumStop: boolean;
+  premiumStopPct: number;
+  usePremiumTarget: boolean;
+  premiumTargetPct: number;
+  stopAtrMult: number;
+  targetAtrMult: number;
   paperSlippageCents: number;
 }
 
@@ -179,6 +185,12 @@ export class BotSettingsService {
       hardFlattenTime: row.hardFlattenTime,
       cooldownMins: row.cooldownMins,
       atrPeriod: row.atrPeriod,
+      usePremiumStop: row.usePremiumStop,
+      premiumStopPct: Number(row.premiumStopPct),
+      usePremiumTarget: row.usePremiumTarget,
+      premiumTargetPct: Number(row.premiumTargetPct),
+      stopAtrMult: Number(row.stopAtrMult),
+      targetAtrMult: Number(row.targetAtrMult),
       paperSlippageCents: row.paperSlippageCents,
     };
   }

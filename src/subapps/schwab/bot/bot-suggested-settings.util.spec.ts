@@ -36,6 +36,12 @@ function baseSettings(overrides: Record<string, unknown> = {}) {
     hardFlattenTime: '15:30',
     cooldownMins: 0,
     atrPeriod: 14,
+    usePremiumStop: true,
+    premiumStopPct: 25,
+    usePremiumTarget: true,
+    premiumTargetPct: 40,
+    stopAtrMult: 1.5,
+    targetAtrMult: 2.5,
     paperSlippageCents: 1,
     ...overrides,
   } as any;
@@ -59,6 +65,8 @@ describe('buildSuggestedSettings', () => {
       BotStrategy.VWAP_PULLBACK,
     ]);
     expect(result.suggested.riskPct).toBeLessThan(100);
+    expect(result.suggested.premiumStopPct).toBe(20);
+    expect(result.suggested.usePremiumStop).toBe(true);
     expect(result.suggested.directionsEnabled).toEqual([BotDirection.CALL]);
     expect(result.suggested.directionsEnabled).not.toContain(BotDirection.PUT);
     expect(result.patch.riskPct).toBeDefined();

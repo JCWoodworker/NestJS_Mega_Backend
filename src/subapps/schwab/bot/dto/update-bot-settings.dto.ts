@@ -183,6 +183,38 @@ export class UpdateBotSettingsDto {
   atrPeriod?: number;
 
   @IsOptional()
+  @IsBoolean()
+  usePremiumStop?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(90)
+  premiumStopPct?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  usePremiumTarget?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(500)
+  premiumTargetPct?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  @Max(20)
+  stopAtrMult?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  @Max(20)
+  targetAtrMult?: number;
+
+  @IsOptional()
   @IsInt()
   @Min(0)
   paperSlippageCents?: number;
