@@ -86,6 +86,9 @@ export class TransactionSyncService implements OnModuleInit {
           startDate,
           endDate,
         );
+        this.logger.debug(
+          `Schwab transactions type=${type}: ${rows.length} rows`,
+        );
         for (const raw of rows) {
           const mapped = mapSchwabTransaction(raw);
           if (!mapped.schwabTransactionId) continue;
