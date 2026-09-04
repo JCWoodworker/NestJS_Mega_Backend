@@ -6,8 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "engines": {
-    "node": "20.x",
-    "yarn": "4.x"
+    "node": "22.x"
   },
   "scripts": {
     "build": "nest build && mkdir -p dist/src/subapps/woodpricing/data && cp src/subapps/woodpricing/data/wood-pricing-seed.json dist/src/subapps/woodpricing/data/wood-pricing-seed.json",

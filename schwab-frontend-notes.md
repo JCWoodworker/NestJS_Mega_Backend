@@ -1324,13 +1324,20 @@ Current state:
 9. **Section 14 (automated 0DTE SPY scalping bot, `BotModule`) — ✅ deployed to preprod + prod
    2026-09-03**, defaulting to `MANUAL` mode (the bot does nothing until explicitly switched to
    `BOT` + a lane). **Section 14j (live watch — `phase`, `GET /bot/events`, `bot-event` socket) —
-   code complete + unit-tested 2026-09-03, pending deploy** — see the "Live watch" subsection
-   under section 14 for the `BotEvent` shape and emission points. See section 14 for the full
-   contract, manual acceptance pass, and remaining "not yet live-verified" caveats (real Schwab
-   fills, live reconciliation, a full trading session, a real day-rollover).
+   ✅ deployed to preprod + prod 2026-09-03.** Migration ran clean on both (adds
+   `bot_state.lockout_date_key` + the `bot_events` table); `GET /bot/status` and `GET /bot/events`
+   confirmed live and JWT-gated on both hosts (401 unauthenticated, 200 with a valid token). See
+   the "Live watch" subsection under section 14 for the `BotEvent` shape and emission points. See
+   section 14 for the full contract, manual acceptance pass, and remaining "not yet live-verified"
+   caveats (real Schwab fills, live reconciliation, a full trading session, a real day-rollover).
 
 ## Changelog
 
+- **2026-09-03 (section 14j deployed to preprod + prod)**: Shipped the live-watch changes below
+  to both environments. Migration `AddBotEventsAndLockoutDateKey` ran clean on both (verified via
+  release-phase logs); `GET /bot/status` and `GET /bot/events` confirmed live and JWT-gated
+  (401 unauthenticated) on both hosts; clean boot with all new `/bot/*` routes mapped. Frontend's
+  live-watch sidebar / chart buy-sell dots should now have real data on both preprod and prod.
 - **2026-09-03 (section 14j: bot live watch — `phase`, `GET /bot/events`, `bot-event`)**: Added the
   activity-feed contract the frontend needs for a live watch sidebar + chart buy/sell dots.
   `BotStatus` gained `phase` (an 8-state machine — `STOPPED`/`LOCKOUT`/`WAITING_WINDOW`/`SCANNING`/
@@ -1359,7 +1366,9 @@ Current state:
   `source` filter. 8 new REST routes under `/bot/*` + optional `bot-status` socket emission on
   `/options`. Unit-tested (strategy/strike-selection utils, FIFO partitioning, state-machine
   invariants — 133 passing specs across the Schwab subapp). See section 14 for the full contract
-  and acceptance pass; **not yet deployed or live-verified against real Schwab market data.**
+  and acceptance pass; **deployed to preprod + prod 2026-09-03 (see the 14j changelog entry
+  above for the live-watch follow-up); still not yet live-verified against real Schwab market
+  data** (needs a full `BOT_PAPER` session on preprod during RTH before ever arming `BOT_LIVE`).
 - **2026-09-03 (section 13b: MANUAL transfers in daily netTransfers)**: Fixed daily rollup so a
   MANUAL `TRANSFER_IN`/`TRANSFER_OUT` dated “today” is subtracted from that day’s `tradingPnl` /
   `todayPnl`. Root cause was UTC-midnight date-only storage landing on the previous ET evening.
