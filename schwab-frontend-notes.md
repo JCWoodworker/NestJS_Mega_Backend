@@ -750,17 +750,43 @@ Array<{
 }>
 ```
 
-Thin proxy to Schwab's `GET /marketdata/v1/chains`, restricted to **today's expiration only**
-(`fromDate`/`toDate` = today) to match this app's 0DTE-only ladder — same date the streamer itself
-subscribes against. Flattens Schwab's `callExpDateMap`/`putExpDateMap` structure into one array
-(`mapOptionChainResponse` in `option-chain.mapper.ts`, unit-tested). Missing/non-numeric fields
-come back as `null` rather than `0` or omitted, matching this endpoint's own explicit nullable
-contract (deliberately different from `option-ticks`' "omitted = unchanged" partial-update
-semantics, since a snapshot has no previous tick to diff against). Call on mount and on
-reconnect, then let `option-ticks` take over, per the original ask. Deployed to preprod + prod —
-**not yet live-tested against a real chain response** (needs an RTH request against the connected
-account; error handling/shape are implemented and unit-tested, but a live 200 hasn't been observed
-yet).
+Thin proxy to Schwab's `GET /marketdata/v1/chains`. **Default (no `expiration`):** today's
+0DTE only (`fromDate`/`toDate` = America/New_York today) — same as the streamer ladder.
+**With `expiration=YYYY-MM-DD`:** that day's ATM window only (§11c). Short Nest cache (~750ms)
+coalesces 1–2s FE polls. Flattens Schwab's `callExpDateMap`/`putExpDateMap` into one array
+(`mapOptionChainResponse`). Missing/non-numeric fields come back as `null`.
+
+Optional query: `expiration=YYYY-MM-DD` (America/New_York). Past / not-in-nearest-10 → **400**.
+If `symbols` is also sent, every OSI's YYMMDD must match `expiration` or **400**.
+
+### 11c. ✅ Implemented: Multi-expiration chains (manual desk) — 2026-09-04
+
+**Status: Nest shipped** (`GET /expirations` + `chain?expiration=`). FE accordion (Phase 2)
+unblocked on preprod once verified.
+
+```
+GET /api/v1/subapps/schwab/market-data/expirations?symbol=SPY
+```
+
+```ts
+{
+  symbol: string
+  expirations: string[]  // YYYY-MM-DD, ascending, nearest first, ≤10
+  asOf: number           // epoch ms
+}
+```
+
+```
+GET /api/v1/subapps/schwab/market-data/chain?symbol=SPY&expiration=YYYY-MM-DD&strikeCount=16
+```
+
+- Omit `expiration` → today's 0DTE (unchanged §11b).
+- Socket ladder (`subscribe-underlying` / `ladder-recentered` / `option-ticks`) stays **0DTE only**.
+- Non-0DTE panes: REST poll every 1–2s; Nest caches/coalesces.
+- **Bot (§14) stays 0DTE-only** — multi-exp is manual arm/submit only.
+- Symbols: `SPY` \| `QQQ` \| `IWM` \| `SPX` \| `SPXW` (`SPX` → Schwab `SPXW` option root).
+
+Full paste-ready prompt (frontend repo): `MULTI_EXP_CHAIN_BACKEND_PROMPT.md`.
 
 ## 12. ✅ Implemented: `dayStartEquity` on `account-snapshot`
 
@@ -1421,6 +1447,9 @@ Current state:
 
 ## Changelog
 
+- **2026-09-04 (multi-exp chain §11c)**: `GET /market-data/expirations` +
+  `GET /market-data/chain?expiration=YYYY-MM-DD`. 0DTE socket unchanged; Nest
+  caches chain polls (~750ms). Bot remains 0DTE-only. FE accordion unblocked.
 - **2026-09-04 (premium soft-stop / ATR exits)**: In-position exits on option bid
   drawdown/target (`PREMIUM_STOP` / `PREMIUM_TARGET`) plus ATR-scaled SPY stops
   (`UNDERLYING_*`). Settings: `usePremiumStop`, `premiumStopPct`, etc. See

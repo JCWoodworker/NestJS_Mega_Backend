@@ -2,8 +2,15 @@ import { HttpService } from '@nestjs/axios';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
 
+import { etDateKey } from '@schwab/pnl/et-date.util';
+
+import { ExpirationsQueryDto } from './dto/expirations-query.dto';
 import { OptionChainQueryDto } from './dto/option-chain-query.dto';
 import { PriceHistoryQueryDto } from './dto/price-history-query.dto';
+import {
+  mapExpirationList,
+  osiExpirationToDateKey,
+} from './expiration-chain.mapper';
 import {
   mapOptionChainResponse,
   OptionChainQuote,
@@ -23,17 +30,32 @@ export interface PriceHistoryResponse {
   candles: NormalizedCandle[];
 }
 
+export interface ExpirationsResponse {
+  symbol: string;
+  expirations: string[];
+  asOf: number;
+}
+
+/** 0DTE SPX options trade under SPXW (same as streamer). */
+const OPTION_ROOT_OVERRIDES: Record<string, string> = { SPX: 'SPXW' };
+
+/** Short TTL so 1–2s FE polls coalesce instead of stampeding Schwab. */
+const CHAIN_CACHE_TTL_MS = 750;
+
+interface ChainCacheEntry {
+  expiresAt: number;
+  value: OptionChainQuote[];
+}
+
 /**
- * Thin authenticated proxy to Schwab Market Data `GET /pricehistory`
- * (https://api.schwabapi.com/marketdata/v1/pricehistory), used for chart
- * backfill (frontend contract section 9a). Reuses `SchwabHttpModule`'s
- * `HttpService` - same Bearer interceptor + keep-alive agent as
- * `OrdersService`/`SchwabStreamerService` - so no separate auth wiring is
- * needed here.
+ * Thin authenticated proxy to Schwab Market Data. Reuses `SchwabHttpModule`'s
+ * `HttpService` - same Bearer interceptor + keep-alive as orders/streamer.
  */
 @Injectable()
 export class MarketDataService {
   private readonly logger = new Logger(MarketDataService.name);
+  private readonly chainCache = new Map<string, ChainCacheEntry>();
+  private readonly chainInflight = new Map<string, Promise<OptionChainQuote[]>>();
 
   constructor(private readonly httpService: HttpService) {}
 
@@ -58,9 +80,6 @@ export class MarketDataService {
       const rawCandles: Array<Record<string, number>> =
         response.data?.candles ?? [];
 
-      // Normalized shape per the contract - deliberately not passing
-      // Schwab's raw envelope through (it also includes `symbol`/`empty` at
-      // the top level, which we fold into our own response shape instead).
       const candles: NormalizedCandle[] = rawCandles.map((candle) => ({
         datetime: candle.datetime,
         open: candle.open,
@@ -83,26 +102,96 @@ export class MarketDataService {
   }
 
   /**
-   * Option-chain quote snapshot (frontend contract section 11b) - lets the
-   * ladder paint instantly on load/reconnect instead of waiting for a
-   * `option-ticks` per symbol, and gives a fallback when the streamer is
-   * degraded. Thin proxy to Schwab's `GET /chains`, restricted to today's
-   * expiration to match this app's 0DTE-only ladder (same date the streamer
-   * itself subscribes against in `SchwabStreamerService.recenterLadder`).
+   * Nearest option expirations for the accordion (§11c). Up to 10 ascending
+   * America/New_York calendar dates from Schwab `/expirationchain`.
+   */
+  async getExpirations(query: ExpirationsQueryDto): Promise<ExpirationsResponse> {
+    const symbol = this.resolveOptionSymbol(query.symbol);
+    const todayEt = etDateKey();
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get('/marketdata/v1/expirationchain', {
+          params: { symbol },
+        }),
+      );
+      const expirations = mapExpirationList(response.data, {
+        todayEt,
+        limit: 10,
+      });
+      return { symbol: query.symbol.toUpperCase(), expirations, asOf: Date.now() };
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      this.logger.error(
+        'Expiration chain fetch failed',
+        error?.response?.data || error.message,
+      );
+      throw new BadRequestException(
+        error?.response?.data?.message || 'Expiration chain fetch failed',
+      );
+    }
+  }
+
+  /**
+   * Option-chain quote snapshot (§11b / §11c). Omit `expiration` for today's
+   * 0DTE (back-compat). With `expiration`, returns that day only. Short TTL
+   * cache for non-0DTE poll MVP.
    */
   async getOptionChain(
     query: OptionChainQueryDto,
   ): Promise<OptionChainQuote[]> {
+    const todayEt = etDateKey();
+    const expiration = (query.expiration?.trim() || todayEt) as string;
+    await this.assertExpirationAllowed(query.symbol, expiration, todayEt);
+
+    if (query.symbols?.trim()) {
+      this.assertSymbolsMatchExpiration(query.symbols, expiration);
+    }
+
+    const cacheKey = [
+      query.symbol.toUpperCase(),
+      expiration,
+      String(query.strikeCount ?? 16),
+      query.symbols?.trim() || '',
+    ].join('|');
+
+    const cached = this.chainCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value;
+    }
+
+    const inflight = this.chainInflight.get(cacheKey);
+    if (inflight) return inflight;
+
+    const promise = this.fetchOptionChain(query, expiration)
+      .then((quotes) => {
+        this.chainCache.set(cacheKey, {
+          expiresAt: Date.now() + CHAIN_CACHE_TTL_MS,
+          value: quotes,
+        });
+        return quotes;
+      })
+      .finally(() => {
+        this.chainInflight.delete(cacheKey);
+      });
+
+    this.chainInflight.set(cacheKey, promise);
+    return promise;
+  }
+
+  private async fetchOptionChain(
+    query: OptionChainQueryDto,
+    expiration: string,
+  ): Promise<OptionChainQuote[]> {
+    const symbol = this.resolveOptionSymbol(query.symbol);
     try {
-      const today = new Date().toISOString().slice(0, 10);
       const response = await firstValueFrom(
         this.httpService.get('/marketdata/v1/chains', {
           params: {
-            symbol: query.symbol,
+            symbol,
             contractType: 'ALL',
             strikeCount: query.strikeCount ?? 16,
-            fromDate: today,
-            toDate: today,
+            fromDate: expiration,
+            toDate: expiration,
           },
         }),
       );
@@ -113,6 +202,7 @@ export class MarketDataService {
       const wanted = new Set(query.symbols.split(',').map((s) => s.trim()));
       return quotes.filter((q) => wanted.has(q.symbol));
     } catch (error) {
+      if (error instanceof BadRequestException) throw error;
       this.logger.error(
         'Option chain fetch failed',
         error?.response?.data || error.message,
@@ -120,6 +210,55 @@ export class MarketDataService {
       throw new BadRequestException(
         error?.response?.data?.message || 'Option chain fetch failed',
       );
+    }
+  }
+
+  /** SPX equity → SPXW option root (streamer invariant). */
+  private resolveOptionSymbol(symbol: string): string {
+    const upper = symbol.toUpperCase();
+    return OPTION_ROOT_OVERRIDES[upper] ?? upper;
+  }
+
+  private async assertExpirationAllowed(
+    symbol: string,
+    expiration: string,
+    todayEt: string,
+  ): Promise<void> {
+    if (expiration < todayEt) {
+      throw new BadRequestException(
+        `expiration ${expiration} is in the past (ET today is ${todayEt})`,
+      );
+    }
+    // Today always allowed for 0DTE back-compat without requiring it to appear
+    // in the calendar fetch (rare Schwab lag). Non-today must be in the ≤10 list.
+    if (expiration === todayEt) return;
+
+    const { expirations } = await this.getExpirations({
+      symbol: symbol.toUpperCase(),
+    });
+    if (!expirations.includes(expiration)) {
+      throw new BadRequestException(
+        `expiration ${expiration} is not in the nearest listed calendar`,
+      );
+    }
+  }
+
+  private assertSymbolsMatchExpiration(
+    symbolsCsv: string,
+    expiration: string,
+  ): void {
+    for (const raw of symbolsCsv.split(',')) {
+      const osi = raw.trim();
+      if (!osi) continue;
+      const key = osiExpirationToDateKey(osi);
+      if (key == null) {
+        throw new BadRequestException(`Invalid OSI symbol "${osi}"`);
+      }
+      if (key !== expiration) {
+        throw new BadRequestException(
+          `OSI ${osi} expiration ${key} does not match requested ${expiration}`,
+        );
+      }
     }
   }
 }
