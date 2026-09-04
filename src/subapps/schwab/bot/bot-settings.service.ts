@@ -68,7 +68,17 @@ export class BotSettingsService {
 
   async updateSettings(patch: UpdateBotSettingsDto): Promise<BotSettingsView> {
     const row = await this.getRow();
-    Object.assign(row, patch);
+    // `strategiesEnabled` (contract §14b) isn't a column itself — it's a view
+    // over the two boolean flags below, so translate it before assigning the
+    // rest of the patch directly onto the entity.
+    const { strategiesEnabled, ...rest } = patch;
+    Object.assign(row, rest);
+    if (strategiesEnabled) {
+      row.vwapPullbackEnabled = strategiesEnabled.includes(
+        BotStrategy.VWAP_PULLBACK,
+      );
+      row.orb5mEnabled = strategiesEnabled.includes(BotStrategy.ORB_5M);
+    }
     const saved = await this.settingsRepository.save(row);
     return this.toView(saved);
   }

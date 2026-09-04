@@ -1,0 +1,145 @@
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+
+import { BotSettingsService } from './bot-settings.service';
+import { UpdateBotSettingsDto } from './dto/update-bot-settings.dto';
+import { BotCombineMode, BotStrategy } from './enums/strategy.enum';
+
+function buildService() {
+  let row: any = {
+    id: '1',
+    vwapPullbackEnabled: true,
+    orb5mEnabled: true,
+    combineMode: BotCombineMode.CONFIRMING,
+    riskPct: 10,
+    useMaxLossUsd: false,
+    maxLossUsd: null,
+    useMaxLossPct: false,
+    maxLossPct: null,
+    useProfitUsd: false,
+    profitUsd: null,
+    useProfitPctDayStart: false,
+    profitPctDayStart: null,
+    useProfitPctCurrent: false,
+    profitPctCurrent: null,
+    minPremium: 0.6,
+    maxPremium: 2.5,
+    maxSpreadPct: 5,
+    deltaMin: 0.4,
+    deltaMax: 0.6,
+    tradeWindowStart: '10:00',
+    tradeWindowEnd: '15:00',
+    hardFlattenTime: '15:30',
+    cooldownMins: 30,
+    atrPeriod: 14,
+    paperSlippageCents: 1,
+    updatedAt: new Date(),
+  };
+
+  const settingsRepository = {
+    find: jest.fn().mockImplementation(async () => (row ? [row] : [])),
+    save: jest.fn().mockImplementation(async (patch: any) => {
+      row = { ...row, ...patch };
+      return row;
+    }),
+    create: jest.fn().mockImplementation((partial: any) => partial),
+  };
+
+  const service = new BotSettingsService(settingsRepository as any);
+  return { service, getRowSnapshot: () => row };
+}
+
+describe('BotSettingsService — strategiesEnabled / combineMode (contract §14b)', () => {
+  it('GET view derives strategiesEnabled from the two boolean flags', async () => {
+    const { service } = buildService();
+    const settings = await service.getSettings();
+    expect(settings.strategiesEnabled).toEqual([
+      BotStrategy.VWAP_PULLBACK,
+      BotStrategy.ORB_5M,
+    ]);
+    expect(settings.combineMode).toBe(BotCombineMode.CONFIRMING);
+  });
+
+  it('PUT with strategiesEnabled=[ORB_5M] disables VWAP_PULLBACK and keeps ORB_5M', async () => {
+    const { service, getRowSnapshot } = buildService();
+    const view = await service.updateSettings({
+      strategiesEnabled: [BotStrategy.ORB_5M],
+    });
+    expect(view.strategiesEnabled).toEqual([BotStrategy.ORB_5M]);
+    expect(getRowSnapshot().vwapPullbackEnabled).toBe(false);
+    expect(getRowSnapshot().orb5mEnabled).toBe(true);
+  });
+
+  it('PUT with strategiesEnabled=[VWAP_PULLBACK] disables ORB_5M and keeps VWAP_PULLBACK', async () => {
+    const { service, getRowSnapshot } = buildService();
+    const view = await service.updateSettings({
+      strategiesEnabled: [BotStrategy.VWAP_PULLBACK],
+    });
+    expect(view.strategiesEnabled).toEqual([BotStrategy.VWAP_PULLBACK]);
+    expect(getRowSnapshot().vwapPullbackEnabled).toBe(true);
+    expect(getRowSnapshot().orb5mEnabled).toBe(false);
+  });
+
+  it('PUT without strategiesEnabled leaves the existing flags untouched', async () => {
+    const { service, getRowSnapshot } = buildService();
+    await service.updateSettings({ riskPct: 25 });
+    expect(getRowSnapshot().vwapPullbackEnabled).toBe(true);
+    expect(getRowSnapshot().orb5mEnabled).toBe(true);
+    expect(getRowSnapshot().riskPct).toBe(25);
+  });
+
+  it('PUT accepts combineMode alongside other fields and persists it', async () => {
+    const { service, getRowSnapshot } = buildService();
+    const view = await service.updateSettings({
+      combineMode: BotCombineMode.CONFIRMING,
+      riskPct: 15,
+    });
+    expect(view.combineMode).toBe(BotCombineMode.CONFIRMING);
+    expect(getRowSnapshot().riskPct).toBe(15);
+  });
+});
+
+describe('UpdateBotSettingsDto validation (contract §14b)', () => {
+  async function validateBody(body: Record<string, unknown>) {
+    const dto = plainToInstance(UpdateBotSettingsDto, body);
+    return validate(dto, { whitelist: true, forbidNonWhitelisted: true });
+  }
+
+  it('accepts the full contract patch (strategiesEnabled + combineMode) with no errors', async () => {
+    const errors = await validateBody({
+      strategiesEnabled: ['VWAP_PULLBACK', 'ORB_5M'],
+      combineMode: 'CONFIRMING',
+      riskPct: 12,
+    });
+    expect(errors).toHaveLength(0);
+  });
+
+  it('accepts a single-strategy patch', async () => {
+    const errors = await validateBody({ strategiesEnabled: ['ORB_5M'] });
+    expect(errors).toHaveLength(0);
+  });
+
+  it('rejects an empty strategiesEnabled array', async () => {
+    const errors = await validateBody({ strategiesEnabled: [] });
+    expect(errors.some((e) => e.property === 'strategiesEnabled')).toBe(true);
+  });
+
+  it('rejects an unknown strategy key', async () => {
+    const errors = await validateBody({ strategiesEnabled: ['NOT_REAL'] });
+    expect(errors.some((e) => e.property === 'strategiesEnabled')).toBe(true);
+  });
+
+  it('rejects a combineMode value other than CONFIRMING', async () => {
+    const errors = await validateBody({ combineMode: 'OR' });
+    expect(errors.some((e) => e.property === 'combineMode')).toBe(true);
+  });
+
+  it('other already-accepted fields still validate unchanged', async () => {
+    const errors = await validateBody({
+      riskPct: 50,
+      tradeWindowStart: '09:30',
+      cooldownMins: 15,
+    });
+    expect(errors).toHaveLength(0);
+  });
+});

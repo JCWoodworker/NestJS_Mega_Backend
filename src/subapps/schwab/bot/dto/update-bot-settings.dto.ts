@@ -1,5 +1,8 @@
 import {
+  ArrayNotEmpty,
+  IsArray,
   IsBoolean,
+  IsEnum,
   IsInt,
   IsNumber,
   IsOptional,
@@ -9,9 +12,25 @@ import {
   Min,
 } from 'class-validator';
 
+import { BotCombineMode, BotStrategy } from '../enums/strategy.enum';
+
 const HH_MM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export class UpdateBotSettingsDto {
+  /** Frontend contract §14b shape — array of enabled strategy keys. Translated
+   * to `vwapPullbackEnabled`/`orb5mEnabled` internally by BotSettingsService. */
+  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsEnum(BotStrategy, { each: true })
+  strategiesEnabled?: BotStrategy[];
+
+  /** Only `CONFIRMING` (AND) is currently supported — enum has a single member
+   * so this both validates the contract field and rejects anything else. */
+  @IsOptional()
+  @IsEnum(BotCombineMode)
+  combineMode?: BotCombineMode;
+
   @IsOptional()
   @IsBoolean()
   vwapPullbackEnabled?: boolean;

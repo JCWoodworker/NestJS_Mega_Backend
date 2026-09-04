@@ -1333,6 +1333,23 @@ Current state:
 
 ## Changelog
 
+- **2026-09-04 (🐛 fix: `PUT /bot/settings` rejected contract fields `strategiesEnabled`/
+  `combineMode`)**: Frontend reported `400 Bad Request` (`property strategiesEnabled should not
+  exist`, `property combineMode should not exist`) saving settings from the React desk — a real
+  backend bug, not a frontend issue. Root cause: `UpdateBotSettingsDto` only ever exposed the two
+  *internal* boolean flags (`vwapPullbackEnabled`/`orb5mEnabled`) plus `combineMode` was missing
+  entirely, while `GET /bot/settings` had always returned the contract's `strategiesEnabled: (
+  'VWAP_PULLBACK' | 'ORB_5M')[]` array (derived from those flags) — so the shape you could read
+  was never the shape you were allowed to write, and the app's global `forbidNonWhitelisted`
+  `ValidationPipe` rejected the extra fields outright. Fixed: `UpdateBotSettingsDto` now accepts
+  `strategiesEnabled` (non-empty array, each element validated against the enum) and `combineMode`
+  (`'CONFIRMING'` only) directly; `BotSettingsService.updateSettings` translates `strategiesEnabled`
+  into the two internal flags before persisting. Both fields are optional on the partial `PUT`
+  patch, as documented. All previously-accepted fields are unchanged and still work. The strategy
+  loop already consumed `settings.strategiesEnabled` from the `GET` view correctly (§14c
+  `CONFIRMING` behavior needed no change) — this was purely a write-path validation gap. New unit
+  tests (`bot-settings.service.spec.ts`, 11 specs) cover the DTO validation and the array↔flags
+  translation in both directions. See section 14b.
 - **2026-09-03 (section 14j deployed to preprod + prod)**: Shipped the live-watch changes below
   to both environments. Migration `AddBotEventsAndLockoutDateKey` ran clean on both (verified via
   release-phase logs); `GET /bot/status` and `GET /bot/events` confirmed live and JWT-gated
