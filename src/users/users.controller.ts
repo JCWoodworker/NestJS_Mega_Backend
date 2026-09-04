@@ -1,5 +1,6 @@
-import { Controller, Get } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch } from '@nestjs/common';
 
+import { SetUserLockDto } from '@users/dto/set-user-lock.dto';
 import { Role } from '@users/enums/role.enum';
 import { UsersService } from '@users/users.service';
 
@@ -21,5 +22,14 @@ export class UserController {
   @Get('user-profile')
   findOne(@ActiveUser() user: ActiveUserData): Promise<any> {
     return this.userService.findOneById(user.sub);
+  }
+
+  @Roles(Role.Admin)
+  @Patch(':id/lock')
+  setLock(
+    @Param('id') id: string,
+    @Body() dto: SetUserLockDto,
+  ): Promise<any> {
+    return this.userService.setLocked(id, dto.locked);
   }
 }

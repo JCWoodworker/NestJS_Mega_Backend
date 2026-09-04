@@ -1,6 +1,3 @@
-// TODO: Check all apps that use AUTH and make sure they are not using token.token anymore
-// TODO: we are now returning authData - authData.tokens & authData.userInfo
-
 import {
   ConflictException,
   Inject,
@@ -15,6 +12,7 @@ import { Repository } from 'typeorm';
 
 import { Users } from '@users/entities/users.entity';
 
+import { AuthAllowlistService } from '@iam/authentication/auth-allowlist.service';
 import { RefreshTokenDto } from '@iam/authentication/dto/refresh-token.dto';
 import { SignInDto } from '@iam/authentication/dto/sign-in.dto';
 import { SignUpDto } from '@iam/authentication/dto/sign-up.dto';
@@ -40,17 +38,19 @@ export class AuthenticationService {
     private readonly refreshTokenStorageService: RefreshTokensService,
     private readonly hashingService: HashingService,
     private readonly jwtService: JwtService,
+    private readonly allowlistService: AuthAllowlistService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
   ) {}
 
   async signUp(signUpDto: SignUpDto) {
+    const email = this.allowlistService.normalizeEmail(signUpDto.email);
+    await this.allowlistService.assertCanAuthenticate(email);
     try {
       const user = new Users();
-      user.email = signUpDto.email.toLowerCase();
+      user.email = email;
       user.password = await this.hashingService.hash(signUpDto.password);
       const newUser = await this.usersRepository.save(user);
-      debugger;
       return { message: `User ${newUser.email} created successfully` };
     } catch (err) {
       const pgUniqueViolationErrorCode = '23505';
@@ -62,13 +62,14 @@ export class AuthenticationService {
   }
 
   async signIn(signInDto: SignInDto) {
-    const userEmail = signInDto.email.toLowerCase();
+    const userEmail = this.allowlistService.normalizeEmail(signInDto.email);
     const user = await this.usersRepository.findOneBy({
       email: userEmail,
     });
     if (!user) {
       throw new UnauthorizedException('User does not exists');
     }
+    await this.allowlistService.assertCanAuthenticate(userEmail, user);
     // Accounts created via Google OAuth (see GoogleAuthenticationService)
     // never get a `password` set, so bcrypt.compare would throw on a null
     // hash here instead of failing cleanly. Treat that as "wrong
@@ -166,6 +167,7 @@ export class AuthenticationService {
       const user = await this.usersRepository.findOneByOrFail({
         id: sub,
       });
+      await this.allowlistService.assertCanAuthenticate(user.email, user);
       const isValid =
         await this.refreshTokenStorageService.validateRefreshToken(
           user.id,
@@ -194,7 +196,9 @@ export class AuthenticationService {
 
       return { authData, businesses };
     } catch (err) {
-      debugger;
+      if (err instanceof UnauthorizedException) {
+        throw err;
+      }
       if (err instanceof InvalidateRefreshTokenError) {
         throw new UnauthorizedException('Access denied');
       }

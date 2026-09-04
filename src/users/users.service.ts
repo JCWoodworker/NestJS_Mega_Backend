@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -18,6 +18,7 @@ export class UsersService {
         id: user.id,
         email: user.email,
         role: user.role,
+        isLocked: user.isLocked,
       };
     });
   }
@@ -26,10 +27,29 @@ export class UsersService {
     const user = await this.usersRepository.findOne({
       where: { id },
     });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
     return {
       id: user.id,
       email: user.email,
       role: user.role,
+      isLocked: user.isLocked,
+    };
+  }
+
+  async setLocked(id: string, locked: boolean) {
+    const user = await this.usersRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    user.isLocked = locked;
+    await this.usersRepository.save(user);
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      isLocked: user.isLocked,
     };
   }
 }

@@ -12,6 +12,7 @@ import { Repository } from 'typeorm';
 import { Users } from '@users/entities/users.entity';
 import { Role } from '@users/enums/role.enum';
 
+import { AuthAllowlistService } from '@iam/authentication/auth-allowlist.service';
 import { AuthenticationService } from '@iam/authentication/authentication.service';
 
 @Injectable()
@@ -21,6 +22,7 @@ export class GoogleAuthenticationService implements OnModuleInit {
   constructor(
     private readonly configService: ConfigService,
     private readonly authService: AuthenticationService,
+    private readonly allowlistService: AuthAllowlistService,
     @InjectRepository(Users)
     private readonly usersRepository: Repository<Users>,
   ) {}
@@ -43,6 +45,7 @@ export class GoogleAuthenticationService implements OnModuleInit {
         family_name,
         picture,
       } = loginTicket.getPayload();
+      const normalizedEmail = this.allowlistService.normalizeEmail(email);
       const userNameAndImage = {
         firstName: given_name,
         lastName: family_name,
@@ -50,8 +53,9 @@ export class GoogleAuthenticationService implements OnModuleInit {
       };
       const user = await this.usersRepository.findOneBy({ googleId });
       if (!user) {
+        await this.allowlistService.assertCanAuthenticate(normalizedEmail);
         const newUser = await this.usersRepository.save({
-          email,
+          email: normalizedEmail,
           googleId,
           first_name: userNameAndImage.firstName,
           last_name: userNameAndImage.lastName,
@@ -61,9 +65,13 @@ export class GoogleAuthenticationService implements OnModuleInit {
         const userAndTokens = await this.authService.generateTokens(newUser);
         return { userAndTokens };
       }
+      await this.allowlistService.assertCanAuthenticate(user.email, user);
       const userAndTokens = await this.authService.generateTokens(user);
       return { userAndTokens };
     } catch (err) {
+      if (err instanceof UnauthorizedException) {
+        throw err;
+      }
       const pgUniqueViolationErrorCode = '23505';
       if (err.code === pgUniqueViolationErrorCode) {
         throw new ConflictException();

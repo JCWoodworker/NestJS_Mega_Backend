@@ -10,12 +10,14 @@ import { SubappsService } from '@subapps/subapps.service';
 import { OblBusinesses } from '@onlybizlinks/entities/oblBusinesses.entity';
 import { OblUsersAndBusinesses } from '@onlybizlinks/entities/oblUsersAndBusinesses.entity';
 
+import { AuthAllowlistService } from './authentication/auth-allowlist.service';
 import { AuthenticationService } from './authentication/authentication.service';
 import { AccessTokenGuard } from './authentication/guards/access-token/access-token.guard';
 import { RefreshTokens } from './authentication/refresh-token-storage/refresh-token-storage.entity';
 import { RefreshTokensService } from './authentication/refresh-token-storage/refresh-token-storage.service';
 import { GoogleAuthenticationService } from './authentication/social/google-authentication.service';
 import jwtConfig from './config/jwt.config';
+import { AuthAllowedEmail } from './entities/auth-allowed-email.entity';
 import { BcryptService } from './hashing/bcrypt.service';
 import { HashingService } from './hashing/hashing.service';
 import { IamModule } from './iam.module';
@@ -23,14 +25,17 @@ import { IamModule } from './iam.module';
 const mockRepository = {
   find: jest.fn(),
   findOne: jest.fn(),
+  findOneBy: jest.fn(),
   save: jest.fn(),
   create: jest.fn(),
   delete: jest.fn(),
+  count: jest.fn().mockResolvedValue(1),
 };
 
 describe('IamModule', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRepository.count.mockResolvedValue(1);
   });
 
   it('should compile the module', async () => {
@@ -50,6 +55,8 @@ describe('IamModule', () => {
       .overrideProvider(getRepositoryToken(OblUsersAndBusinesses))
       .useValue(mockRepository)
       .overrideProvider(getRepositoryToken(OblBusinesses))
+      .useValue(mockRepository)
+      .overrideProvider(getRepositoryToken(AuthAllowedEmail))
       .useValue(mockRepository)
       .compile();
 
@@ -73,6 +80,8 @@ describe('IamModule', () => {
       .overrideProvider(getRepositoryToken(OblUsersAndBusinesses))
       .useValue(mockRepository)
       .overrideProvider(getRepositoryToken(OblBusinesses))
+      .useValue(mockRepository)
+      .overrideProvider(getRepositoryToken(AuthAllowedEmail))
       .useValue(mockRepository)
       .compile();
 
@@ -98,9 +107,12 @@ describe('IamModule', () => {
       .useValue(mockRepository)
       .overrideProvider(getRepositoryToken(OblBusinesses))
       .useValue(mockRepository)
+      .overrideProvider(getRepositoryToken(AuthAllowedEmail))
+      .useValue(mockRepository)
       .compile();
 
     expect(module.get(AuthenticationService)).toBeDefined();
+    expect(module.get(AuthAllowlistService)).toBeDefined();
     expect(module.get(AccessTokenGuard)).toBeDefined();
     expect(module.get(RefreshTokensService)).toBeDefined();
     expect(module.get(GoogleAuthenticationService)).toBeDefined();
@@ -125,6 +137,8 @@ describe('IamModule', () => {
       .useValue(mockRepository)
       .overrideProvider(getRepositoryToken(OblBusinesses))
       .useValue(mockRepository)
+      .overrideProvider(getRepositoryToken(AuthAllowedEmail))
+      .useValue(mockRepository)
       .compile();
 
     const jwtService = module.get(JwtModule);
@@ -142,6 +156,10 @@ jest.mock(
     RefreshTokens: class MockRefreshTokens {},
   }),
 );
+
+jest.mock('./entities/auth-allowed-email.entity', () => ({
+  AuthAllowedEmail: class MockAuthAllowedEmail {},
+}));
 
 jest.mock('@onlybizlinks/entities/oblUsersAndBusinesses.entity', () => ({
   OblUsersAndBusinesses: class MockOblUsersAndBusinesses {},

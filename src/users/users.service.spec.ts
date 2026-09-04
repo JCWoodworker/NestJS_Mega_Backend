@@ -17,6 +17,7 @@ describe('UsersService', () => {
       email: 'user1@example.com',
       password: 'hashed_password',
       role: Role.Basic,
+      isLocked: false,
       googleId: null,
       first_name: 'John',
       last_name: 'Doe',
@@ -30,6 +31,7 @@ describe('UsersService', () => {
       email: 'admin@example.com',
       password: 'hashed_password',
       role: Role.Admin,
+      isLocked: false,
       googleId: null,
       first_name: 'Admin',
       last_name: 'User',
@@ -53,6 +55,7 @@ describe('UsersService', () => {
               .mockImplementation(({ where: { id } }) =>
                 Promise.resolve(mockUsers.find((user) => user.id === id)),
               ),
+            save: jest.fn().mockImplementation(async (user) => user),
           },
         },
       ],
@@ -75,11 +78,13 @@ describe('UsersService', () => {
           id: mockUsers[0].id,
           email: mockUsers[0].email,
           role: mockUsers[0].role,
+          isLocked: false,
         },
         {
           id: mockUsers[1].id,
           email: mockUsers[1].email,
           role: mockUsers[1].role,
+          isLocked: false,
         },
       ]);
 
@@ -105,6 +110,7 @@ describe('UsersService', () => {
         id: mockUsers[0].id,
         email: mockUsers[0].email,
         role: mockUsers[0].role,
+        isLocked: false,
       });
 
       expect(repository.findOne).toHaveBeenCalledWith({
@@ -124,5 +130,12 @@ describe('UsersService', () => {
     });
   });
 
-  // Add more test cases as you add more methods to the service
+  describe('setLocked', () => {
+    it('should lock a user', async () => {
+      const result = await service.setLocked('1', true);
+      expect(result.isLocked).toBe(true);
+      expect(repository.save).toHaveBeenCalled();
+      mockUsers[0].isLocked = false;
+    });
+  });
 });

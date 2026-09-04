@@ -18,6 +18,10 @@ export class Users {
   @Column({ enum: Role, default: Role.Basic })
   role: Role;
 
+  /** When true, sign-in / Google / refresh are rejected (admin lock). */
+  @Column({ name: 'is_locked', default: false })
+  isLocked: boolean;
+
   @Column({ nullable: true })
   googleId: string;
 

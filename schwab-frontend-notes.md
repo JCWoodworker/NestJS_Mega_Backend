@@ -133,6 +133,22 @@ every subapp, not Schwab-specific — see the bug note below for what that can i
 
 Old refresh token is invalidated server-side on use (rotation) — always store the new one.
 
+### Email allowlist + user lock (2026-09-04)
+
+Nest auth is **fail-closed** to an allowlist (all frontends sharing this backend):
+
+- Sign-up / sign-in / Google / refresh require the email on `auth_allowed_emails`.
+- `users.is_locked` blocks auth even when allowlisted (generic `401`).
+- Env `AUTH_BOOTSTRAP_ALLOWED_EMAILS` seeds the table **only when empty** (comma-separated).
+
+Admin (`role: admin`):
+
+```
+GET/POST/DELETE /api/v1/authentication/allowed-emails[/:id]
+PATCH /api/v1/users/:id/lock  { "locked": boolean }
+GET /api/v1/users/all-users   // includes isLocked
+```
+
 ### Test credentials (preprod)
 
 ```
@@ -1403,6 +1419,10 @@ Current state:
 
 ## Changelog
 
+- **2026-09-04 (email allowlist + user lock)**: Global IAM gate — only
+  `auth_allowed_emails` may sign up/in (incl. Google); `users.is_locked` for admin
+  disable. Bootstrap via `AUTH_BOOTSTRAP_ALLOWED_EMAILS`. Admin:
+  `/authentication/allowed-emails`, `PATCH /users/:id/lock`. See section 0.
 - **2026-09-04 (log browser on `GET /bot/events`)**: Envelope
   `{ items, nextBeforeId, nextAfterId, hasMoreOlder, hasMoreNewer }` plus query params
   `beforeId` / `afterId` / `type` / `lane` / `reason` / `q` / `from` / `to` (epoch ms).
