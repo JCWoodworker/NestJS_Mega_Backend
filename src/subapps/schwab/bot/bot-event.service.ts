@@ -7,6 +7,7 @@ import {
   OptionsGateway,
 } from '@schwab/streaming/options.gateway';
 
+import { ListEventsDto } from './dto/list-events.dto';
 import { BotEvent } from './entities/bot-event.entity';
 import { BotEventSide, BotEventType } from './enums/bot-event-type.enum';
 import { BotLane } from './enums/bot-lane.enum';
@@ -25,6 +26,17 @@ export interface RecordBotEventInput {
   reason?: string | null;
   orderId?: string | null;
   payload?: Record<string, unknown> | null;
+}
+
+export interface BotEventListResult {
+  items: BotEventPayload[];
+  limit: number;
+  /** Pass as `beforeId` to load the next older page. */
+  nextBeforeId: number | null;
+  /** Pass as `afterId` to load newer rows than this page's newest. */
+  nextAfterId: number | null;
+  hasMoreOlder: boolean;
+  hasMoreNewer: boolean;
 }
 
 /** Max rows returned by a single list/recent query (not retention). */
@@ -103,21 +115,76 @@ export class BotEventService {
     });
   }
 
-  /** Newest-first, optionally only rows strictly newer than `afterId`. */
-  async list(limit = 100, afterId?: number): Promise<BotEventPayload[]> {
+  /**
+   * Newest-first log browser. Prefer `beforeId` to scroll older; `afterId` for
+   * catch-up of rows newer than a known id.
+   */
+  async list(query: ListEventsDto = {}): Promise<BotEventListResult> {
+    const limit = Math.min(Math.max(query.limit ?? 100, 1), LIST_CAP);
     const qb = this.repository
       .createQueryBuilder('e')
       .orderBy('e.id', 'DESC')
-      .take(Math.min(Math.max(limit, 1), LIST_CAP));
-    if (afterId != null && !Number.isNaN(afterId)) {
-      qb.andWhere('e.id > :afterId', { afterId });
+      .take(limit + 1); // one extra to detect hasMoreOlder
+
+    if (query.afterId != null && !Number.isNaN(query.afterId)) {
+      qb.andWhere('e.id > :afterId', { afterId: query.afterId });
     }
+    if (query.beforeId != null && !Number.isNaN(query.beforeId)) {
+      qb.andWhere('e.id < :beforeId', { beforeId: query.beforeId });
+    }
+    if (query.type?.length) {
+      qb.andWhere('e.type IN (:...types)', { types: query.type });
+    }
+    if (query.lane) {
+      qb.andWhere('e.lane = :lane', { lane: query.lane });
+    }
+    if (query.reason) {
+      qb.andWhere('e.reason = :reason', { reason: query.reason });
+    }
+    if (query.from != null && !Number.isNaN(query.from)) {
+      qb.andWhere('e.at >= :from', { from: String(query.from) });
+    }
+    if (query.to != null && !Number.isNaN(query.to)) {
+      qb.andWhere('e.at <= :to', { to: String(query.to) });
+    }
+    if (query.q?.trim()) {
+      const q = `%${query.q.trim()}%`;
+      qb.andWhere(
+        `(e.reason ILIKE :q OR e.symbol ILIKE :q OR e.order_id ILIKE :q OR CAST(e.payload AS text) ILIKE :q)`,
+        { q },
+      );
+    }
+
     const rows = await qb.getMany();
-    return rows.map((r) => this.toPayload(r));
+    const hasMoreOlder = rows.length > limit;
+    const page = hasMoreOlder ? rows.slice(0, limit) : rows;
+    const items = page.map((r) => this.toPayload(r));
+    const newestId = page.length ? page[0].id : null;
+    const oldestId = page.length ? page[page.length - 1].id : null;
+
+    let hasMoreNewer = false;
+    if (newestId != null) {
+      const newerCount = await this.repository
+        .createQueryBuilder('e')
+        .where('e.id > :newestId', { newestId })
+        .getCount();
+      hasMoreNewer = newerCount > 0;
+    }
+
+    return {
+      items,
+      limit,
+      nextBeforeId: oldestId,
+      nextAfterId: newestId,
+      hasMoreOlder,
+      hasMoreNewer,
+    };
   }
 
+  /** Newest-first plain array (status.recentEvents / explain). */
   async recent(count: number): Promise<BotEventPayload[]> {
-    return this.list(count);
+    const result = await this.list({ limit: count });
+    return result.items;
   }
 
   private async trim(): Promise<void> {

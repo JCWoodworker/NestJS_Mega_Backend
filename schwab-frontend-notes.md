@@ -1206,9 +1206,13 @@ lockoutReason: 'KILL_SWITCH'` → `unlock` → `200`, `status.lockout: false`, `
 
 ### `BotSettings` shape (defaults in parentheses)
 
-See also the full decision-audit + suggested-settings handoff:
+See also the full decision-audit + suggested-settings + **log browser** handoff:
 [`schwab-bot-audit-and-suggested-settings.md`](./schwab-bot-audit-and-suggested-settings.md)
-(`GET /bot/explain`, `GET /bot/settings/suggested`, new event types).
+(`GET /bot/events` envelope with filter/date/search/pagination, `GET /bot/explain`,
+`GET /bot/settings/suggested`, new event types).
+
+**Note:** `GET /bot/events` response is now `{ items, nextBeforeId, hasMoreOlder, … }`
+— not a bare array (breaking vs early §14j).
 
 - `strategiesEnabled`: array of `'VWAP_PULLBACK' | 'ORB_5M'` (both enabled by default)
 - `directionsEnabled`: array of `'CALL' | 'PUT'` — operator preference for which sides the bot may

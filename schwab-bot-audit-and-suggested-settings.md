@@ -1,7 +1,9 @@
 # Schwab Bot — Decision Audit, Explain & Suggested Settings
 
-**Nest handoff for the React desk** (2026-09-04). Paste-ready.  
+**Nest handoff for the React desk** (updated 2026-09-04). Paste-ready.  
 Companion index: [`schwab-frontend-notes.md`](./schwab-frontend-notes.md) §14.
+
+**Breaking change:** `GET /bot/events` now returns a **pagination envelope** (`{ items, … }`), not a bare array. Update any client that assumed `BotEvent[]`.
 
 ---
 
@@ -17,18 +19,82 @@ strategies never agree → no `SIGNAL` → no trade. That is now visible as `NO_
 
 ---
 
-## New / expanded APIs
+## Log browser — `GET /api/v1/subapps/schwab/bot/events`
 
-### `GET /api/v1/subapps/schwab/bot/events?limit=&afterId=`
+Auth: same JWT as other `/bot/*`. Rate limit: 120/min.
 
-Unchanged path. Now:
+Retention: **30 days** (rows older than that are deleted). Plan UI date pickers within that window.
 
-- Default / max `limit` up to **1000** (was 500).
-- Rows may include optional `payload` (JSON).
-- Retention: **30 days** by timestamp (not a 500-row ring).
-- Still newest-first; socket `bot-event` still fires on each new row.
+### Response envelope
 
-### `GET /api/v1/subapps/schwab/bot/explain`
+```ts
+{
+  items: BotEvent[];       // newest-first
+  limit: number;           // echoed (1–1000, default 100)
+  nextBeforeId: number | null;  // oldest id in this page → pass as beforeId for older page
+  nextAfterId: number | null;   // newest id in this page → pass as afterId for newer catch-up
+  hasMoreOlder: boolean;
+  hasMoreNewer: boolean;
+}
+```
+
+### Query params
+
+| Param | Type | Purpose |
+|-------|------|---------|
+| `limit` | int 1–1000 | Page size (default 100) |
+| `beforeId` | int | **Scroll older:** only `id < beforeId` (use `nextBeforeId` from prior page) |
+| `afterId` | int | **Catch-up newer:** only `id > afterId` (socket miss / resume) |
+| `type` | repeatable enum | Filter types: `?type=NO_SIGNAL&type=GATE_SKIP` |
+| `lane` | `BOT_PAPER` \| `BOT_LIVE` | Lane filter |
+| `reason` | string | Exact reason match (e.g. `COOLDOWN`, `CONFIRMING_NO_AGREEMENT`) |
+| `q` | string ≤128 | Case-insensitive search in `reason`, `symbol`, `orderId`, and JSON `payload` text |
+| `from` | epoch ms | Inclusive lower bound on `at` (**date picker from**) |
+| `to` | epoch ms | Inclusive upper bound on `at` (**date picker to**) |
+
+### Pagination UX (recommended)
+
+1. Initial load: `GET /bot/events?limit=50` (optional `from`/`to` / filters).
+2. Infinite scroll older: `GET /bot/events?limit=50&beforeId={nextBeforeId}&…same filters`.
+3. Live catch-up while viewing: socket `bot-event` **or** poll `?afterId={nextAfterId}`.
+4. Date picker: convert local day bounds → UTC epoch ms → `from` / `to` (clamp to last 30 days).
+5. Filter chips: map to `type=` repeats (Decision / Trades / Operator — see groupings below).
+
+### Example URLs
+
+```
+# Last 50 of everything
+GET /bot/events?limit=50
+
+# Decision-only for today (example epochs)
+GET /bot/events?limit=50&type=NO_SIGNAL&type=GATE_SKIP&from=1788532800000&to=1788619199999
+
+# Older page after user scrolled
+GET /bot/events?limit=50&beforeId=1200&type=OPERATOR_SETTINGS
+
+# Search settings diffs / symbols
+GET /bot/events?q=riskPct&limit=50
+
+# Paper lane only
+GET /bot/events?lane=BOT_PAPER&limit=100
+```
+
+### Filter chip → `type` groupings (UI suggestion)
+
+| Chip | `type` values |
+|------|----------------|
+| Decisions | `NO_SIGNAL`, `GATE_SKIP`, `SIGNAL`, `SKIP`, `ERROR` |
+| Trades | `ENTRY_SUBMIT`, `ENTRY_FILL`, `EXIT_SUBMIT`, `EXIT_FILL` |
+| Operator | `OPERATOR_SETTINGS`, `OPERATOR_MODE`, `OPERATOR_LANE`, `OPERATOR_LIVE`, `FLAT_KILL`, `UNLOCK`, `LOCKOUT` |
+| Phase | `PHASE` |
+
+### Real-time
+
+Socket `/options` event `bot-event` — same `BotEvent` shape as `items[]` (includes optional `payload`). Use for live tail; use REST for history / filters / date range.
+
+---
+
+## `GET /api/v1/subapps/schwab/bot/explain`
 
 No LLM. One-glance summary for the status strip / help panel.
 
@@ -47,7 +113,9 @@ No LLM. One-glance summary for the status strip / help panel.
 
 **UI:** show `summary` under the status strip. Link to suggested settings when `suggestedHint` is set.
 
-### `GET /api/v1/subapps/schwab/bot/settings/suggested`
+---
+
+## `GET /api/v1/subapps/schwab/bot/settings/suggested`
 
 Account-size-aware recommendations from **current** `BotStatus.equity` (paper or live lane equity).
 
@@ -91,7 +159,7 @@ Respects `canBuyPuts` — never suggests PUT in `directionsEnabled` when capabil
 | `UNLOCK` | Day rollover or `OPERATOR_UNLOCK` |
 | `PHASE` | Phase machine transition |
 
-### New (decision + operator audit)
+### Decision + operator audit
 
 | Type | Meaning | Typical `reason` / `payload` |
 |------|---------|------------------------------|
@@ -103,7 +171,7 @@ Respects `canBuyPuts` — never suggests PUT in `directionsEnabled` when capabil
 | `OPERATOR_LIVE` | live enable/disable | `LIVE_ARMED` / `LIVE_DISARMED` |
 | `ERROR` | Eval threw | message in `reason` |
 
-**Wire shape** (socket + REST):
+**Wire shape** (socket + REST `items[]`):
 
 ```ts
 interface BotEvent {
@@ -120,11 +188,11 @@ interface BotEvent {
   strategies?: string[];
   reason?: string;
   orderId?: string;
-  payload?: Record<string, unknown>;  // NEW — optional
+  payload?: Record<string, unknown>;  // optional — diffs, indicator snapshots
 }
 ```
 
-`GATE_SKIP` / `NO_SIGNAL` are **deduped** per `(type, reason, chartTime)` (~1 per SPY bar) so option-chart traffic does not double-write.
+`GATE_SKIP` / `NO_SIGNAL` are **deduped** per `(type, reason, chartTime)` (~1 per SPY bar).
 
 ---
 
@@ -138,25 +206,32 @@ interface BotEvent {
 
 ---
 
-## Frontend recommendations
+## Other bot routes (unchanged contract, still relevant)
 
-1. **Status strip:** poll or socket-drive `GET /bot/explain` (or derive from `bot-event` stream) and show `summary`.
-2. **Activity feed:** filter chips for Decision (`NO_SIGNAL`, `GATE_SKIP`) vs Trades vs Operator.
-3. **Settings panel:** “Suggested for $X (MICRO)” card from `/settings/suggested`; **Apply** → `PUT` with `patch`; show `rationale` + `warnings`.
-4. **Help copy:** “SCANNING” ≠ “about to trade” — idle confirmation needs `NO_SIGNAL` / explain.
-5. **Chat agent (deferred):** ground answers on `/explain` + `/events` + `/settings/suggested` — do not invent reasons Nest never logged.
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/bot/status` | Includes `phase`, `recentEvents` (last 20, still a bare array) |
+| PUT | `/bot/settings` | Accepts `directionsEnabled`, `canBuyCalls`/`canBuyPuts`, `profitTarget*` aliases |
+| POST | `/bot/mode`, `/bot/lane`, `/bot/kill`, `/bot/unlock`, `/bot/live/enable`, `/bot/live/disable` | Operator actions → audit events |
 
 ---
 
-## Auth / rate limit
+## Frontend build checklist
 
-Same JWT + 120/min throttle as other `/bot/*` routes.
+1. **Status strip:** `GET /bot/explain` → show `summary`; link when `suggestedHint` set.
+2. **Log page / sidebar:** envelope-aware `GET /bot/events` with filters, date range (`from`/`to`), `beforeId` infinite scroll, `q` search box.
+3. **Live tail:** socket `bot-event` prepend (respect active filters client-side or refetch).
+4. **Settings:** “Suggested for $X (MICRO)” from `/settings/suggested` → Apply via `PUT` with `patch`.
+5. **Help:** SCANNING ≠ about to trade — point at `NO_SIGNAL` / explain.
+6. **Chat (deferred):** ground on `/explain` + `/events` + `/settings/suggested`.
 
 ---
 
 ## Acceptance checklist
 
-- [ ] Armed SCANNING session produces `NO_SIGNAL` (or `GATE_SKIP`) within ~1–2 minutes of a SPY bar close
+- [ ] Armed SCANNING produces `NO_SIGNAL` or `GATE_SKIP` within ~1–2 minutes of a SPY bar close
+- [ ] `GET /bot/events` returns `{ items, nextBeforeId, hasMoreOlder, … }` (not a bare array)
+- [ ] `?type=NO_SIGNAL&type=GATE_SKIP` filters; `?from=&to=` date range; `?q=` search; `?beforeId=` older page
 - [ ] `PUT /bot/settings` creates `OPERATOR_SETTINGS` with before/after
 - [ ] Mode / lane / live arm create `OPERATOR_*` events
 - [ ] `GET /bot/explain` summary mentions CONFIRMING / gate reason when idle

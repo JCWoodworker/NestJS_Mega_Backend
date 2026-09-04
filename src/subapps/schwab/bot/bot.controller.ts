@@ -37,7 +37,7 @@ export class BotController {
 
   @Get('events')
   async getEvents(@Query() query: ListEventsDto) {
-    return this.botEventService.list(query.limit ?? 100, query.afterId);
+    return this.botEventService.list(query);
   }
 
   /**
