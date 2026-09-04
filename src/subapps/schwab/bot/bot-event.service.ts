@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { LessThan, Repository } from 'typeorm';
 
 import {
   BotEventPayload,
@@ -24,20 +24,24 @@ export interface RecordBotEventInput {
   strategies?: string[] | null;
   reason?: string | null;
   orderId?: string | null;
+  payload?: Record<string, unknown> | null;
 }
 
-/** Ring buffer size — frontend contract §14j asks for 200–500. */
-const RING_SIZE = 500;
+/** Max rows returned by a single list/recent query (not retention). */
+const LIST_CAP = 1000;
+
+/** Keep decision/operator history for 30 days. */
+const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
- * Append-only activity feed (frontend contract §14j) backing the live watch
- * sidebar + chart buy/sell dots. Every recorded event is persisted (so
- * `GET /bot/events` / late socket joiners can catch up) and broadcast
- * immediately over `/options` as `bot-event`.
+ * Append-only activity + decision-audit feed. Persisted for catch-up /
+ * `GET /bot/events` / explain, and broadcast over `/options` as `bot-event`.
  */
 @Injectable()
 export class BotEventService {
   private readonly logger = new Logger(BotEventService.name);
+  /** In-process dedupe: `${type}:${reason}:${chartTime}` → last emit ms. */
+  private readonly recentDedupe = new Map<string, number>();
 
   constructor(
     @InjectRepository(BotEvent)
@@ -60,22 +64,51 @@ export class BotEventService {
         strategies: input.strategies ?? null,
         reason: input.reason ?? null,
         orderId: input.orderId ?? null,
+        payload: input.payload ?? null,
       }),
     );
     this.optionsGateway.emitBotEvent(this.toPayload(row));
     this.trim().catch((err) =>
-      this.logger.debug(`Ring-buffer trim skipped: ${err.message}`),
+      this.logger.debug(`Retention trim skipped: ${err.message}`),
     );
     return row;
   }
 
-  /** Newest-first, optionally only rows strictly newer than `afterId`
-   * (catch-up pagination for a client that already has everything else). */
+  /**
+   * Record at most once per (type, reason, chartTime) within ~55s. Used for
+   * GATE_SKIP / NO_SIGNAL so option-chart candles don't double-write a bar.
+   */
+  async recordDeduped(
+    input: RecordBotEventInput,
+    chartTime: number | null | undefined,
+  ): Promise<BotEvent | null> {
+    const key = `${input.type}:${input.reason ?? ''}:${chartTime ?? 'na'}`;
+    const now = Date.now();
+    const prev = this.recentDedupe.get(key);
+    if (prev != null && now - prev < 55_000) {
+      return null;
+    }
+    this.recentDedupe.set(key, now);
+    if (this.recentDedupe.size > 500) {
+      for (const [k, at] of this.recentDedupe) {
+        if (now - at > 120_000) this.recentDedupe.delete(k);
+      }
+    }
+    return this.record({
+      ...input,
+      payload: {
+        ...(input.payload ?? {}),
+        ...(chartTime != null ? { chartTime } : {}),
+      },
+    });
+  }
+
+  /** Newest-first, optionally only rows strictly newer than `afterId`. */
   async list(limit = 100, afterId?: number): Promise<BotEventPayload[]> {
     const qb = this.repository
       .createQueryBuilder('e')
       .orderBy('e.id', 'DESC')
-      .take(Math.min(Math.max(limit, 1), RING_SIZE));
+      .take(Math.min(Math.max(limit, 1), LIST_CAP));
     if (afterId != null && !Number.isNaN(afterId)) {
       qb.andWhere('e.id > :afterId', { afterId });
     }
@@ -88,14 +121,8 @@ export class BotEventService {
   }
 
   private async trim(): Promise<void> {
-    const count = await this.repository.count();
-    if (count <= RING_SIZE) return;
-    const excess = count - RING_SIZE;
-    const oldest = await this.repository.find({
-      order: { id: 'ASC' },
-      take: excess,
-    });
-    if (oldest.length) await this.repository.remove(oldest);
+    const cutoff = String(Date.now() - RETENTION_MS);
+    await this.repository.delete({ at: LessThan(cutoff) });
   }
 
   private toPayload(row: BotEvent): BotEventPayload {
@@ -114,6 +141,7 @@ export class BotEventService {
       strategies: row.strategies ?? undefined,
       reason: row.reason ?? undefined,
       orderId: row.orderId ?? undefined,
+      payload: row.payload ?? undefined,
     };
   }
 }

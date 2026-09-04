@@ -53,8 +53,15 @@ function buildService() {
     create: jest.fn().mockImplementation((partial: any) => partial),
   };
 
-  const service = new BotSettingsService(settingsRepository as any);
-  return { service, getRowSnapshot: () => row };
+  const botEventService = {
+    record: jest.fn().mockResolvedValue(undefined),
+  };
+
+  const service = new BotSettingsService(
+    settingsRepository as any,
+    botEventService as any,
+  );
+  return { service, getRowSnapshot: () => row, botEventService };
 }
 
 describe('BotSettingsService — strategiesEnabled / combineMode (contract §14b)', () => {
@@ -152,6 +159,21 @@ describe('BotSettingsService — directionsEnabled / canBuy* (contract §14b)', 
     expect(view.canBuyPuts).toBe(true);
     expect(getRowSnapshot().canBuyPuts).toBe(true);
     expect(view.directionsEnabled).toEqual([BotDirection.CALL]);
+  });
+
+  it('emits OPERATOR_SETTINGS with before/after on update', async () => {
+    const { service, botEventService } = buildService();
+    await service.updateSettings({ riskPct: 25 });
+    expect(botEventService.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'OPERATOR_SETTINGS',
+        reason: 'SETTINGS_UPDATED',
+        payload: expect.objectContaining({
+          before: expect.objectContaining({ riskPct: 10 }),
+          after: expect.objectContaining({ riskPct: 25 }),
+        }),
+      }),
+    );
   });
 });
 

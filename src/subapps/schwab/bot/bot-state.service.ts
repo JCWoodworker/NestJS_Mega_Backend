@@ -257,6 +257,7 @@ export class BotStateService {
   async setMode(mode: BotMode): Promise<BotStatusView> {
     await this.clearLockoutIfNewDay();
     const row = await this.getRow();
+    const from = row.mode;
     row.mode = mode;
     if (mode === BotMode.MANUAL) {
       row.running = false;
@@ -266,6 +267,12 @@ export class BotStateService {
       row.running = false;
     }
     await this.save(row);
+    await this.botEventService.record({
+      lane: row.lane,
+      type: BotEventType.OPERATOR_MODE,
+      reason: `${from} → ${mode}`,
+      payload: { from, to: mode, running: row.running },
+    });
     this.botEngine.onControlPlaneChange();
     return this.getStatus();
   }
@@ -291,11 +298,18 @@ export class BotStateService {
       );
     }
 
+    const from = row.lane;
     row.lane = lane;
     if (row.mode === BotMode.BOT && !row.lockout) {
       row.running = true;
     }
     await this.save(row);
+    await this.botEventService.record({
+      lane: row.lane,
+      type: BotEventType.OPERATOR_LANE,
+      reason: `${from ?? 'null'} → ${lane}`,
+      payload: { from, to: lane },
+    });
     this.botEngine.onControlPlaneChange();
     return this.getStatus();
   }
@@ -307,6 +321,13 @@ export class BotStateService {
     const row = await this.getRow();
     row.liveArmed = true;
     await this.save(row);
+    await this.botEventService.record({
+      lane: row.lane,
+      type: BotEventType.OPERATOR_LIVE,
+      reason: 'LIVE_ARMED',
+      payload: { liveArmed: true },
+    });
+    this.botEngine.onControlPlaneChange();
     return this.getStatus();
   }
 
@@ -322,6 +343,12 @@ export class BotStateService {
       refreshed.running = false;
     }
     await this.save(refreshed);
+    await this.botEventService.record({
+      lane: refreshed.lane,
+      type: BotEventType.OPERATOR_LIVE,
+      reason: 'LIVE_DISARMED',
+      payload: { liveArmed: false },
+    });
     this.botEngine.onControlPlaneChange();
     return this.getStatus();
   }

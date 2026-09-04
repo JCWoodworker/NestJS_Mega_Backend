@@ -108,6 +108,7 @@ export interface BotEventPayload {
   strategies?: string[];
   reason?: string;
   orderId?: string;
+  payload?: Record<string, unknown>;
 }
 
 const allowedOrigins =

@@ -2,8 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
+import { BotEventService } from './bot-event.service';
+import {
+  buildSuggestedSettings,
+  SuggestedSettingsResult,
+} from './bot-suggested-settings.util';
 import { UpdateBotSettingsDto } from './dto/update-bot-settings.dto';
 import { BotSettings } from './entities/bot-settings.entity';
+import { BotEventType } from './enums/bot-event-type.enum';
 import {
   BotCombineMode,
   BotDirection,
@@ -52,6 +58,7 @@ export class BotSettingsService {
   constructor(
     @InjectRepository(BotSettings)
     private readonly settingsRepository: Repository<BotSettings>,
+    private readonly botEventService: BotEventService,
   ) {}
 
   async getRow(): Promise<BotSettings> {
@@ -75,8 +82,15 @@ export class BotSettingsService {
     return this.toView(await this.getRow());
   }
 
+  /** Fee/math-aware recommended settings for the given equity. */
+  async getSuggested(equity: number): Promise<SuggestedSettingsResult> {
+    const current = await this.getSettings();
+    return buildSuggestedSettings(Math.max(0, equity), current);
+  }
+
   async updateSettings(patch: UpdateBotSettingsDto): Promise<BotSettingsView> {
     const row = await this.getRow();
+    const before = this.toView(row);
     // Contract view fields / frontend aliases aren't columns themselves —
     // strip them before Object.assign, then translate onto the entity.
     const {
@@ -111,7 +125,14 @@ export class BotSettingsService {
       row.profitPctCurrent = profitTargetPctCurrent;
     }
     const saved = await this.settingsRepository.save(row);
-    return this.toView(saved);
+    const after = this.toView(saved);
+    await this.botEventService.record({
+      lane: null,
+      type: BotEventType.OPERATOR_SETTINGS,
+      reason: 'SETTINGS_UPDATED',
+      payload: { before, after, patch },
+    });
+    return after;
   }
 
   toView(row: BotSettings): BotSettingsView {

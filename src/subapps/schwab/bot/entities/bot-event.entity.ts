@@ -5,10 +5,8 @@ import { BotLane } from '../enums/bot-lane.enum';
 import { BotDirection } from '../enums/strategy.enum';
 
 /**
- * Append-only activity feed row (frontend contract §14j) — powers the live
- * watch sidebar / chart buy-sell dots. Trimmed to a ring buffer of the most
- * recent rows by `BotEventService` rather than time-based expiry, since
- * event volume tracks trading activity, not wall-clock time.
+ * Append-only activity + decision-audit feed (frontend contract §14j).
+ * Retention is time-based (30 days) via BotEventService, not a fixed row ring.
  */
 @Entity('bot_events')
 export class BotEvent {
@@ -62,4 +60,8 @@ export class BotEvent {
 
   @Column({ type: 'varchar', length: 64, name: 'order_id', nullable: true })
   orderId: string | null;
+
+  /** Diffs, indicator snapshots, strategy results, etc. */
+  @Column({ type: 'jsonb', nullable: true })
+  payload: Record<string, unknown> | null;
 }

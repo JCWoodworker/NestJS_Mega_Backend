@@ -19,6 +19,7 @@ import { LiveEnableDto } from './dto/live-enable.dto';
 import { SetLaneDto } from './dto/set-lane.dto';
 import { SetModeDto } from './dto/set-mode.dto';
 import { UpdateBotSettingsDto } from './dto/update-bot-settings.dto';
+import { BotEventType } from './enums/bot-event-type.enum';
 
 @Throttle({ default: { limit: 120, ttl: 60000 } })
 @Controller('bot')
@@ -37,6 +38,84 @@ export class BotController {
   @Get('events')
   async getEvents(@Query() query: ListEventsDto) {
     return this.botEventService.list(query.limit ?? 100, query.afterId);
+  }
+
+  /**
+   * One-glance "why idle / what's happening" for the status strip — no LLM.
+   * Uses recent decision-audit events + current status/settings.
+   */
+  @Get('explain')
+  async explain() {
+    const status = await this.botStateService.getStatus();
+    const [settings, events, suggested] = await Promise.all([
+      this.botSettingsService.getSettings(),
+      this.botEventService.recent(40),
+      this.botSettingsService.getSuggested(status.equity),
+    ]);
+
+    const decisionEvents = events.filter((e) =>
+      [
+        BotEventType.NO_SIGNAL,
+        BotEventType.GATE_SKIP,
+        BotEventType.SIGNAL,
+        BotEventType.SKIP,
+        BotEventType.ERROR,
+      ].includes(e.type as BotEventType),
+    );
+    const lastDecision = decisionEvents[0] ?? null;
+    const noSignalCount = decisionEvents.filter(
+      (e) => e.type === BotEventType.NO_SIGNAL,
+    ).length;
+
+    let summary: string;
+    if (status.phase === 'LOCKOUT') {
+      summary = `LOCKOUT: ${status.lockoutReason ?? 'unknown'}`;
+    } else if (status.phase === 'STOPPED') {
+      summary = 'STOPPED: mode is MANUAL or no lane selected';
+    } else if (status.openPosition) {
+      summary = `IN_POSITION: ${status.openPosition.symbol} x${status.openPosition.quantity}`;
+    } else if (lastDecision?.type === BotEventType.NO_SIGNAL) {
+      const results = (lastDecision.payload as any)?.results ?? {};
+      summary =
+        `SCANNING: last candles NO_SIGNAL (CONFIRMING ` +
+        `VWAP=${results.VWAP_PULLBACK ?? 'n/a'} ORB=${
+          results.ORB_5M ?? 'n/a'
+        }); ` +
+        `directions ${settings.directionsEnabled.join('+') || 'none'}` +
+        (noSignalCount > 1 ? ` — ${noSignalCount} recent NO_SIGNAL rows` : '');
+    } else if (lastDecision?.type === BotEventType.GATE_SKIP) {
+      summary = `SCANNING blocked: GATE_SKIP ${lastDecision.reason}`;
+    } else if (status.phase === 'WAITING_WINDOW') {
+      summary = `WAITING_WINDOW: outside ${settings.tradeWindowStart}–${settings.tradeWindowEnd} ET`;
+    } else if (status.phase === 'COOLDOWN') {
+      summary = `COOLDOWN: ${settings.cooldownMins}m after last trade`;
+    } else {
+      summary = `${status.phase}: armed, waiting for confirming signal`;
+    }
+
+    if (Object.keys(suggested.patch).length > 0) {
+      summary += ` — settings look aggressive for ${suggested.tier} equity (see /bot/settings/suggested)`;
+    }
+
+    return {
+      phase: status.phase,
+      summary,
+      status,
+      settings,
+      lastDecision,
+      recentDecisions: decisionEvents.slice(0, 20),
+      suggestedTier: suggested.tier,
+      suggestedHint:
+        Object.keys(suggested.patch).length > 0
+          ? `Apply suggested ${suggested.tier} settings via GET /bot/settings/suggested`
+          : null,
+    };
+  }
+
+  @Get('settings/suggested')
+  async getSuggestedSettings() {
+    const status = await this.botStateService.getStatus();
+    return this.botSettingsService.getSuggested(status.equity);
   }
 
   @Post('mode')

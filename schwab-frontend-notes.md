@@ -1206,6 +1206,10 @@ lockoutReason: 'KILL_SWITCH'` → `unlock` → `200`, `status.lockout: false`, `
 
 ### `BotSettings` shape (defaults in parentheses)
 
+See also the full decision-audit + suggested-settings handoff:
+[`schwab-bot-audit-and-suggested-settings.md`](./schwab-bot-audit-and-suggested-settings.md)
+(`GET /bot/explain`, `GET /bot/settings/suggested`, new event types).
+
 - `strategiesEnabled`: array of `'VWAP_PULLBACK' | 'ORB_5M'` (both enabled by default)
 - `directionsEnabled`: array of `'CALL' | 'PUT'` — operator preference for which sides the bot may
   enter (**default `['CALL']` only** — not BOTH). UI may present this as CALL / PUT / BOTH; the wire
@@ -1387,6 +1391,11 @@ Current state:
 
 ## Changelog
 
+- **2026-09-04 (decision audit + explain + suggested settings)**: Expanded `bot_events`
+  with `GATE_SKIP` / `NO_SIGNAL` / `OPERATOR_*` / `ERROR` + optional `payload` jsonb;
+  30-day retention (no 500-row ring). Entry eval now logs why it did not trade.
+  New `GET /bot/explain` and `GET /bot/settings/suggested` (equity tiers MICRO→COMFORTABLE).
+  Full frontend writeup: [`schwab-bot-audit-and-suggested-settings.md`](./schwab-bot-audit-and-suggested-settings.md).
 - **2026-09-04 (🐛 fix: `PUT /bot/settings` rejected `profitTarget*` aliases)**: Same
   `forbidNonWhitelisted` class of bug as `strategiesEnabled` — React desk was PUTting
   `profitTargetUsd` / `profitTargetPctDayStart` / `profitTargetPctCurrent` (form names)

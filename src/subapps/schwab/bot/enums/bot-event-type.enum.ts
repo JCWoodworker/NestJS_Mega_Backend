@@ -1,4 +1,4 @@
-/** Activity feed event types — frontend contract §14j (live watch). */
+/** Activity feed + decision-audit event types (frontend §14j + audit log). */
 export enum BotEventType {
   SIGNAL = 'SIGNAL',
   SKIP = 'SKIP',
@@ -10,6 +10,15 @@ export enum BotEventType {
   LOCKOUT = 'LOCKOUT',
   UNLOCK = 'UNLOCK',
   PHASE = 'PHASE',
+  /** Pre-signal gate blocked evaluation (window, cooldown, stale quote, …). */
+  GATE_SKIP = 'GATE_SKIP',
+  /** Strategies evaluated but CONFIRMING did not fire. */
+  NO_SIGNAL = 'NO_SIGNAL',
+  OPERATOR_SETTINGS = 'OPERATOR_SETTINGS',
+  OPERATOR_MODE = 'OPERATOR_MODE',
+  OPERATOR_LANE = 'OPERATOR_LANE',
+  OPERATOR_LIVE = 'OPERATOR_LIVE',
+  ERROR = 'ERROR',
 }
 
 export type BotEventSide = 'BUY' | 'SELL';
@@ -24,3 +33,6 @@ export type BotPhase =
   | 'IN_POSITION'
   | 'EXITING'
   | 'COOLDOWN';
+
+/** Account-size tier for suggested settings. */
+export type BotSettingsTier = 'MICRO' | 'SMALL' | 'STANDARD' | 'COMFORTABLE';

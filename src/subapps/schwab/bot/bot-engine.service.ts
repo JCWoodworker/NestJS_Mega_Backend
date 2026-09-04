@@ -12,6 +12,7 @@ import { OrdersService } from '@schwab/orders/orders.service';
 import { etDateKey } from '@schwab/pnl/et-date.util';
 import {
   OptionsGateway,
+  ChartCandlePayload,
   UnderlyingPricePayload,
 } from '@schwab/streaming/options.gateway';
 import { SchwabStreamerService } from '@schwab/streaming/schwab-streamer.service';
@@ -100,15 +101,18 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     void this.emitStatus(true);
   }
 
-  private handleChartCandleClose = (): void => {
-    void this.evaluateEntrySignal();
+  private handleChartCandleClose = (candle?: ChartCandlePayload): void => {
+    // Only SPY equity bars drive entry evaluation (option chart shares the
+    // same gateway event and would otherwise double-eval).
+    if (candle && candle.assetType !== 'EQUITY') return;
+    void this.evaluateEntrySignal(candle?.chartTime);
   };
 
   private handleUnderlyingPrice = (payload: UnderlyingPricePayload): void => {
     void this.checkSoftStopAndTargets(payload.price);
   };
 
-  private async evaluateEntrySignal(): Promise<void> {
+  private async evaluateEntrySignal(chartTime?: number): Promise<void> {
     if (this.evaluating) return;
     this.evaluating = true;
     try {
@@ -117,9 +121,34 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         row.mode !== BotMode.BOT ||
         !row.lane ||
         row.lockout ||
-        !row.running ||
-        row.openPosition
+        !row.running
       ) {
+        await this.botEventService.recordDeduped(
+          {
+            lane: row.lane,
+            type: BotEventType.GATE_SKIP,
+            reason: 'NOT_ARMED',
+            payload: {
+              mode: row.mode,
+              lane: row.lane,
+              lockout: row.lockout,
+              running: row.running,
+            },
+          },
+          chartTime,
+        );
+        return;
+      }
+      if (row.openPosition) {
+        await this.botEventService.recordDeduped(
+          {
+            lane: row.lane,
+            type: BotEventType.GATE_SKIP,
+            reason: 'ALREADY_IN_POSITION',
+            symbol: row.openPosition.symbol,
+          },
+          chartTime,
+        );
         return;
       }
 
@@ -132,17 +161,53 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
           settings.tradeWindowEnd,
         )
       ) {
+        await this.botEventService.recordDeduped(
+          {
+            lane: row.lane,
+            type: BotEventType.GATE_SKIP,
+            reason: 'OUTSIDE_WINDOW',
+            payload: {
+              nowHhMm,
+              start: settings.tradeWindowStart,
+              end: settings.tradeWindowEnd,
+            },
+          },
+          chartTime,
+        );
         return;
       }
       if (
         row.lastTradeAt &&
         Date.now() - row.lastTradeAt.getTime() < settings.cooldownMins * 60_000
       ) {
+        await this.botEventService.recordDeduped(
+          {
+            lane: row.lane,
+            type: BotEventType.GATE_SKIP,
+            reason: 'COOLDOWN',
+            payload: {
+              cooldownMins: settings.cooldownMins,
+              lastTradeAt: row.lastTradeAt.toISOString(),
+            },
+          },
+          chartTime,
+        );
         return;
       }
 
       const status = await this.botStateService.getStatus();
-      if (!status.minEquityOk) return;
+      if (!status.minEquityOk) {
+        await this.botEventService.recordDeduped(
+          {
+            lane: row.lane,
+            type: BotEventType.GATE_SKIP,
+            reason: 'MIN_EQUITY',
+            payload: { equity: status.equity },
+          },
+          chartTime,
+        );
+        return;
+      }
 
       const lastFrameAt = this.streamerService.getLastFrameAt();
       if (
@@ -150,11 +215,34 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         lastFrameAt == null ||
         Date.now() - lastFrameAt > QUOTE_FRESHNESS_MS
       ) {
+        await this.botEventService.recordDeduped(
+          {
+            lane: row.lane,
+            type: BotEventType.GATE_SKIP,
+            reason: 'STALE_QUOTE',
+            payload: {
+              connected: this.streamerService.isStreamConnected(),
+              lastFrameAt,
+            },
+          },
+          chartTime,
+        );
         return;
       }
 
       const candles = this.botMarketDataService.getCandles();
-      if (candles.length < 6) return;
+      if (candles.length < 6) {
+        await this.botEventService.recordDeduped(
+          {
+            lane: row.lane,
+            type: BotEventType.GATE_SKIP,
+            reason: 'INSUFFICIENT_CANDLES',
+            payload: { candleCount: candles.length },
+          },
+          chartTime,
+        );
+        return;
+      }
       const sessionStart = etSessionStartMs();
       const vwap = computeVwap(candles, sessionStart);
       const atr = computeAtr(candles, settings.atrPeriod);
@@ -174,7 +262,25 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         (s) => s as 'VWAP_PULLBACK' | 'ORB_5M',
       );
       const combined = combineSignals(enabledKeys, results);
-      if (!combined) return;
+      if (!combined) {
+        await this.botEventService.recordDeduped(
+          {
+            lane: row.lane,
+            type: BotEventType.NO_SIGNAL,
+            reason: 'CONFIRMING_NO_AGREEMENT',
+            strategies: enabledKeys,
+            payload: {
+              results,
+              vwap,
+              atr,
+              orb,
+              directionsEnabled: settings.directionsEnabled,
+            },
+          },
+          chartTime ?? candles[candles.length - 1]?.chartTime,
+        );
+        return;
+      }
 
       await this.botEventService.record({
         lane: row.lane,
@@ -188,6 +294,16 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     } catch (err) {
       this.logger.warn(`evaluateEntrySignal failed: ${err.message}`);
       await this.recordError(err.message);
+      try {
+        const row = await this.botStateService.getRow();
+        await this.botEventService.record({
+          lane: row.lane,
+          type: BotEventType.ERROR,
+          reason: err.message,
+        });
+      } catch {
+        /* ignore secondary failure */
+      }
     } finally {
       this.evaluating = false;
     }
