@@ -77,10 +77,16 @@ export class BotSettingsService {
 
   async updateSettings(patch: UpdateBotSettingsDto): Promise<BotSettingsView> {
     const row = await this.getRow();
-    // `strategiesEnabled` / `directionsEnabled` (contract §14b) aren't columns
-    // themselves — they're views over boolean flags, so translate them before
-    // assigning the rest of the patch directly onto the entity.
-    const { strategiesEnabled, directionsEnabled, ...rest } = patch;
+    // Contract view fields / frontend aliases aren't columns themselves —
+    // strip them before Object.assign, then translate onto the entity.
+    const {
+      strategiesEnabled,
+      directionsEnabled,
+      profitTargetUsd,
+      profitTargetPctDayStart,
+      profitTargetPctCurrent,
+      ...rest
+    } = patch;
     Object.assign(row, rest);
     if (strategiesEnabled) {
       row.vwapPullbackEnabled = strategiesEnabled.includes(
@@ -91,6 +97,18 @@ export class BotSettingsService {
     if (directionsEnabled) {
       row.callsEnabled = directionsEnabled.includes(BotDirection.CALL);
       row.putsEnabled = directionsEnabled.includes(BotDirection.PUT);
+    }
+    // Frontend often PUTs both `profitTarget*` (form) and `profit*` (GET echo).
+    // When the alias is present it wins, so a form value of 50 isn't wiped by
+    // a null GET-shaped `profitUsd` in the same body.
+    if (profitTargetUsd !== undefined) {
+      row.profitUsd = profitTargetUsd;
+    }
+    if (profitTargetPctDayStart !== undefined) {
+      row.profitPctDayStart = profitTargetPctDayStart;
+    }
+    if (profitTargetPctCurrent !== undefined) {
+      row.profitPctCurrent = profitTargetPctCurrent;
     }
     const saved = await this.settingsRepository.save(row);
     return this.toView(saved);

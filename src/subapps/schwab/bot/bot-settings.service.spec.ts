@@ -217,4 +217,48 @@ describe('UpdateBotSettingsDto validation (contract §14b)', () => {
     const errors = await validateBody({ directionsEnabled: ['BOTH'] });
     expect(errors.some((e) => e.property === 'directionsEnabled')).toBe(true);
   });
+
+  it('accepts profitTarget* aliases alongside canonical profit* fields', async () => {
+    const errors = await validateBody({
+      profitTargetUsd: 50,
+      profitTargetPctDayStart: 10,
+      profitTargetPctCurrent: null,
+      profitUsd: null,
+      profitPctDayStart: null,
+      profitPctCurrent: null,
+      useProfitUsd: false,
+    });
+    expect(errors).toHaveLength(0);
+  });
+});
+
+describe('BotSettingsService — profitTarget* aliases', () => {
+  it('maps profitTargetUsd onto profitUsd when both are sent (alias wins)', async () => {
+    const { service, getRowSnapshot } = buildService();
+    const view = await service.updateSettings({
+      profitTargetUsd: 50,
+      profitUsd: null,
+      useProfitUsd: true,
+    });
+    expect(getRowSnapshot().profitUsd).toBe(50);
+    expect(view.profitUsd).toBe(50);
+  });
+
+  it('maps profitTargetPctDayStart / profitTargetPctCurrent the same way', async () => {
+    const { service, getRowSnapshot } = buildService();
+    await service.updateSettings({
+      profitTargetPctDayStart: 10,
+      profitPctDayStart: null,
+      profitTargetPctCurrent: 5,
+      profitPctCurrent: null,
+    });
+    expect(getRowSnapshot().profitPctDayStart).toBe(10);
+    expect(getRowSnapshot().profitPctCurrent).toBe(5);
+  });
+
+  it('still accepts canonical profitUsd alone without aliases', async () => {
+    const { service, getRowSnapshot } = buildService();
+    await service.updateSettings({ profitUsd: 25 });
+    expect(getRowSnapshot().profitUsd).toBe(25);
+  });
 });

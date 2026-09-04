@@ -98,6 +98,12 @@ export class UpdateBotSettingsDto {
   @IsNumber()
   profitUsd?: number | null;
 
+  /** Frontend alias for `profitUsd` — accepted on PUT and mapped in
+   * BotSettingsService (same forbidNonWhitelisted gap as strategiesEnabled). */
+  @IsOptional()
+  @IsNumber()
+  profitTargetUsd?: number | null;
+
   @IsOptional()
   @IsBoolean()
   useProfitPctDayStart?: boolean;
@@ -106,6 +112,11 @@ export class UpdateBotSettingsDto {
   @IsNumber()
   profitPctDayStart?: number | null;
 
+  /** Frontend alias for `profitPctDayStart`. */
+  @IsOptional()
+  @IsNumber()
+  profitTargetPctDayStart?: number | null;
+
   @IsOptional()
   @IsBoolean()
   useProfitPctCurrent?: boolean;
@@ -113,6 +124,11 @@ export class UpdateBotSettingsDto {
   @IsOptional()
   @IsNumber()
   profitPctCurrent?: number | null;
+
+  /** Frontend alias for `profitPctCurrent`. */
+  @IsOptional()
+  @IsNumber()
+  profitTargetPctCurrent?: number | null;
 
   @IsOptional()
   @IsNumber()

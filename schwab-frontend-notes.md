@@ -1222,7 +1222,7 @@ lockoutReason: 'KILL_SWITCH'` → `unlock` → `200`, `status.lockout: false`, `
 - `combineMode`: `'CONFIRMING'` only (AND — all enabled strategies must agree on direction)
 - `riskPct` 0.1–100 (10) — applies to the *next* entry only
 - Loss gates: `useMaxLossUsd`/`maxLossUsd`, `useMaxLossPct`/`maxLossPct` (nullable values, both off by default)
-- Profit gates: `useProfitUsd`/`profitUsd`, `useProfitPctDayStart`/`profitPctDayStart`, `useProfitPctCurrent`/`profitPctCurrent` (all off by default; halts on the *first* gate that hits)
+- Profit gates: `useProfitUsd`/`profitUsd`, `useProfitPctDayStart`/`profitPctDayStart`, `useProfitPctCurrent`/`profitPctCurrent` (all off by default; halts on the *first* gate that hits). **PUT also accepts frontend aliases** `profitTargetUsd` → `profitUsd`, `profitTargetPctDayStart` → `profitPctDayStart`, `profitTargetPctCurrent` → `profitPctCurrent` (alias wins when both are present in the same body). GET still returns the canonical `profit*` names.
 - Strike filters: `minPremium` (0.60), `maxPremium` (2.50), `maxSpreadPct` (5), `deltaMin` (0.40), `deltaMax` (0.60)
 - Windows (ET, `HH:MM`): `tradeWindowStart` (10:00), `tradeWindowEnd` (15:00), `hardFlattenTime` (15:30)
 - `cooldownMins` (30) — minimum gap between bot entries
@@ -1387,6 +1387,14 @@ Current state:
 
 ## Changelog
 
+- **2026-09-04 (🐛 fix: `PUT /bot/settings` rejected `profitTarget*` aliases)**: Same
+  `forbidNonWhitelisted` class of bug as `strategiesEnabled` — React desk was PUTting
+  `profitTargetUsd` / `profitTargetPctDayStart` / `profitTargetPctCurrent` (form names)
+  alongside the canonical `profitUsd` / `profitPctDayStart` / `profitPctCurrent` (GET echo),
+  and Nest rejected the aliases with 400. DTO now whitelists the three aliases;
+  `updateSettings` maps them onto the entity columns (alias wins when both are present so a
+  form value isn't wiped by a null GET-shaped field in the same body). GET response shape
+  unchanged (`profitUsd` etc.). See section 14b.
 - **2026-09-04 (section 14b: CALL/PUT direction toggle + declared account capability)**: Added
   `directionsEnabled: ('CALL' | 'PUT')[]` (default `['CALL']` only) and operator-declared
   `canBuyCalls` / `canBuyPuts` (default `true` / `false`) to `BotSettings`. Schwab's account API
