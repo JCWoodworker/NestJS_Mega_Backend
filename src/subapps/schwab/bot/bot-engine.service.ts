@@ -31,6 +31,7 @@ import {
   evaluateOrb5m,
   evaluateVwapPullback,
   isAtOrPast,
+  isDirectionAllowed,
   isWithinWindow,
 } from './bot-strategy.util';
 import {
@@ -201,6 +202,17 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     const accountHash = await this.botStateService.resolveAccountHash();
     const row = await this.botStateService.getRow();
     if (!row.lane) return;
+
+    // Preference ∩ capability — skip before any chain lookup or order work.
+    if (!isDirectionAllowed(direction, settings)) {
+      await this.botEventService.record({
+        lane: row.lane,
+        type: BotEventType.SKIP,
+        direction: direction as BotDirection,
+        reason: 'DIRECTION_DISABLED',
+      });
+      return;
+    }
 
     if (
       row.lane === BotLane.BOT_LIVE &&

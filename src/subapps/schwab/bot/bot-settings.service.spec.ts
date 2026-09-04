@@ -3,13 +3,21 @@ import { validate } from 'class-validator';
 
 import { BotSettingsService } from './bot-settings.service';
 import { UpdateBotSettingsDto } from './dto/update-bot-settings.dto';
-import { BotCombineMode, BotStrategy } from './enums/strategy.enum';
+import {
+  BotCombineMode,
+  BotDirection,
+  BotStrategy,
+} from './enums/strategy.enum';
 
 function buildService() {
   let row: any = {
     id: '1',
     vwapPullbackEnabled: true,
     orb5mEnabled: true,
+    callsEnabled: true,
+    putsEnabled: false,
+    canBuyCalls: true,
+    canBuyPuts: false,
     combineMode: BotCombineMode.CONFIRMING,
     riskPct: 10,
     useMaxLossUsd: false,
@@ -99,6 +107,54 @@ describe('BotSettingsService — strategiesEnabled / combineMode (contract §14b
   });
 });
 
+describe('BotSettingsService — directionsEnabled / canBuy* (contract §14b)', () => {
+  it('GET view defaults to CALL-only preference and calls-only capability', async () => {
+    const { service } = buildService();
+    const settings = await service.getSettings();
+    expect(settings.directionsEnabled).toEqual([BotDirection.CALL]);
+    expect(settings.canBuyCalls).toBe(true);
+    expect(settings.canBuyPuts).toBe(false);
+  });
+
+  it('PUT with directionsEnabled=[CALL,PUT] enables both preference flags', async () => {
+    const { service, getRowSnapshot } = buildService();
+    const view = await service.updateSettings({
+      directionsEnabled: [BotDirection.CALL, BotDirection.PUT],
+    });
+    expect(view.directionsEnabled).toEqual([
+      BotDirection.CALL,
+      BotDirection.PUT,
+    ]);
+    expect(getRowSnapshot().callsEnabled).toBe(true);
+    expect(getRowSnapshot().putsEnabled).toBe(true);
+  });
+
+  it('PUT with directionsEnabled=[PUT] disables calls preference', async () => {
+    const { service, getRowSnapshot } = buildService();
+    const view = await service.updateSettings({
+      directionsEnabled: [BotDirection.PUT],
+    });
+    expect(view.directionsEnabled).toEqual([BotDirection.PUT]);
+    expect(getRowSnapshot().callsEnabled).toBe(false);
+    expect(getRowSnapshot().putsEnabled).toBe(true);
+  });
+
+  it('PUT without directionsEnabled leaves preference flags untouched', async () => {
+    const { service, getRowSnapshot } = buildService();
+    await service.updateSettings({ riskPct: 25 });
+    expect(getRowSnapshot().callsEnabled).toBe(true);
+    expect(getRowSnapshot().putsEnabled).toBe(false);
+  });
+
+  it('PUT can flip canBuyPuts capability independently of preference', async () => {
+    const { service, getRowSnapshot } = buildService();
+    const view = await service.updateSettings({ canBuyPuts: true });
+    expect(view.canBuyPuts).toBe(true);
+    expect(getRowSnapshot().canBuyPuts).toBe(true);
+    expect(view.directionsEnabled).toEqual([BotDirection.CALL]);
+  });
+});
+
 describe('UpdateBotSettingsDto validation (contract §14b)', () => {
   async function validateBody(body: Record<string, unknown>) {
     const dto = plainToInstance(UpdateBotSettingsDto, body);
@@ -141,5 +197,24 @@ describe('UpdateBotSettingsDto validation (contract §14b)', () => {
       cooldownMins: 15,
     });
     expect(errors).toHaveLength(0);
+  });
+
+  it('accepts directionsEnabled + canBuyCalls/canBuyPuts', async () => {
+    const errors = await validateBody({
+      directionsEnabled: ['CALL', 'PUT'],
+      canBuyCalls: true,
+      canBuyPuts: true,
+    });
+    expect(errors).toHaveLength(0);
+  });
+
+  it('rejects an empty directionsEnabled array', async () => {
+    const errors = await validateBody({ directionsEnabled: [] });
+    expect(errors.some((e) => e.property === 'directionsEnabled')).toBe(true);
+  });
+
+  it('rejects an unknown direction key', async () => {
+    const errors = await validateBody({ directionsEnabled: ['BOTH'] });
+    expect(errors.some((e) => e.property === 'directionsEnabled')).toBe(true);
   });
 });

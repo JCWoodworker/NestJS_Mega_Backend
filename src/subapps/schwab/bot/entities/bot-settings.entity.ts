@@ -19,6 +19,23 @@ export class BotSettings {
   @Column({ type: 'boolean', name: 'orb_5m_enabled', default: true })
   orb5mEnabled: boolean;
 
+  /** Operator preference — trade CALL direction when strategies fire CALL. */
+  @Column({ type: 'boolean', name: 'calls_enabled', default: true })
+  callsEnabled: boolean;
+
+  /** Operator preference — trade PUT direction when strategies fire PUT.
+   * Default false (calls-only) until the operator opts in. */
+  @Column({ type: 'boolean', name: 'puts_enabled', default: false })
+  putsEnabled: boolean;
+
+  /** Operator-declared account capability (not live-verified against Schwab).
+   * Frontend should confirm before flipping either flag. */
+  @Column({ type: 'boolean', name: 'can_buy_calls', default: true })
+  canBuyCalls: boolean;
+
+  @Column({ type: 'boolean', name: 'can_buy_puts', default: false })
+  canBuyPuts: boolean;
+
   @Column({
     type: 'enum',
     enum: BotCombineMode,

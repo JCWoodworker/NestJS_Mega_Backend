@@ -6,6 +6,7 @@ import {
   evaluateOrb5m,
   evaluateVwapPullback,
   isAtOrPast,
+  isDirectionAllowed,
   isWithinWindow,
   BotCandle,
 } from './bot-strategy.util';
@@ -245,5 +246,56 @@ describe('window helpers', () => {
     expect(isAtOrPast('15:30', '15:30')).toBe(true);
     expect(isAtOrPast('15:31', '15:30')).toBe(true);
     expect(isAtOrPast('15:29', '15:30')).toBe(false);
+  });
+});
+
+describe('isDirectionAllowed (preference ∩ capability)', () => {
+  const callsOnly = {
+    directionsEnabled: ['CALL'] as Array<'CALL' | 'PUT'>,
+    canBuyCalls: true,
+    canBuyPuts: false,
+  };
+
+  it('allows CALL when preferred and canBuyCalls', () => {
+    expect(isDirectionAllowed('CALL', callsOnly)).toBe(true);
+  });
+
+  it('rejects PUT when preference is CALL-only even if capability were true', () => {
+    expect(
+      isDirectionAllowed('PUT', {
+        ...callsOnly,
+        canBuyPuts: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects PUT when preferred but canBuyPuts is false', () => {
+    expect(
+      isDirectionAllowed('PUT', {
+        directionsEnabled: ['CALL', 'PUT'],
+        canBuyCalls: true,
+        canBuyPuts: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('allows PUT only when both preference and capability say yes', () => {
+    expect(
+      isDirectionAllowed('PUT', {
+        directionsEnabled: ['CALL', 'PUT'],
+        canBuyCalls: true,
+        canBuyPuts: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects CALL when canBuyCalls is false even if preferred', () => {
+    expect(
+      isDirectionAllowed('CALL', {
+        directionsEnabled: ['CALL'],
+        canBuyCalls: false,
+        canBuyPuts: false,
+      }),
+    ).toBe(false);
   });
 });

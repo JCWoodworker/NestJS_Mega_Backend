@@ -1207,6 +1207,18 @@ lockoutReason: 'KILL_SWITCH'` → `unlock` → `200`, `status.lockout: false`, `
 ### `BotSettings` shape (defaults in parentheses)
 
 - `strategiesEnabled`: array of `'VWAP_PULLBACK' | 'ORB_5M'` (both enabled by default)
+- `directionsEnabled`: array of `'CALL' | 'PUT'` — operator preference for which sides the bot may
+  enter (**default `['CALL']` only** — not BOTH). UI may present this as CALL / PUT / BOTH; the wire
+  shape is always the array. Soften any help copy that says the bot "does calls or puts" — that was
+  aspirational; today's default is calls-only until the operator opts into puts.
+- `canBuyCalls` / `canBuyPuts`: booleans — **operator-declared** account capability (defaults
+  `true` / `false`). These are **not** live-verified against Schwab: the Trader API's account
+  object does not expose options-approval level, and under FINRA's standard tiers long puts are
+  normally approved together with long calls (same Level-2 "buy options" tier — no margin needed
+  for either). If Schwab is blocking puts on a specific account, that is an account-approval gap
+  worth confirming with Schwab, not something Nest can auto-detect. Frontend should grey out
+  PUT / BOTH in the direction toggle when `canBuyPuts === false`, and require an explicit confirm
+  step before flipping `canBuyPuts` to `true`.
 - `combineMode`: `'CONFIRMING'` only (AND — all enabled strategies must agree on direction)
 - `riskPct` 0.1–100 (10) — applies to the *next* entry only
 - Loss gates: `useMaxLossUsd`/`maxLossUsd`, `useMaxLossPct`/`maxLossPct` (nullable values, both off by default)
@@ -1226,6 +1238,11 @@ lockoutReason: 'KILL_SWITCH'` → `unlock` → `200`, `status.lockout: false`, `
 - `VWAP_PULLBACK` (pullback into VWAP with the prevailing trend) and `ORB_5M` (breakout of the
   opening range) each independently emit `CALL`/`PUT`/no-signal; `CONFIRMING` mode requires every
   *enabled* strategy to agree before a trade fires.
+- **Direction gate (preference ∩ capability):** even after strategies agree, Nest skips the entry
+  if the signal direction is not in `directionsEnabled` **or** the matching `canBuyCalls` /
+  `canBuyPuts` flag is false. Skip is visible in the activity feed as
+  `BotEvent { type: 'SKIP', reason: 'DIRECTION_DISABLED' }` — not a silent drop. Hiding the PUT
+  toggle in the UI alone is not enough; the loop enforces this server-side.
 - No entries outside `tradeWindowStart`–`tradeWindowEnd`; hard-flattens any open bot position at
   `hardFlattenTime` regardless of P&L.
 - Entries are skipped (not queued/retried) if the live streamer connection is stale (no frame in
@@ -1370,6 +1387,15 @@ Current state:
 
 ## Changelog
 
+- **2026-09-04 (section 14b: CALL/PUT direction toggle + declared account capability)**: Added
+  `directionsEnabled: ('CALL' | 'PUT')[]` (default `['CALL']` only) and operator-declared
+  `canBuyCalls` / `canBuyPuts` (default `true` / `false`) to `BotSettings`. Schwab's account API
+  does not expose options-approval level, so capability is asserted by the operator — not
+  auto-detected. The strategy loop intersects preference ∩ capability before any chain lookup /
+  order work and emits `SKIP` / `DIRECTION_DISABLED` when a signal is blocked (hiding a UI toggle
+  alone is not enough). Migration `AddBotDirectionSettings1788456900004` adds the four boolean
+  columns on `bot_settings`. Soften help copy that implied the bot always trades "calls or puts."
+  See section 14b.
 - **2026-09-04 (🐛 fix: no same-day recovery from a kill-switch lockout — new `POST /bot/unlock`)**:
   A real kill-switch test got permanently stuck (`lockout: true, lockoutReason: 'KILL_SWITCH'`)
   with `lane: 'BOT_LIVE'`/`liveArmed: true` and no way to resume same day — `/mode`/`/lane`/

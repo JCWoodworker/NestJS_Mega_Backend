@@ -4,10 +4,19 @@ import { Repository } from 'typeorm';
 
 import { UpdateBotSettingsDto } from './dto/update-bot-settings.dto';
 import { BotSettings } from './entities/bot-settings.entity';
-import { BotCombineMode, BotStrategy } from './enums/strategy.enum';
+import {
+  BotCombineMode,
+  BotDirection,
+  BotStrategy,
+} from './enums/strategy.enum';
 
 export interface BotSettingsView {
   strategiesEnabled: BotStrategy[];
+  /** Operator preference — which directions the bot may enter. Default `['CALL']`. */
+  directionsEnabled: BotDirection[];
+  /** Operator-declared account capability (not live-verified against Schwab). */
+  canBuyCalls: boolean;
+  canBuyPuts: boolean;
   combineMode: BotCombineMode;
   riskPct: number;
   useMaxLossUsd: boolean;
@@ -68,16 +77,20 @@ export class BotSettingsService {
 
   async updateSettings(patch: UpdateBotSettingsDto): Promise<BotSettingsView> {
     const row = await this.getRow();
-    // `strategiesEnabled` (contract §14b) isn't a column itself — it's a view
-    // over the two boolean flags below, so translate it before assigning the
-    // rest of the patch directly onto the entity.
-    const { strategiesEnabled, ...rest } = patch;
+    // `strategiesEnabled` / `directionsEnabled` (contract §14b) aren't columns
+    // themselves — they're views over boolean flags, so translate them before
+    // assigning the rest of the patch directly onto the entity.
+    const { strategiesEnabled, directionsEnabled, ...rest } = patch;
     Object.assign(row, rest);
     if (strategiesEnabled) {
       row.vwapPullbackEnabled = strategiesEnabled.includes(
         BotStrategy.VWAP_PULLBACK,
       );
       row.orb5mEnabled = strategiesEnabled.includes(BotStrategy.ORB_5M);
+    }
+    if (directionsEnabled) {
+      row.callsEnabled = directionsEnabled.includes(BotDirection.CALL);
+      row.putsEnabled = directionsEnabled.includes(BotDirection.PUT);
     }
     const saved = await this.settingsRepository.save(row);
     return this.toView(saved);
@@ -91,8 +104,18 @@ export class BotSettingsService {
     if (row.orb5mEnabled) {
       strategiesEnabled.push(BotStrategy.ORB_5M);
     }
+    const directionsEnabled: BotDirection[] = [];
+    if (row.callsEnabled) {
+      directionsEnabled.push(BotDirection.CALL);
+    }
+    if (row.putsEnabled) {
+      directionsEnabled.push(BotDirection.PUT);
+    }
     return {
       strategiesEnabled,
+      directionsEnabled,
+      canBuyCalls: row.canBuyCalls,
+      canBuyPuts: row.canBuyPuts,
       combineMode: row.combineMode,
       riskPct: Number(row.riskPct),
       useMaxLossUsd: row.useMaxLossUsd,

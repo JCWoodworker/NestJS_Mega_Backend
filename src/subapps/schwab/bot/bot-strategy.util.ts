@@ -192,3 +192,22 @@ export function isWithinWindow(
 export function isAtOrPast(nowHhMm: string, target: string): boolean {
   return nowHhMm >= target;
 }
+
+export interface DirectionGateSettings {
+  directionsEnabled: Array<'CALL' | 'PUT'>;
+  canBuyCalls: boolean;
+  canBuyPuts: boolean;
+}
+
+/**
+ * Intersection of operator preference (`directionsEnabled`) and declared
+ * account capability (`canBuyCalls`/`canBuyPuts`). Both must allow the
+ * direction before the engine may enter.
+ */
+export function isDirectionAllowed(
+  direction: SignalDirection,
+  settings: DirectionGateSettings,
+): boolean {
+  if (!settings.directionsEnabled.includes(direction)) return false;
+  return direction === 'CALL' ? settings.canBuyCalls : settings.canBuyPuts;
+}

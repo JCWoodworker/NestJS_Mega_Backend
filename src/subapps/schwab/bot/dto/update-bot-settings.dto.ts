@@ -12,7 +12,11 @@ import {
   Min,
 } from 'class-validator';
 
-import { BotCombineMode, BotStrategy } from '../enums/strategy.enum';
+import {
+  BotCombineMode,
+  BotDirection,
+  BotStrategy,
+} from '../enums/strategy.enum';
 
 const HH_MM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -24,6 +28,14 @@ export class UpdateBotSettingsDto {
   @ArrayNotEmpty()
   @IsEnum(BotStrategy, { each: true })
   strategiesEnabled?: BotStrategy[];
+
+  /** Operator preference for CALL / PUT / both. Translated to
+   * `callsEnabled`/`putsEnabled` internally by BotSettingsService. */
+  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsEnum(BotDirection, { each: true })
+  directionsEnabled?: BotDirection[];
 
   /** Only `CONFIRMING` (AND) is currently supported — enum has a single member
    * so this both validates the contract field and rejects anything else. */
@@ -38,6 +50,23 @@ export class UpdateBotSettingsDto {
   @IsOptional()
   @IsBoolean()
   orb5mEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  callsEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  putsEnabled?: boolean;
+
+  /** Operator-declared account capability — not live-verified against Schwab. */
+  @IsOptional()
+  @IsBoolean()
+  canBuyCalls?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  canBuyPuts?: boolean;
 
   @IsOptional()
   @IsNumber()
