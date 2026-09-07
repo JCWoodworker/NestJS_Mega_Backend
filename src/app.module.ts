@@ -21,6 +21,7 @@ import { IamModule } from '@iam/iam.module';
 
 import { GeminiModule } from '@gemini/gemini.module';
 
+import { FantasyWarRoomModule } from '@subapps/fantasy-war-room/fantasy-war-room.module';
 import { IronviewModule } from '@subapps/ironview/ironview.module';
 import { MycuttingboardModule } from '@subapps/mycuttingboard/mycuttingboard.module';
 import { MywoodappModule } from '@subapps/mywoodapp/mywoodapp.module';
@@ -111,6 +112,10 @@ import { AppService } from './app.service';
           {
             path: 'woodpricing',
             module: WoodpricingModule,
+          },
+          {
+            path: 'fantasy-war-room',
+            module: FantasyWarRoomModule,
           },
           // SchwabModule itself declares no controllers directly - it only
           // aggregates SchwabAuthModule/OrdersModule/SchwabStreamingModule.
