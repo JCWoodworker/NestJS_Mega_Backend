@@ -1,0 +1,23 @@
+---
+description: Schwab subapp pairs with schwab-0dte-spy-trader desk; keep contract notes synced
+alwaysApply: true
+---
+
+# Schwab ↔ frontend desk
+
+## Pairing
+
+- This Nest repo’s Schwab live code: `src/subapps/schwab/`
+- Frontend desk: `/Users/jc/schwab-0dte-spy-trader` (TanStack Start → Netlify `main`)
+- Prefer the multi-root workspace `schwab-desk.code-workspace` in the FE repo
+
+## Contract
+
+- Nest copy: `schwab-frontend-notes.md`
+- FE copy: `nestjs-notes.md`
+- Sync both when REST/socket contracts change. Do not invent public API shapes without updating notes.
+
+## Scope
+
+- Default: only `src/subapps/schwab/` (+ shared auth/CORS when required for Schwab).
+- Leave unrelated subapps alone unless the user asks.
