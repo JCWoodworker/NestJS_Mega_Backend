@@ -119,6 +119,11 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
   private currentWindowSymbols = new Set<string>();
   private pendingOptionTicks: OptionTick[] = [];
   private pendingUnderlyingPrice: number | null = null;
+  /** Last merged LEVELONE bid/ask per OSI — bot soft-exits read this instead of REST. */
+  private lastOptionQuotes = new Map<
+    string,
+    { bid?: number; ask?: number; at: number }
+  >();
   /** OSI symbol of the single tracked-option premium chart (`subscribe-
    * option-chart`, section 9b) - `null` when nothing is subscribed. */
   private optionChartSymbol: string | null = null;
@@ -161,6 +166,13 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
    * would otherwise have to maintain independently. */
   getLastKnownSpotPrice(): number | null {
     return this.lastKnownSpotPrice;
+  }
+
+  /** Last streamed option quote for soft-stop/target marks (partial merges). */
+  getLastOptionQuote(
+    symbol: string,
+  ): { bid?: number; ask?: number; at: number } | null {
+    return this.lastOptionQuotes.get(symbol) ?? null;
   }
 
   isStreamConnected(): boolean {
@@ -314,7 +326,16 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
       if (dataItem.service === 'LEVELONE_EQUITIES') {
         this.handleEquityTicks(dataItem.content ?? []);
       } else if (dataItem.service === 'LEVELONE_OPTIONS') {
-        this.pendingOptionTicks.push(...mapOptionTicks(dataItem.content ?? []));
+        const mapped = mapOptionTicks(dataItem.content ?? []);
+        for (const tick of mapped) {
+          const prev = this.lastOptionQuotes.get(tick.symbol);
+          this.lastOptionQuotes.set(tick.symbol, {
+            bid: tick.bid ?? prev?.bid,
+            ask: tick.ask ?? prev?.ask,
+            at: Date.now(),
+          });
+        }
+        this.pendingOptionTicks.push(...mapped);
       } else if (dataItem.service === 'CHART_EQUITY') {
         this.handleChartEquityCandles(dataItem.content ?? []);
       } else if (dataItem.service === 'CHART_OPTIONS') {

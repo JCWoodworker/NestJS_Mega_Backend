@@ -7,30 +7,29 @@ import { AuthType } from '@iam/enums/auth-type.enum';
 import { SchwabAuthService } from './schwab-auth.service';
 
 /**
- * OAuth endpoints are public (`AuthType.None`): Schwab's own redirect flow
- * cannot attach this backend's JWT bearer token, since the browser is
- * navigating directly per Schwab's 3-legged OAuth2/PKCE flow.
+ * Schwab OAuth. Only the broker callback is public — `/connect` and `/status`
+ * require this backend's JWT so an unauthenticated browser cannot rebind the
+ * shared Schwab token row.
  */
-@Auth(AuthType.None)
 @Controller('auth')
 export class SchwabAuthController {
   constructor(private readonly schwabAuthService: SchwabAuthService) {}
 
   /**
-   * `returnTo` (optional): where to send the browser after a successful
-   * connect, overriding the configured Expo deep link. Use this from a web
-   * client (Expo web, a plain browser tab) that can't handle
-   * `myapp://schwab-connected`. Must be an origin already in
-   * ALLOWED_ORIGINS/ALLOWED_ORIGINS_DEVELOPMENT, or use the `exp://`/
-   * `myapp://` custom schemes - anything else is rejected.
+   * Authenticated: returns the Schwab authorize URL as JSON so the FE can
+   * `window.open` it with a Bearer-gated request (redirect responses cannot
+   * carry Authorization). `returnTo` must be an allowlisted origin / scheme.
    */
   @Get('connect')
-  connect(@Query('returnTo') returnTo: string, @Res() res: Response) {
-    const authorizationUrl =
-      this.schwabAuthService.buildAuthorizationUrl(returnTo);
-    return res.redirect(authorizationUrl);
+  connect(@Query('returnTo') returnTo: string) {
+    return {
+      authorizationUrl:
+        this.schwabAuthService.buildAuthorizationUrl(returnTo),
+    };
   }
 
+  /** Public: Schwab redirects here without our JWT. */
+  @Auth(AuthType.None)
   @Get('callback')
   async callback(
     @Query('code') code: string,

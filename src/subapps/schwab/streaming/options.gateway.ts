@@ -188,8 +188,8 @@ export class OptionsGateway
     const authToken = client.handshake.auth?.token as string | undefined;
     if (authToken) return authToken;
 
-    const queryToken = client.handshake.query?.token as string | undefined;
-    if (queryToken) return queryToken;
+    // Query-string tokens are rejected — they leak via proxies/access logs.
+    // FE uses `auth: { token }` only (`src/lib/socket.ts`).
 
     const header = client.handshake.headers?.authorization;
     if (typeof header === 'string') {

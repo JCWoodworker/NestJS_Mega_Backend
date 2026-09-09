@@ -48,8 +48,8 @@ export interface ExecutionResult {
   orderId: string | null;
 }
 
-const WALK_LIMIT_ABANDON_MS = 10_000;
-const WALK_LIMIT_STEP_MS = 2_000;
+const WALK_LIMIT_ABANDON_MS = 5_000;
+const WALK_LIMIT_STEP_MS = 750;
 
 @Injectable()
 export class BotExecutionService {
@@ -84,8 +84,9 @@ export class BotExecutionService {
       symbol: params.symbol,
       instruction: OrderInstruction.BUY_TO_OPEN,
       quantity: params.quantity,
-      startPrice: (params.referenceAsk + params.referenceBid) / 2,
-      cappedPrice: params.referenceAsk,
+      // Aggressive 0DTE entry: start at ask, walk up a tick if needed.
+      startPrice: params.referenceAsk,
+      cappedPrice: round2(params.referenceAsk + 0.02),
       direction: 'up',
     });
   }
@@ -230,23 +231,17 @@ export class BotExecutionService {
     quantity: number;
     referenceBid: number;
   }): Promise<ExecutionResult> {
-    const price = Math.max(0.01, round2(params.referenceBid - 0.02));
-    const result = await this.ordersService.sendDirectOrder({
+    // Walk STC limits down from bid−$0.02; only report filled when the order
+    // leaves the working book (same honesty as entry walk-limit).
+    return this.walkLimitLive({
       accountHash: params.accountHash,
       symbol: params.symbol,
       instruction: OrderInstruction.SELL_TO_CLOSE,
       quantity: params.quantity,
-      orderType: OrderType.LIMIT,
-      price,
+      startPrice: Math.max(0.01, round2(params.referenceBid - 0.02)),
+      cappedPrice: 0.01,
+      direction: 'down',
     });
-    if (result.orderId) {
-      await this.orderSourceTagService.tag(
-        result.orderId,
-        params.accountHash,
-        OrderSource.BOT_LIVE,
-      );
-    }
-    return { filled: true, fillPrice: price, orderId: result.orderId };
   }
 
   private async recordPaperFill(params: {

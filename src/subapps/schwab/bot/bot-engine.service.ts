@@ -50,8 +50,9 @@ import { BotDirection, BotStrategy } from './enums/strategy.enum';
 const HEARTBEAT_MS = 7_000;
 /** "Refuse entry if option/underlying quote older than ~2s" (plan §Strategy loop). */
 const QUOTE_FRESHNESS_MS = 2_000;
-/** Min gap between option-chain fetches for premium soft-stop while in position. */
-const PREMIUM_QUOTE_MIN_MS = 3_000;
+/** Prefer stream marks; REST chain only as fallback when stream quote is stale. */
+const PREMIUM_STREAM_MAX_AGE_MS = 2_000;
+const PREMIUM_REST_FALLBACK_MIN_MS = 3_000;
 
 @Injectable()
 export class BotEngineService implements OnModuleInit, OnModuleDestroy {
@@ -534,21 +535,28 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       let optionBid: number | null = null;
       const now = Date.now();
       const needsPremium =
-        (pos.stopPremium != null || pos.targetPremium != null) &&
-        now - this.lastPremiumQuoteAt >= PREMIUM_QUOTE_MIN_MS;
+        pos.stopPremium != null || pos.targetPremium != null;
       if (needsPremium) {
-        this.lastPremiumQuoteAt = now;
-        try {
-          const chain = await this.marketDataService.getOptionChain({
-            symbol: 'SPY',
-            symbols: pos.symbol,
-          });
-          const quote = chain.find((q) => q.symbol === pos.symbol);
-          if (quote?.bid != null) optionBid = Number(quote.bid);
-        } catch (err) {
-          this.logger.warn(
-            `premium quote fetch failed: ${(err as Error).message}`,
-          );
+        const streamed = this.streamerService.getLastOptionQuote(pos.symbol);
+        if (
+          streamed?.bid != null &&
+          now - streamed.at <= PREMIUM_STREAM_MAX_AGE_MS
+        ) {
+          optionBid = streamed.bid;
+        } else if (now - this.lastPremiumQuoteAt >= PREMIUM_REST_FALLBACK_MIN_MS) {
+          this.lastPremiumQuoteAt = now;
+          try {
+            const chain = await this.marketDataService.getOptionChain({
+              symbol: 'SPY',
+              symbols: pos.symbol,
+            });
+            const quote = chain.find((q) => q.symbol === pos.symbol);
+            if (quote?.bid != null) optionBid = Number(quote.bid);
+          } catch (err) {
+            this.logger.warn(
+              `premium quote fetch failed: ${(err as Error).message}`,
+            );
+          }
         }
       }
 
@@ -578,11 +586,24 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     const direction = row.lastSignal?.direction;
     const spot = this.streamerService.getLastKnownSpotPrice();
 
-    const chain = await this.marketDataService.getOptionChain({
-      symbol: 'SPY',
-      symbols: row.openPosition.symbol,
-    });
-    const quote = chain.find((q) => q.symbol === row.openPosition!.symbol);
+    const streamed = this.streamerService.getLastOptionQuote(
+      row.openPosition.symbol,
+    );
+    let quoteBid = streamed?.bid;
+    let quoteAsk = streamed?.ask;
+    if (quoteBid == null || quoteAsk == null) {
+      try {
+        const chain = await this.marketDataService.getOptionChain({
+          symbol: 'SPY',
+          symbols: row.openPosition.symbol,
+        });
+        const quote = chain.find((q) => q.symbol === row.openPosition!.symbol);
+        quoteBid = quoteBid ?? (quote?.bid != null ? Number(quote.bid) : undefined);
+        quoteAsk = quoteAsk ?? (quote?.ask != null ? Number(quote.ask) : undefined);
+      } catch {
+        /* fall through to entryPrice */
+      }
+    }
     const settings = await this.botSettingsService.getSettings();
 
     await this.botEventService.record({
@@ -603,12 +624,30 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         lane: row.lane,
         symbol: row.openPosition.symbol,
         quantity: row.openPosition.quantity,
-        referenceBid: quote?.bid ?? row.openPosition.entryPrice,
-        referenceAsk: quote?.ask ?? row.openPosition.entryPrice,
+        referenceBid: quoteBid ?? row.openPosition.entryPrice,
+        referenceAsk: quoteAsk ?? row.openPosition.entryPrice,
         paperSlippageCents: settings.paperSlippageCents,
       });
     } finally {
       this.transientPhase = null;
+    }
+
+    if (!result.filled) {
+      this.logger.warn(
+        `Exit not confirmed filled for ${row.openPosition.symbol} (${reasonTag}) — keeping openPosition`,
+      );
+      await this.botEventService.record({
+        lane: row.lane,
+        type: BotEventType.EXIT_SUBMIT,
+        direction,
+        symbol: row.openPosition.symbol,
+        quantity: row.openPosition.quantity,
+        underlyingPrice: spot ?? undefined,
+        orderId: result.orderId ?? undefined,
+        reason: `${reasonTag}_UNFILLED`,
+      });
+      await this.emitStatus(true);
+      return;
     }
 
     if (result.filled && row.lane === BotLane.BOT_PAPER) {
@@ -799,7 +838,28 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       const match = positions.find(
         (p: any) => p.symbol === row.openPosition!.symbol,
       );
-      if (!match || Number(match.quantity ?? 0) < row.openPosition.quantity) {
+      const qty = match ? Number(match.quantity ?? 0) : 0;
+
+      // Operator flattened (or fill landed outside bot) — clear without day lockout.
+      if (qty <= 0) {
+        const closed = row.openPosition;
+        row.openPosition = null;
+        await this.botStateService.save(row);
+        await this.botEventService.record({
+          lane: row.lane,
+          type: BotEventType.EXIT_FILL,
+          symbol: closed.symbol,
+          quantity: closed.quantity,
+          reason: 'OPERATOR_FLAT',
+        });
+        this.logger.warn(
+          `OPERATOR_FLAT: cleared nest openPosition for ${closed.symbol} (Schwab flat)`,
+        );
+        await this.emitStatus(true);
+        return;
+      }
+
+      if (qty < row.openPosition.quantity) {
         await this.flattenAndHalt('RECON_MISMATCH', KillScope.ALL);
       }
     } catch (err) {

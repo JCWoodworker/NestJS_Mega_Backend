@@ -1,7 +1,15 @@
 import { HttpService } from '@nestjs/axios';
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
+import { ConfigType } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 
+import schwabConfig from '@schwab/config/schwab.config';
 import {
   mapAccountPositions,
   PositionSnapshot,
@@ -59,9 +67,34 @@ export interface OrderDispatchResult {
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
 
-  constructor(private readonly httpService: HttpService) {}
+  constructor(
+    private readonly httpService: HttpService,
+    @Inject(schwabConfig.KEY)
+    private readonly config: ConfigType<typeof schwabConfig>,
+  ) {}
+
+  /**
+   * Reject hashes that are not the configured desk account and not linked to
+   * this Schwab app token — prevents any allowlisted JWT from trading an
+   * arbitrary accountHash the broker token can reach.
+   */
+  async assertAccountHashAllowed(accountHash: string): Promise<void> {
+    if (!accountHash?.trim()) {
+      throw new ForbiddenException('accountHash is required');
+    }
+    const configured = this.config.accountHash?.trim();
+    if (configured && accountHash === configured) return;
+
+    const linked = await this.listAccounts();
+    if (linked.some((a) => a.hashValue === accountHash)) return;
+
+    throw new ForbiddenException(
+      'accountHash is not authorized for this Schwab session',
+    );
+  }
 
   async sendDirectOrder(dto: FastOrderDto): Promise<OrderDispatchResult> {
+    await this.assertAccountHashAllowed(dto.accountHash);
     const startTime = performance.now();
 
     // Marketable-limit walk only applies to plain LIMIT orders; STOP_LIMIT's
@@ -175,6 +208,7 @@ export class OrdersService {
   }
 
   async getPositions(accountHash: string): Promise<PositionSnapshot[]> {
+    await this.assertAccountHashAllowed(accountHash);
     const response = await firstValueFrom(
       this.httpService.get(`/trader/v1/accounts/${accountHash}`, {
         params: { fields: 'positions' },
@@ -190,6 +224,7 @@ export class OrdersService {
    * (section 10d), which also needs terminal statuses (FILLED/CANCELED) to
    * detect fills, not just still-open orders. */
   async getRawOrders(accountHash: string): Promise<any[]> {
+    await this.assertAccountHashAllowed(accountHash);
     const fromEnteredTime = new Date();
     fromEnteredTime.setHours(0, 0, 0, 0);
 
@@ -220,6 +255,7 @@ export class OrdersService {
     accountHash: string,
     orderId: string,
   ): Promise<{ status: 'CANCELED'; statusCode: number }> {
+    await this.assertAccountHashAllowed(accountHash);
     try {
       const response = await firstValueFrom(
         this.httpService.delete(
