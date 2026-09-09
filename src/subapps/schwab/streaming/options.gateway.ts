@@ -201,7 +201,7 @@ export class OptionsGateway
   }
 
   /**
-   * Switches the shared ladder to a new underlying (SPY/QQQ/IWM/SPX/SPXW).
+   * Switches the shared ladder to a new US equity/ETF/index underlying.
    * This affects every connected client (there's one shared Schwab streamer
    * connection, not one per socket) - last request wins. Returns an ack if
    * the client's `emit` included a callback; fire-and-forget otherwise.

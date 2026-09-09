@@ -1,4 +1,9 @@
-# Schwab 0DTE Scalper — Frontend Sync Notes
+# Schwab Swift — Frontend Sync Notes
+
+Product display name for users: **Schwab Swift** (options trading desk). Keep technical “0DTE”
+references in this contract as-is; rename only user-visible UI chrome in the React app
+(document title / meta, nav / header / login splash, any “0DTE SPY Option Scalper” marketing copy).
+Netlify host `schwab-0dte-spy-trader.netlify.app` stays unchanged for now.
 
 This file is the shared contract between this backend repo (`nestjs_mega_backend`) and the
 separate frontend project (`schwab-0dte-spy-trader` — TanStack Start, **web**). There's no shared

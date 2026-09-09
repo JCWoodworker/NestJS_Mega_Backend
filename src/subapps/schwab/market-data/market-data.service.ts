@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import { etDateKey } from '@schwab/pnl/et-date.util';
 
 import { ExpirationsQueryDto } from './dto/expirations-query.dto';
+import { InstrumentSearchQueryDto } from './dto/instrument-search-query.dto';
 import { OptionChainQueryDto } from './dto/option-chain-query.dto';
 import { PriceHistoryQueryDto } from './dto/price-history-query.dto';
 import {
@@ -36,6 +37,18 @@ export interface ExpirationsResponse {
   asOf: number;
 }
 
+export interface InstrumentSearchHit {
+  symbol: string;
+  description: string;
+  exchange: string | null;
+  assetType: string | null;
+}
+
+export interface InstrumentSearchResponse {
+  q: string;
+  results: InstrumentSearchHit[];
+}
+
 /** 0DTE SPX options trade under SPXW (same as streamer). */
 const OPTION_ROOT_OVERRIDES: Record<string, string> = { SPX: 'SPXW' };
 
@@ -55,7 +68,10 @@ interface ChainCacheEntry {
 export class MarketDataService {
   private readonly logger = new Logger(MarketDataService.name);
   private readonly chainCache = new Map<string, ChainCacheEntry>();
-  private readonly chainInflight = new Map<string, Promise<OptionChainQuote[]>>();
+  private readonly chainInflight = new Map<
+    string,
+    Promise<OptionChainQuote[]>
+  >();
 
   constructor(private readonly httpService: HttpService) {}
 
@@ -102,10 +118,118 @@ export class MarketDataService {
   }
 
   /**
-   * Nearest option expirations for the accordion (§11c). Up to 10 ascending
-   * America/New_York calendar dates from Schwab `/expirationchain`.
+   * Search US instruments by ticker and/or company description via Schwab
+   * `/instruments` (symbol-search + desc-search merged).
    */
-  async getExpirations(query: ExpirationsQueryDto): Promise<ExpirationsResponse> {
+  async searchInstruments(
+    query: InstrumentSearchQueryDto,
+  ): Promise<InstrumentSearchResponse> {
+    const q = query.q.trim();
+    if (!q) return { q, results: [] };
+
+    const looksLikeTicker = /^[A-Za-z][A-Za-z0-9.-]{0,9}$/.test(q);
+    const projections: Array<{ projection: string; symbol: string }> = [];
+
+    if (looksLikeTicker) {
+      projections.push({
+        projection: 'symbol-search',
+        symbol: q.toUpperCase(),
+      });
+      projections.push({
+        projection: 'symbol-regex',
+        symbol: `^${q.toUpperCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`,
+      });
+    }
+    projections.push({ projection: 'desc-search', symbol: q });
+
+    const batches = await Promise.all(
+      projections.map(async ({ projection, symbol }) => {
+        try {
+          const response = await firstValueFrom(
+            this.httpService.get('/marketdata/v1/instruments', {
+              params: { symbol, projection },
+            }),
+          );
+          return this.normalizeInstrumentPayload(response.data);
+        } catch (error) {
+          this.logger.warn(
+            `Instrument ${projection} search failed for "${symbol}": ${
+              error?.response?.data?.message || error.message
+            }`,
+          );
+          return [] as InstrumentSearchHit[];
+        }
+      }),
+    );
+
+    const bySymbol = new Map<string, InstrumentSearchHit>();
+    for (const hit of batches.flat()) {
+      if (!hit.symbol) continue;
+      const prev = bySymbol.get(hit.symbol);
+      if (
+        !prev ||
+        this.assetRank(hit.assetType) > this.assetRank(prev.assetType)
+      ) {
+        bySymbol.set(hit.symbol, hit);
+      }
+    }
+
+    const results = [...bySymbol.values()]
+      .sort((a, b) => {
+        const aExact = a.symbol === q.toUpperCase() ? 0 : 1;
+        const bExact = b.symbol === q.toUpperCase() ? 0 : 1;
+        if (aExact !== bExact) return aExact - bExact;
+        return a.symbol.localeCompare(b.symbol);
+      })
+      .slice(0, 25);
+
+    return { q, results };
+  }
+
+  private assetRank(assetType: string | null): number {
+    const t = (assetType ?? '').toUpperCase();
+    if (t === 'EQUITY') return 3;
+    if (t === 'ETF' || t === 'COLLECTIVE_INVESTMENT') return 2;
+    if (t === 'INDEX') return 1;
+    return 0;
+  }
+
+  private normalizeInstrumentPayload(data: unknown): InstrumentSearchHit[] {
+    if (!data || typeof data !== 'object') return [];
+
+    const rows: Array<Record<string, unknown>> = [];
+    if (Array.isArray((data as { instruments?: unknown }).instruments)) {
+      rows.push(
+        ...(data as { instruments: Array<Record<string, unknown>> })
+          .instruments,
+      );
+    } else {
+      for (const value of Object.values(data as Record<string, unknown>)) {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          rows.push(value as Record<string, unknown>);
+        }
+      }
+    }
+
+    return rows
+      .map((row) => {
+        const symbol = String(row.symbol ?? '')
+          .toUpperCase()
+          .trim();
+        if (!symbol) return null;
+        return {
+          symbol,
+          description: String(row.description ?? row.name ?? '').trim(),
+          exchange: row.exchange != null ? String(row.exchange) : null,
+          assetType: row.assetType != null ? String(row.assetType) : null,
+        } satisfies InstrumentSearchHit;
+      })
+      .filter((h): h is InstrumentSearchHit => h != null);
+  }
+
+  async getExpirations(
+    query: ExpirationsQueryDto,
+  ): Promise<ExpirationsResponse> {
     const symbol = this.resolveOptionSymbol(query.symbol);
     const todayEt = etDateKey();
     try {
@@ -118,7 +242,11 @@ export class MarketDataService {
         todayEt,
         limit: 10,
       });
-      return { symbol: query.symbol.toUpperCase(), expirations, asOf: Date.now() };
+      return {
+        symbol: query.symbol.toUpperCase(),
+        expirations,
+        asOf: Date.now(),
+      };
     } catch (error) {
       if (error instanceof BadRequestException) throw error;
       this.logger.error(

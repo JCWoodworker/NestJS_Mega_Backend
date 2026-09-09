@@ -56,13 +56,15 @@ export interface SwitchUnderlyingResult {
 }
 
 /**
- * Underlyings the ladder can re-center around via the `subscribe-underlying`
- * socket event. SPX/SPXW are listed but flagged as unverified: Schwab's
- * index quotes may need a different streamer service than
- * `LEVELONE_EQUITIES` (which is documented for equities/ETFs) - confirm
- * against a live account before relying on SPX/SPXW underlying price ticks.
+ * Normalize + validate a US equity/ETF/index ticker for streamer subscribe.
+ * Allows A–Z, digits, and `.` / `-` (e.g. BRK.B). Rejects spaces and OSI strings.
  */
-const SUPPORTED_UNDERLYINGS = new Set(['SPY', 'QQQ', 'IWM', 'SPX', 'SPXW']);
+export function normalizeUnderlyingSymbol(raw: string): string | null {
+  const symbol = raw?.toUpperCase()?.trim() ?? '';
+  if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(symbol)) return null;
+  return symbol;
+}
+
 /** 0DTE SPX options trade under the SPXW root, not SPX. */
 const OPTION_ROOT_OVERRIDES: Record<string, string> = { SPX: 'SPXW' };
 const STRIKE_INCREMENT_OVERRIDES: Record<string, number> = {
@@ -419,12 +421,12 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
   async switchUnderlying(
     requestedSymbol: string,
   ): Promise<SwitchUnderlyingResult> {
-    const symbol = requestedSymbol?.toUpperCase()?.trim();
-    if (!symbol || !SUPPORTED_UNDERLYINGS.has(symbol)) {
+    const symbol = normalizeUnderlyingSymbol(requestedSymbol ?? '');
+    if (!symbol) {
       return {
         status: 'error',
         symbol: requestedSymbol,
-        message: `Unsupported underlying "${requestedSymbol}"`,
+        message: `Invalid underlying "${requestedSymbol}" — use a US ticker like AAPL, SPY, or BRK.B`,
       };
     }
 
@@ -488,6 +490,11 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
         `Failed to fetch initial ${this.underlyingSymbol} quote after underlying switch`,
         err.message,
       );
+      return {
+        status: 'error',
+        symbol,
+        message: `Could not quote ${symbol} from Schwab — check the ticker is optionable / listed`,
+      };
     }
 
     return {

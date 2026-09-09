@@ -1,6 +1,6 @@
-# Schwab Bot — Decision Audit, Explain & Suggested Settings
+# Schwab Swift — Bot Decision Audit, Explain & Suggested Settings
 
-**Nest handoff for the React desk** (updated 2026-09-04). Paste-ready.  
+**Nest handoff for the Schwab Swift React desk** (updated 2026-09-04). Paste-ready.  
 Companion index: [`schwab-frontend-notes.md`](./schwab-frontend-notes.md) §14.
 
 **Shipped:** preprod **v423** / prod **v263** (`74fe780`) — decision audit + explain + suggested settings + **log browser**.

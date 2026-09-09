@@ -1,14 +1,14 @@
 import { Type } from 'class-transformer';
 import {
-  IsIn,
   IsInt,
   IsOptional,
   IsString,
   Matches,
+  MaxLength,
   Min,
 } from 'class-validator';
 
-import { MARKET_DATA_UNDERLYINGS } from './expirations-query.dto';
+const UNDERLYING_PATTERN = /^[A-Za-z][A-Za-z0-9.-]{0,9}$/;
 
 /**
  * Query params for the option-chain quote snapshot (frontend contract
@@ -16,9 +16,12 @@ import { MARKET_DATA_UNDERLYINGS } from './expirations-query.dto';
  * a non-0DTE (or explicit) day — omit for today's 0DTE back-compat.
  */
 export class OptionChainQueryDto {
-  /** Underlying ticker, e.g. "SPY". */
+  /** Underlying ticker, e.g. "SPY" or "AAPL". */
   @IsString()
-  @IsIn([...MARKET_DATA_UNDERLYINGS])
+  @MaxLength(10)
+  @Matches(UNDERLYING_PATTERN, {
+    message: 'symbol must be a US ticker (e.g. SPY, AAPL, BRK.B)',
+  })
   symbol: string;
 
   /** Strikes above + below the money to request from Schwab. Default 16. */

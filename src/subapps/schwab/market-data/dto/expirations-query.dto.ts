@@ -1,11 +1,13 @@
-import { IsIn, IsString } from 'class-validator';
+import { IsString, Matches, MaxLength } from 'class-validator';
 
-const UNDERLYINGS = ['SPY', 'QQQ', 'IWM', 'SPX', 'SPXW'] as const;
+/** US equity/ETF/index root tickers (e.g. SPY, AAPL, BRK.B). */
+const UNDERLYING_PATTERN = /^[A-Za-z][A-Za-z0-9.-]{0,9}$/;
 
 export class ExpirationsQueryDto {
   @IsString()
-  @IsIn([...UNDERLYINGS])
+  @MaxLength(10)
+  @Matches(UNDERLYING_PATTERN, {
+    message: 'symbol must be a US ticker (e.g. SPY, AAPL, BRK.B)',
+  })
   symbol: string;
 }
-
-export { UNDERLYINGS as MARKET_DATA_UNDERLYINGS };

@@ -2,6 +2,7 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 
 import { ExpirationsQueryDto } from './dto/expirations-query.dto';
+import { InstrumentSearchQueryDto } from './dto/instrument-search-query.dto';
 import { OptionChainQueryDto } from './dto/option-chain-query.dto';
 import { PriceHistoryQueryDto } from './dto/price-history-query.dto';
 import { MarketDataService } from './market-data.service';
@@ -23,6 +24,12 @@ export class MarketDataController {
   @Get('price-history')
   async getPriceHistory(@Query() query: PriceHistoryQueryDto) {
     return this.marketDataService.getPriceHistory(query);
+  }
+
+  /** Instrument lookup by ticker and/or company name (Schwab /instruments). */
+  @Get('instruments')
+  async searchInstruments(@Query() query: InstrumentSearchQueryDto) {
+    return this.marketDataService.searchInstruments(query);
   }
 
   /** Nearest option expirations for the multi-exp accordion (§11c). */
