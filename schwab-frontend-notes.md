@@ -292,6 +292,8 @@ Confirmed live: returns the real connected account's number + hash on preprod.
 ```ts
 Array<{ symbol: string; assetType: string; quantity: number; averagePrice: number; marketValue: number; dayProfitLoss: number }>
 ```
+`dayProfitLoss` = unrealized on the open lot (`marketValue - averagePrice*quantity*multiplier`,
+×100 for options) — **not** Schwab's `currentDayProfitLoss` as of 2026-09-09, see Changelog.
 Confirmed live (returns `[]` for the connected test account — no open positions).
 
 ### Error response shape
@@ -352,7 +354,7 @@ io(`${VITE_SOCKET_URL}${VITE_SOCKET_NAMESPACE}`, {
     settledCash: number
     optionsBuyingPower: number
     dayStartEquity: number // new 2026-09-03 — see section 12
-    positions: Array<{ symbol: string; assetType: string; quantity: number; averagePrice: number; marketValue: number; dayProfitLoss: number }>
+    positions: Array<{ symbol: string; assetType: string; quantity: number; averagePrice: number; marketValue: number; dayProfitLoss: number }> // dayProfitLoss = unrealized on open lot, see 2026-09-09 Changelog
     asOf: number
   }
   ```
@@ -676,6 +678,9 @@ See section 4 for the full payload shape. Backend-wide poll (not per-socket), sa
 (new order, status change, fill, or stop/limit price change) rather than every poll tick.
 `averageFillPrice` is a quantity-weighted average across Schwab's `orderActivityCollection`
 execution legs, so it's accurate through partial fills too — `null` until the first fill.
+`statusDescription` (added 2026-09-09) carries Schwab's human-readable reason on
+`REJECTED`/`CANCELED` — same field on `GET .../orders/working` and `GET /pnl/orders`, see
+Changelog.
 
 ### 10f. Acceptance checks — status
 
@@ -1452,6 +1457,25 @@ Current state:
 
 ## Changelog
 
+- **2026-09-09 (order rejection reason: `statusDescription`)**: Frontend reported `REJECTED`
+  orders in the Order Log with no explanation. Schwab's `GET .../orders` (already polled by
+  `OrderUpdatesService`) returns a human-readable `statusDescription` that this backend was
+  dropping at every layer (mapper, gateway payload, DB, `/pnl/orders`). Added
+  `statusDescription` to `WorkingOrder` / `OrderUpdate` / `OrderUpdatePayload` / the
+  `GET /pnl/orders` row shape, persisted it on `schwab_order_history`
+  (nullable `status_description` column, migration `1788550000000-addStatusDescriptionToOrderHistory`),
+  and included it in `orderUpdateFingerprint` so a reason arriving on a later poll (Schwab
+  doesn't always populate it same-tick as the status flip) still re-emits `order-update`. See
+  section 4 and 10d.
+- **2026-09-09 (fix: `dayProfitLoss` no longer Schwab's `currentDayProfitLoss`)**: Frontend
+  reported a position showing **-$18** Open P&L despite bid == entry price. Root cause:
+  `mapAccountPositions` passed through Schwab's `currentDayProfitLoss` field, which is the
+  day's *realized + unrealized* result for that symbol — it silently includes any earlier
+  same-symbol round-trip that day, not just the currently open lot. Changed to compute it
+  directly: `marketValue - averagePrice * quantity * multiplier` (×100 for options), i.e. true
+  unrealized on the open quantity only. Affects `GET /orders/positions` and the
+  `account-snapshot` socket event's `positions[].dayProfitLoss` (section 4). The account-level
+  "Day P&L" (`equity - dayStartEquity`) is unaffected.
 - **2026-09-04 (multi-exp chain §11c)**: `GET /market-data/expirations` +
   `GET /market-data/chain?expiration=YYYY-MM-DD`. 0DTE socket unchanged; Nest
   caches chain polls (~750ms). Bot remains 0DTE-only. FE accordion unblocked.

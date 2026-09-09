@@ -15,6 +15,9 @@ export interface WorkingOrder {
   price: number | null;
   stopPrice: number | null;
   enteredTime: string | null;
+  /** Schwab's human-readable reason, populated on REJECTED/CANCELED (e.g.
+   * "Your limit price is significantly away from the current market price"). */
+  statusDescription: string | null;
 }
 
 /** Schwab returns orders newest-first with one leg per instrument; this app
@@ -36,6 +39,7 @@ export function mapWorkingOrders(schwabOrders: any[]): WorkingOrder[] {
       price: order.price ?? null,
       stopPrice: order.stopPrice ?? null,
       enteredTime: order.enteredTime ?? null,
+      statusDescription: order.statusDescription ?? null,
     };
   });
 }
@@ -49,6 +53,8 @@ export interface OrderUpdate {
   price: number | null;
   filledQuantity: number;
   averageFillPrice: number | null;
+  /** Schwab's human-readable reason, populated on REJECTED/CANCELED. */
+  statusDescription: string | null;
 }
 
 /** Quantity-weighted average across every execution leg Schwab has recorded
@@ -87,6 +93,7 @@ export function mapOrderUpdate(order: any): OrderUpdate {
     price: order.price ?? null,
     filledQuantity: order.filledQuantity ?? 0,
     averageFillPrice: computeAverageFillPrice(order),
+    statusDescription: order.statusDescription ?? null,
   };
 }
 
@@ -100,5 +107,6 @@ export function orderUpdateFingerprint(update: OrderUpdate): string {
     update.stopPrice,
     update.price,
     update.averageFillPrice,
+    update.statusDescription,
   ].join('|');
 }

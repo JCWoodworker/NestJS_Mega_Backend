@@ -42,6 +42,7 @@ describe('mapWorkingOrders', () => {
       price: null,
       stopPrice: 1.25,
       enteredTime: '2026-09-02T14:30:00+0000',
+      statusDescription: null,
     });
   });
 
@@ -59,7 +60,22 @@ describe('mapWorkingOrders', () => {
       price: null,
       stopPrice: null,
       enteredTime: null,
+      statusDescription: null,
     });
+  });
+
+  it('surfaces statusDescription on a rejected order', () => {
+    const [order] = mapWorkingOrders([
+      rawOrder({
+        status: 'REJECTED',
+        statusDescription:
+          'Your limit price is significantly away from the current market price.',
+      }),
+    ]);
+
+    expect(order.statusDescription).toBe(
+      'Your limit price is significantly away from the current market price.',
+    );
   });
 });
 
@@ -76,6 +92,7 @@ describe('mapOrderUpdate', () => {
       price: null,
       filledQuantity: 0,
       averageFillPrice: null,
+      statusDescription: null,
     });
   });
 
@@ -113,5 +130,15 @@ describe('orderUpdateFingerprint', () => {
       mapOrderUpdate(rawOrder({ status: 'CANCELED' })),
     );
     expect(working).not.toBe(canceled);
+  });
+
+  it('changes when statusDescription changes even if status does not', () => {
+    const a = orderUpdateFingerprint(
+      mapOrderUpdate(rawOrder({ status: 'REJECTED', statusDescription: 'A' })),
+    );
+    const b = orderUpdateFingerprint(
+      mapOrderUpdate(rawOrder({ status: 'REJECTED', statusDescription: 'B' })),
+    );
+    expect(a).not.toBe(b);
   });
 });

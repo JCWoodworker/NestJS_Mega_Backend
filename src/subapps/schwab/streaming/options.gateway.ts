@@ -57,6 +57,8 @@ export interface OrderUpdatePayload {
   price?: number | null;
   filledQuantity?: number;
   averageFillPrice?: number | null;
+  /** Schwab's human-readable reason, populated on REJECTED/CANCELED. */
+  statusDescription?: string | null;
   asOf: number;
 }
 

@@ -63,6 +63,8 @@ export class OrderHistoryService {
           : existing?.enteredTime ?? null,
         closedAt: new Date(),
         source,
+        statusDescription:
+          update.statusDescription ?? existing?.statusDescription ?? null,
       };
 
       if (existing) {
@@ -113,6 +115,11 @@ export class OrderHistoryService {
           : existing?.enteredTime ?? null,
         closedAt: new Date(),
         source,
+        statusDescription:
+          update.statusDescription ??
+          rawOrder?.statusDescription ??
+          existing?.statusDescription ??
+          null,
       };
 
       if (existing) {

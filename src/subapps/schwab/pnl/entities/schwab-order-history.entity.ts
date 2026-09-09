@@ -72,6 +72,11 @@ export class SchwabOrderHistory {
   @Column({ type: 'timestamptz', name: 'closed_at', nullable: true })
   closedAt: Date | null;
 
+  /** Schwab's human-readable reason, populated on REJECTED/CANCELED (e.g.
+   * "Your limit price is significantly away from the current market price"). */
+  @Column({ type: 'text', name: 'status_description', nullable: true })
+  statusDescription: string | null;
+
   @Column({
     type: 'enum',
     enum: OrderSource,

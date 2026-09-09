@@ -67,7 +67,9 @@ describe('account-data.mapper', () => {
               longQuantity: 2,
               shortQuantity: 0,
               averageLongPrice: 1.25,
-              marketValue: 250,
+              marketValue: 280,
+              // Deliberately different from marketValue - costBasis (280 - 250 = 30) to
+              // prove dayProfitLoss is computed, not passed through from Schwab's field.
               currentDayProfitLoss: 15.5,
             },
           ],
@@ -80,10 +82,51 @@ describe('account-data.mapper', () => {
           assetType: 'OPTION',
           quantity: 2,
           averagePrice: 1.25,
-          marketValue: 250,
-          dayProfitLoss: 15.5,
+          marketValue: 280,
+          dayProfitLoss: 30,
         },
       ]);
+    });
+
+    it('computes unrealized P&L on options at ×100 notional', () => {
+      const response = {
+        securitiesAccount: {
+          positions: [
+            {
+              instrument: {
+                symbol: 'SPY   260909C00766000',
+                assetType: 'OPTION',
+              },
+              longQuantity: 6,
+              shortQuantity: 0,
+              averagePrice: 0.07,
+              marketValue: 45,
+            },
+          ],
+        },
+      };
+
+      // cost basis = 0.07 * 6 * 100 = 42; unrealized = 45 - 42 = 3
+      expect(mapAccountPositions(response)[0]?.dayProfitLoss).toBeCloseTo(3, 5);
+    });
+
+    it('computes unrealized P&L on equities at ×1 notional', () => {
+      const response = {
+        securitiesAccount: {
+          positions: [
+            {
+              instrument: { symbol: 'AAPL', assetType: 'EQUITY' },
+              longQuantity: 10,
+              shortQuantity: 0,
+              averagePrice: 200,
+              marketValue: 2050,
+            },
+          ],
+        },
+      };
+
+      // cost basis = 200 * 10 * 1 = 2000; unrealized = 2050 - 2000 = 50
+      expect(mapAccountPositions(response)[0]?.dayProfitLoss).toBe(50);
     });
 
     it('returns an empty array when there are no positions', () => {

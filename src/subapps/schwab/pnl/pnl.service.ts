@@ -297,6 +297,7 @@ export class PnlService {
       enteredTime: row.enteredTime?.toISOString() ?? null,
       closedAt: row.closedAt?.toISOString() ?? null,
       source: row.source,
+      statusDescription: row.statusDescription ?? null,
     }));
   }
 

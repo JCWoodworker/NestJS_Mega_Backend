@@ -31,7 +31,23 @@ export interface PositionSnapshot {
   quantity: number;
   averagePrice: number;
   marketValue: number;
+  /**
+   * Unrealized P&L on the *currently open* quantity: `marketValue -
+   * averagePrice * quantity * multiplier`. Deliberately NOT Schwab's
+   * `currentDayProfitLoss` - that field is the day's realized *and*
+   * unrealized result for the symbol, so it swings on intraday round-trips
+   * (scale in/out) that never touch the remaining open lot's cost basis,
+   * producing a number that doesn't reconcile with "I bought at X, mark is
+   * X, why isn't this ~$0" (frontend contract 2026-09-09 bug report). The
+   * account bar's "Day P&L" (`equity - dayStartEquity`, section 12) already
+   * covers realized + unrealized honestly at the account level.
+   */
   dayProfitLoss: number;
+}
+
+/** Options are quoted per-share; Schwab's marketValue/P&L are already ×100 notional. */
+function positionMultiplier(assetType: string): number {
+  return assetType === 'OPTION' ? 100 : 1;
 }
 
 export function mapAccountBalances(
@@ -56,16 +72,25 @@ export function mapAccountPositions(
 ): PositionSnapshot[] {
   const positions = schwabAccountResponse?.securitiesAccount?.positions ?? [];
 
-  return positions.map((position: any) => ({
-    symbol: position.instrument?.symbol ?? '',
-    assetType: position.instrument?.assetType ?? 'UNKNOWN',
-    quantity: (position.longQuantity ?? 0) - (position.shortQuantity ?? 0),
-    averagePrice:
+  return positions.map((position: any) => {
+    const assetType = position.instrument?.assetType ?? 'UNKNOWN';
+    const quantity =
+      (position.longQuantity ?? 0) - (position.shortQuantity ?? 0);
+    const averagePrice =
       position.averagePrice ??
       position.averageLongPrice ??
       position.averageShortPrice ??
-      0,
-    marketValue: position.marketValue ?? 0,
-    dayProfitLoss: position.currentDayProfitLoss ?? 0,
-  }));
+      0;
+    const marketValue = position.marketValue ?? 0;
+    const costBasis = averagePrice * quantity * positionMultiplier(assetType);
+
+    return {
+      symbol: position.instrument?.symbol ?? '',
+      assetType,
+      quantity,
+      averagePrice,
+      marketValue,
+      dayProfitLoss: marketValue - costBasis,
+    };
+  });
 }
