@@ -1,4 +1,5 @@
 import { Controller, Get, Query, Res } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Response } from 'express';
 
 import { Auth } from '@iam/decorators/auth.decorator';
@@ -10,7 +11,15 @@ import { SchwabAuthService } from './schwab-auth.service';
  * Schwab OAuth. Only the broker callback is public — `/connect` and `/status`
  * require this backend's JWT so an unauthenticated browser cannot rebind the
  * shared Schwab token row.
+ *
+ * Overrides the app-wide 10 req/60s default, which this controller was the only
+ * Schwab controller still inheriting. The desk polls `/status` every 2s while a
+ * connection is pending (30/min), so it throttled itself out roughly 20 seconds
+ * into the flow — and because `/callback` shares the budget, an exhausted quota
+ * could reject the broker's redirect and fail the handshake outright, not just
+ * stall the badge. 60/min covers the poll with headroom.
  */
+@Throttle({ default: { limit: 60, ttl: 60000 } })
 @Controller('auth')
 export class SchwabAuthController {
   constructor(private readonly schwabAuthService: SchwabAuthService) {}
@@ -23,8 +32,7 @@ export class SchwabAuthController {
   @Get('connect')
   connect(@Query('returnTo') returnTo: string) {
     return {
-      authorizationUrl:
-        this.schwabAuthService.buildAuthorizationUrl(returnTo),
+      authorizationUrl: this.schwabAuthService.buildAuthorizationUrl(returnTo),
     };
   }
 
