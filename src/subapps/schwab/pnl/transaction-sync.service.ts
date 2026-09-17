@@ -1,5 +1,11 @@
 import { HttpService } from '@nestjs/axios';
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -40,10 +46,11 @@ const SCHWAB_TRANSACTION_TYPES = [
 ] as const;
 
 @Injectable()
-export class TransactionSyncService implements OnModuleInit {
+export class TransactionSyncService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TransactionSyncService.name);
   /** Keyed by user so one user's long sync doesn't skip everyone else's. */
   private readonly syncing = new Set<string>();
+  private bootSyncTimer: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly httpService: HttpService,
@@ -62,7 +69,13 @@ export class TransactionSyncService implements OnModuleInit {
 
   onModuleInit(): void {
     // Fire-and-forget initial sync so history is available shortly after boot.
-    setTimeout(() => void this.syncAllUsers(), 15_000);
+    this.bootSyncTimer = setTimeout(() => void this.syncAllUsers(), 15_000);
+  }
+
+  /** Without this the boot timer keeps the process alive for 15s after
+   * shutdown, and fires a Schwab sync against a closing DataSource. */
+  onModuleDestroy(): void {
+    if (this.bootSyncTimer) clearTimeout(this.bootSyncTimer);
   }
 
   @Cron('0 */15 * * * *')

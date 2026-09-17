@@ -1,7 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConfigType } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThan, Repository } from 'typeorm';
 
+import schwabConfig from '@schwab/config/schwab.config';
 import {
   BotEventPayload,
   OptionsGateway,
@@ -59,6 +61,8 @@ export class BotEventService {
     @InjectRepository(BotEvent)
     private readonly repository: Repository<BotEvent>,
     private readonly optionsGateway: OptionsGateway,
+    @Inject(schwabConfig.KEY)
+    private readonly config: ConfigType<typeof schwabConfig>,
   ) {}
 
   async record(input: RecordBotEventInput): Promise<BotEvent> {
@@ -79,7 +83,15 @@ export class BotEventService {
         payload: input.payload ?? null,
       }),
     );
-    this.optionsGateway.emitBotEvent(this.toPayload(row));
+    // Still single-tenant: the bot runs one desk, so its telemetry is
+    // addressed to the owner's room. Phase 4 makes bot state per-user and
+    // threads the real userId down to here.
+    if (this.config.ownerUserId) {
+      this.optionsGateway.emitBotEvent(
+        this.config.ownerUserId,
+        this.toPayload(row),
+      );
+    }
     this.trim().catch((err) =>
       this.logger.debug(`Retention trim skipped: ${err.message}`),
     );

@@ -1,12 +1,5 @@
 import { HttpService } from '@nestjs/axios';
-import {
-  forwardRef,
-  Inject,
-  Injectable,
-  Logger,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import * as WebSocket from 'ws';
@@ -79,19 +72,26 @@ function formatDateKey(date: Date): string {
 }
 
 /**
- * Owns the raw connection to Schwab's LEVELONE streamer: login handshake,
+ * One user's connection to Schwab's LEVELONE streamer: login handshake,
  * heartbeat watchdog, subscription churn for the dynamic strike ladder, and
- * throttled relay of ticks to OptionsGateway. The frontend never talks to
- * this socket directly.
+ * throttled relay of ticks to that user's socket room. The frontend never
+ * talks to this socket directly.
+ *
+ * Deliberately a plain class rather than a Nest provider — there is one
+ * instance per connected user, created and torn down by
+ * `SchwabStreamerPool`. Schwab's streamer authenticates with the user's own
+ * access token and its subscription set is a single namespace per socket, so
+ * multiplexing several accounts onto one connection is not possible; nor
+ * would it be entitlement-correct, since market data permissions are
+ * per-user.
  *
  * NOTE: Schwab's streamer login payload/field semantics here follow the
  * publicly documented Streamer Guide; validate against a live account
  * before trading real money, since this hasn't been exercised against
  * Schwab's production streamer in this environment.
  */
-@Injectable()
-export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(SchwabStreamerService.name);
+export class SchwabStreamerSession {
+  private readonly logger: Logger;
 
   private socket: WebSocket | null = null;
   private streamerInfo: StreamerInfo | null = null;
@@ -132,13 +132,20 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
   private optionChartSymbol: string | null = null;
 
   constructor(
+    private readonly userId: string,
     private readonly httpService: HttpService,
     private readonly authService: SchwabAuthService,
-    @Inject(forwardRef(() => OptionsGateway))
     private readonly optionsGateway: OptionsGateway,
-    @Inject(schwabConfig.KEY)
     private readonly config: ConfigType<typeof schwabConfig>,
-  ) {}
+  ) {
+    this.logger = new Logger(`${SchwabStreamerSession.name}[${userId}]`);
+  }
+
+  /** Every Schwab HTTP call this session makes must authenticate as its own
+   * user, so the shared Axios interceptor needs the context established. */
+  private runAsSelf<T>(fn: () => Promise<T>): Promise<T> {
+    return runAsUser(this.userId, fn);
+  }
 
   /**
    * Snapshot of current streamer state for a client that just connected -
@@ -190,7 +197,7 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
     return this.lastFrameAt;
   }
 
-  onModuleInit(): void {
+  start(): void {
     this.flushTimer = setInterval(
       () => this.flushBufferedUpdates(),
       this.config.tickEmitThrottleMs,
@@ -198,7 +205,7 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
     void this.connect();
   }
 
-  onModuleDestroy(): void {
+  stop(): void {
     this.destroyed = true;
     if (this.flushTimer) clearInterval(this.flushTimer);
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
@@ -206,29 +213,12 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
     this.socket?.close();
   }
 
-  /**
-   * Interim single-tenant bridge. This service is still one process-wide
-   * socket, so it runs as the configured owner — which is exactly the
-   * account it has always used. Phase 3 replaces it with a per-user session
-   * pool, at which point the tenant comes from the session instead.
-   */
-  private runAsOwner<T>(fn: () => Promise<T>): Promise<T> {
-    if (!this.config.ownerUserId) {
-      return Promise.reject(
-        new Error(
-          'SCHWAB_OWNER_USER_ID is not configured — the streamer has no account to connect as',
-        ),
-      );
-    }
-    return runAsUser(this.config.ownerUserId, fn);
-  }
-
   private async connect(): Promise<void> {
     if (this.destroyed) return;
 
     try {
       const accessToken = await this.authService.getValidAccessToken(
-        this.config.ownerUserId,
+        this.userId,
       );
       this.streamerInfo = await this.fetchStreamerInfo();
       this.openSocket(accessToken);
@@ -243,7 +233,7 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async fetchStreamerInfo(): Promise<StreamerInfo> {
-    const response = await this.runAsOwner(() =>
+    const response = await this.runAsSelf(() =>
       firstValueFrom(this.httpService.get('/trader/v1/userPreference')),
     );
     const streamerInfo = response.data?.streamerInfo?.[0];
@@ -369,7 +359,7 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
   private async onLoggedIn(): Promise<void> {
     this.loggedIn = true;
     this.logger.log('Schwab streamer LOGIN succeeded');
-    this.optionsGateway.emitStreamStatus({
+    this.optionsGateway.emitStreamStatus(this.userId, {
       connected: true,
       lastFrameAt: this.lastFrameAt,
     });
@@ -423,7 +413,7 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async fetchInitialUnderlyingPrice(): Promise<number> {
-    const response = await this.runAsOwner(() =>
+    const response = await this.runAsSelf(() =>
       firstValueFrom(
         this.httpService.get('/marketdata/v1/quotes', {
           params: { symbols: this.underlyingSymbol },
@@ -587,7 +577,7 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
         );
         continue;
       }
-      this.optionsGateway.emitChartCandle(candle);
+      this.optionsGateway.emitChartCandle(this.userId, candle);
     }
   }
 
@@ -602,7 +592,7 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
         );
         continue;
       }
-      this.optionsGateway.emitChartCandle(candle);
+      this.optionsGateway.emitChartCandle(this.userId, candle);
     }
   }
 
@@ -681,7 +671,7 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
     this.centerStrike = nearestStrike;
     this.currentExpirationDateKey = todayKey;
     this.currentWindowSymbols = newSymbols;
-    this.optionsGateway.emitLadderRecentered({
+    this.optionsGateway.emitLadderRecentered(this.userId, {
       centerStrike: nearestStrike,
       symbols: [...newSymbols],
     });
@@ -735,11 +725,11 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
 
   private flushBufferedUpdates(): void {
     if (this.pendingOptionTicks.length > 0) {
-      this.optionsGateway.emitOptionTicks(this.pendingOptionTicks);
+      this.optionsGateway.emitOptionTicks(this.userId, this.pendingOptionTicks);
       this.pendingOptionTicks = [];
     }
     if (this.pendingUnderlyingPrice !== null) {
-      this.optionsGateway.emitUnderlyingPrice({
+      this.optionsGateway.emitUnderlyingPrice(this.userId, {
         symbol: this.underlyingSymbol,
         price: this.pendingUnderlyingPrice,
         timestamp: Date.now(),
@@ -759,7 +749,7 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(
           'No frames received from Schwab streamer within heartbeat window; forcing reconnect',
         );
-        this.optionsGateway.emitStreamStatus({
+        this.optionsGateway.emitStreamStatus(this.userId, {
           connected: false,
           lastFrameAt: this.lastFrameAt,
         });
@@ -788,7 +778,7 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
 
   private handleSocketClosed(): void {
     this.loggedIn = false;
-    this.optionsGateway.emitStreamStatus({
+    this.optionsGateway.emitStreamStatus(this.userId, {
       connected: false,
       lastFrameAt: this.lastFrameAt,
     });

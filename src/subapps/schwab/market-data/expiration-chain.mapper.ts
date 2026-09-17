@@ -38,5 +38,8 @@ export function osiExpirationToDateKey(osi: string): string | null {
     return null;
   }
   const year = 2000 + yy;
-  return `${year}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+  return `${year}-${String(mm).padStart(2, '0')}-${String(dd).padStart(
+    2,
+    '0',
+  )}`;
 }

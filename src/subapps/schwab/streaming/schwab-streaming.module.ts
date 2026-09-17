@@ -9,11 +9,12 @@ import schwabConfig from '@schwab/config/schwab.config';
 import { SchwabHttpModule } from '@schwab/http/schwab-http.module';
 import { OrdersModule } from '@schwab/orders/orders.module';
 import { PnlModule } from '@schwab/pnl/pnl.module';
+import { SchwabSharedModule } from '@schwab/shared/schwab-shared.module';
 
 import { AccountSnapshotService } from './account-snapshot.service';
 import { OptionsGateway } from './options.gateway';
 import { OrderUpdatesService } from './order-updates.service';
-import { SchwabStreamerService } from './schwab-streamer.service';
+import { SchwabStreamerPool } from './schwab-streamer-pool.service';
 
 @Module({
   imports: [
@@ -24,13 +25,14 @@ import { SchwabStreamerService } from './schwab-streamer.service';
     SchwabHttpModule,
     OrdersModule,
     PnlModule,
+    SchwabSharedModule,
   ],
   providers: [
     OptionsGateway,
-    SchwabStreamerService,
+    SchwabStreamerPool,
     AccountSnapshotService,
     OrderUpdatesService,
   ],
-  exports: [OptionsGateway, SchwabStreamerService],
+  exports: [OptionsGateway, SchwabStreamerPool],
 })
 export class SchwabStreamingModule {}

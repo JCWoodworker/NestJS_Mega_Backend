@@ -1,5 +1,6 @@
 import { HttpService } from '@nestjs/axios';
 import {
+  forwardRef,
   Inject,
   Injectable,
   Logger,
@@ -10,68 +11,75 @@ import { ConfigType } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 
 import schwabConfig from '@schwab/config/schwab.config';
-import { OrdersService } from '@schwab/orders/orders.service';
 import { DailyPnlService } from '@schwab/pnl/daily-pnl.service';
 import {
   mapAccountBalances,
   mapAccountPositions,
 } from '@schwab/shared/account-data.mapper';
+import { SchwabAccountResolver } from '@schwab/shared/schwab-account-resolver.service';
+import { runAsUser } from '@schwab/shared/schwab-user-context';
 
 import { AccountSnapshotPayload, OptionsGateway } from './options.gateway';
+import { SchwabStreamerPool } from './schwab-streamer-pool.service';
 
 /**
- * Polls Schwab's account REST endpoint on an interval and re-broadcasts
- * balances over the /options socket as `account-snapshot`, per the doc's
- * client-side pre-flight affordability engine (equity/settledCash/
- * optionsBuyingPower). Delivered over the socket rather than a REST
- * endpoint the frontend polls itself, per the agreed frontend contract.
+ * Polls Schwab's account REST endpoint and relays balances to each watching
+ * user's socket room as `account-snapshot`, per the doc's client-side
+ * pre-flight affordability engine (equity/settledCash/optionsBuyingPower).
+ * Delivered over the socket rather than a REST endpoint the frontend polls
+ * itself, per the agreed frontend contract.
  *
- * The account hash isn't known until after the Schwab OAuth connect flow
- * completes (there's no per-request caller to supply one, unlike the REST
- * order endpoints), so it's resolved once via `/accounts/accountNumbers`
- * and cached rather than relying on a hardcoded `SCHWAB_ACCOUNT_HASH` env
- * var, which is optional and typically unset.
+ * Polls only users with a live streamer session, not every registered user.
+ * Schwab's rate limit is per-app rather than per-user, so the tick interval
+ * scales with the number of watchers to hold total request rate roughly
+ * constant: a fixed 4s poll times N users would blow the whole budget on
+ * balance checks somewhere around eight concurrent users, starving order
+ * placement.
  */
 @Injectable()
 export class AccountSnapshotService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AccountSnapshotService.name);
   private pollTimer: NodeJS.Timeout | null = null;
-  private cachedAccountHash: string | null = null;
+  private polling = false;
 
   constructor(
     private readonly httpService: HttpService,
+    @Inject(forwardRef(() => OptionsGateway))
     private readonly optionsGateway: OptionsGateway,
-    private readonly ordersService: OrdersService,
+    @Inject(forwardRef(() => SchwabStreamerPool))
+    private readonly streamerPool: SchwabStreamerPool,
+    private readonly accountResolver: SchwabAccountResolver,
     private readonly dailyPnlService: DailyPnlService,
     @Inject(schwabConfig.KEY)
     private readonly config: ConfigType<typeof schwabConfig>,
   ) {}
 
   onModuleInit(): void {
-    this.pollTimer = setInterval(
-      () => void this.pollAndBroadcast(),
-      this.config.accountSnapshotPollMs,
-    );
+    this.scheduleNextTick();
   }
 
   onModuleDestroy(): void {
-    if (this.pollTimer) clearInterval(this.pollTimer);
+    if (this.pollTimer) clearTimeout(this.pollTimer);
   }
 
-  private async resolveAccountHash(): Promise<string> {
-    if (this.config.accountHash) return this.config.accountHash;
-    if (this.cachedAccountHash) return this.cachedAccountHash;
-
-    const accounts = await this.ordersService.listAccounts();
-    if (!accounts.length) {
-      throw new Error('No Schwab accounts linked to this app yet');
-    }
-    this.cachedAccountHash = accounts[0].hashValue;
-    return this.cachedAccountHash;
+  /**
+   * Self-rescheduling rather than a fixed `setInterval`, so the spacing can
+   * widen as watchers arrive. Also prevents overlapping runs, which a fixed
+   * interval would allow once a round of polls takes longer than the period.
+   */
+  private scheduleNextTick(): void {
+    const watchers = Math.max(1, this.streamerPool.activeUserIds().length);
+    const spacing = Math.max(
+      this.config.accountSnapshotPollMs,
+      watchers * this.config.accountPollMinSpacingMs,
+    );
+    this.pollTimer = setTimeout(() => {
+      void this.pollAllWatchers().finally(() => this.scheduleNextTick());
+    }, spacing);
   }
 
   async fetchSnapshot(): Promise<Omit<AccountSnapshotPayload, 'asOf'>> {
-    const accountHash = await this.resolveAccountHash();
+    const accountHash = await this.accountResolver.resolve();
     const response = await firstValueFrom(
       this.httpService.get(`/trader/v1/accounts/${accountHash}`, {
         params: { fields: 'positions' },
@@ -84,11 +92,23 @@ export class AccountSnapshotService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  private async pollAndBroadcast(): Promise<void> {
+  private async pollAllWatchers(): Promise<void> {
+    if (this.polling) return;
+    this.polling = true;
     try {
-      const accountHash = await this.resolveAccountHash();
+      for (const userId of this.streamerPool.activeUserIds()) {
+        await runAsUser(userId, () => this.pollAndEmit(userId));
+      }
+    } finally {
+      this.polling = false;
+    }
+  }
+
+  private async pollAndEmit(userId: string): Promise<void> {
+    try {
+      const accountHash = await this.accountResolver.resolve();
       const snapshot = await this.fetchSnapshot();
-      this.optionsGateway.emitAccountSnapshot({
+      this.optionsGateway.emitAccountSnapshot(userId, {
         ...snapshot,
         asOf: Date.now(),
       });
@@ -101,13 +121,15 @@ export class AccountSnapshotService implements OnModuleInit, OnModuleDestroy {
       const message = err?.response?.data?.message || err.message;
       if (message?.includes('not connected')) {
         this.logger.debug(
-          'Skipping account snapshot poll: Schwab account not connected yet',
+          `Skipping account snapshot poll for user ${userId}: Schwab account not connected yet`,
         );
       } else {
         // Account hash may have changed (e.g. re-connected to a different
         // account) — clear the cache so the next poll re-resolves it.
-        this.cachedAccountHash = null;
-        this.logger.warn(`Account snapshot poll failed: ${message}`);
+        this.accountResolver.invalidate(userId);
+        this.logger.warn(
+          `Account snapshot poll failed for user ${userId}: ${message}`,
+        );
       }
     }
   }

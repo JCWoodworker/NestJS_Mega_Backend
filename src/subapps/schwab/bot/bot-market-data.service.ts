@@ -1,5 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConfigType } from '@nestjs/config';
 
+import schwabConfig from '@schwab/config/schwab.config';
 import { MarketDataService } from '@schwab/market-data/market-data.service';
 import {
   ChartCandlePayload,
@@ -21,9 +23,18 @@ export class BotMarketDataService {
   constructor(
     private readonly marketDataService: MarketDataService,
     private readonly optionsGateway: OptionsGateway,
+    @Inject(schwabConfig.KEY)
+    private readonly config: ConfigType<typeof schwabConfig>,
   ) {}
 
-  private handleChartCandle = (payload: ChartCandlePayload): void => {
+  /** Gateway events are per-user now; only the owner's bars belong in the
+   * buffer the strategy reads. Another user's candles would silently corrupt
+   * the owner's VWAP/ATR inputs. */
+  private handleChartCandle = (
+    userId: string,
+    payload: ChartCandlePayload,
+  ): void => {
+    if (!this.config.ownerUserId || userId !== this.config.ownerUserId) return;
     if (payload.assetType !== 'EQUITY') return;
     this.push({
       open: payload.open,

@@ -6,7 +6,9 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
+import { ConfigType } from '@nestjs/config';
 
+import schwabConfig from '@schwab/config/schwab.config';
 import { MarketDataService } from '@schwab/market-data/market-data.service';
 import { OrdersService } from '@schwab/orders/orders.service';
 import { etDateKey } from '@schwab/pnl/et-date.util';
@@ -15,7 +17,8 @@ import {
   ChartCandlePayload,
   UnderlyingPricePayload,
 } from '@schwab/streaming/options.gateway';
-import { SchwabStreamerService } from '@schwab/streaming/schwab-streamer.service';
+import { SchwabStreamerPool } from '@schwab/streaming/schwab-streamer-pool.service';
+import { SchwabStreamerSession } from '@schwab/streaming/schwab-streamer-session';
 
 import { BotEventService } from './bot-event.service';
 import { BotExecutionService } from './bot-execution.service';
@@ -87,8 +90,23 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     private readonly marketDataService: MarketDataService,
     private readonly ordersService: OrdersService,
     private readonly optionsGateway: OptionsGateway,
-    private readonly streamerService: SchwabStreamerService,
+    private readonly streamerPool: SchwabStreamerPool,
+    @Inject(schwabConfig.KEY)
+    private readonly config: ConfigType<typeof schwabConfig>,
   ) {}
+
+  /**
+   * The streamer session whose market data drives the bot.
+   *
+   * Still owner-scoped: the bot runs one desk until Phase 4. Returns null
+   * when the owner has no live session, which the staleness gates below
+   * treat as "no fresh data" and therefore refuse to trade on.
+   */
+  private get streamerSession(): SchwabStreamerSession | null {
+    return this.config.ownerUserId
+      ? this.streamerPool.peek(this.config.ownerUserId)
+      : null;
+  }
 
   getTransientPhase(): 'ENTERING' | 'EXITING' | null {
     return this.transientPhase;
@@ -125,14 +143,31 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     void this.emitStatus(true);
   }
 
-  private handleChartCandleClose = (candle?: ChartCandlePayload): void => {
+  /**
+   * Gateway events are now per-user, so the bot must ignore everyone
+   * else's. Without this filter a customer watching SPY would drive entry
+   * evaluation and soft-stop checks on the owner's bot.
+   */
+  private isOwnEvent(userId: string): boolean {
+    return !!this.config.ownerUserId && userId === this.config.ownerUserId;
+  }
+
+  private handleChartCandleClose = (
+    userId: string,
+    candle?: ChartCandlePayload,
+  ): void => {
+    if (!this.isOwnEvent(userId)) return;
     // Only SPY equity bars drive entry evaluation (option chart shares the
     // same gateway event and would otherwise double-eval).
     if (candle && candle.assetType !== 'EQUITY') return;
     void this.evaluateEntrySignal(candle?.chartTime);
   };
 
-  private handleUnderlyingPrice = (payload: UnderlyingPricePayload): void => {
+  private handleUnderlyingPrice = (
+    userId: string,
+    payload: UnderlyingPricePayload,
+  ): void => {
+    if (!this.isOwnEvent(userId)) return;
     void this.checkSoftStopAndTargets(payload.price);
   };
 
@@ -233,9 +268,9 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      const lastFrameAt = this.streamerService.getLastFrameAt();
+      const lastFrameAt = this.streamerSession?.getLastFrameAt() ?? null;
       if (
-        !this.streamerService.isStreamConnected() ||
+        !(this.streamerSession?.isStreamConnected() ?? false) ||
         lastFrameAt == null ||
         Date.now() - lastFrameAt > QUOTE_FRESHNESS_MS
       ) {
@@ -245,7 +280,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
             type: BotEventType.GATE_SKIP,
             reason: 'STALE_QUOTE',
             payload: {
-              connected: this.streamerService.isStreamConnected(),
+              connected: this.streamerSession?.isStreamConnected() ?? false,
               lastFrameAt,
             },
           },
@@ -440,7 +475,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const spot = this.streamerService.getLastKnownSpotPrice();
+    const spot = this.streamerSession?.getLastKnownSpotPrice() ?? null;
     // Provisional levels from ask; recomputed with fill price after entry.
     const provisionalLevels = computeExitLevels({
       entryPremium: contract.ask,
@@ -584,7 +619,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       const now = Date.now();
       const needsPremium = pos.stopPremium != null || pos.targetPremium != null;
       if (needsPremium) {
-        const streamed = this.streamerService.getLastOptionQuote(pos.symbol);
+        const streamed = this.streamerSession?.getLastOptionQuote(pos.symbol);
         if (
           streamed?.bid != null &&
           now - streamed.at <= PREMIUM_STREAM_MAX_AGE_MS
@@ -650,9 +685,9 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     if (!row.openPosition || !row.lane) return;
     const accountHash = await this.botStateService.resolveAccountHash();
     const direction = row.openPosition.direction ?? row.lastSignal?.direction;
-    const spot = this.streamerService.getLastKnownSpotPrice();
+    const spot = this.streamerSession?.getLastKnownSpotPrice() ?? null;
 
-    const streamed = this.streamerService.getLastOptionQuote(
+    const streamed = this.streamerSession?.getLastOptionQuote(
       row.openPosition.symbol,
     );
     let quoteBid = streamed?.bid;
@@ -851,13 +886,16 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         await this.reconcileLivePosition(row);
       }
 
-      if (!this.streamerService.isStreamConnected() && row.openPosition) {
+      if (
+        !(this.streamerSession?.isStreamConnected() ?? false) &&
+        row.openPosition
+      ) {
         await this.flattenAndHalt('SOCKET_LOSS', KillScope.ALL);
         return;
       }
 
       if (row.openPosition) {
-        const spot = this.streamerService.getLastKnownSpotPrice();
+        const spot = this.streamerSession?.getLastKnownSpotPrice() ?? null;
         if (spot != null) {
           await this.checkSoftStopAndTargets(spot);
         }
@@ -988,6 +1026,10 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     }
     this.lastEmittedPhase = status.phase;
 
-    this.optionsGateway.emitBotStatus(status);
+    // See BotEventService.record — bot telemetry is owner-addressed until
+    // Phase 4 makes bot state per-user.
+    if (this.config.ownerUserId) {
+      this.optionsGateway.emitBotStatus(this.config.ownerUserId, status);
+    }
   }
 }

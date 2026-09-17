@@ -2,9 +2,9 @@ import { UnauthorizedException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
-import authConfig from '@config/auth.config';
-
 import { Role } from '@users/enums/role.enum';
+
+import authConfig from '@config/auth.config';
 
 import { AuthAllowlistService } from './auth-allowlist.service';
 import { AuthAllowedEmail } from '../entities/auth-allowed-email.entity';

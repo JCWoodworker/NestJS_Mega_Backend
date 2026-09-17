@@ -2,8 +2,10 @@ import { forwardRef, Inject, Logger } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
+  ConnectedSocket,
   MessageBody,
   OnGatewayConnection,
+  OnGatewayDisconnect,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
@@ -12,14 +14,13 @@ import { EventEmitter } from 'events';
 import { Server, Socket } from 'socket.io';
 
 import jwtConfig from '@iam/config/jwt.config';
+import type { ActiveUserData } from '@iam/interfaces/active-user-data.interface';
 
 import { PositionSnapshot } from '@schwab/shared/account-data.mapper';
 
 import { OptionTick } from './option-tick.mapper';
-import {
-  SchwabStreamerService,
-  SwitchUnderlyingResult,
-} from './schwab-streamer.service';
+import { SchwabStreamerPool } from './schwab-streamer-pool.service';
+import { SwitchUnderlyingResult } from './schwab-streamer-session';
 
 export interface UnderlyingPricePayload {
   symbol: string;
@@ -123,21 +124,32 @@ const allowedOrigins =
       ) ?? '*'
     : process.env.ALLOWED_ORIGINS?.split(',').map((o) => o.trim()) ?? [];
 
+/** Socket.io room carrying one user's Schwab data. */
+export function schwabUserRoom(userId: string): string {
+  return `schwab-user:${userId}`;
+}
+
 /**
  * Outbound relay to the frontend. This is intentionally decoupled from the
- * raw Schwab streamer connection (see SchwabStreamerService) - the frontend
+ * raw Schwab streamer connection (see SchwabStreamerSession) - the frontend
  * never talks to Schwab directly.
  *
  * This socket carries account balances and live positions, so every
  * connection must present a valid JWT from this backend's own auth system
  * (the same one guarding the REST endpoints) via the Socket.io handshake -
- * either `auth: { token }`, a `token` query param, or an Authorization
- * header. Unauthenticated sockets are disconnected immediately.
+ * either `auth: { token }` or an Authorization header. Unauthenticated
+ * sockets are disconnected immediately.
+ *
+ * Every payload is addressed to one user's room rather than broadcast. The
+ * JWT used to be verified and then discarded, so account snapshots, order
+ * updates and bot events went to every connected client — harmless with a
+ * single desk, a data leak the moment a second user signs in.
  *
  * Also extends Node's EventEmitter so in-process consumers (BotEngineService,
  * BotMarketDataService) can subscribe to the same payloads this gateway
- * broadcasts over the socket, without a second Schwab subscription or a
- * circular module dependency.
+ * relays, without a second Schwab subscription or a circular module
+ * dependency. Those internal events carry the userId as their first
+ * argument for the same routing reason.
  */
 @WebSocketGateway({
   namespace: '/options',
@@ -145,9 +157,17 @@ const allowedOrigins =
 })
 export class OptionsGateway
   extends EventEmitter
-  implements OnGatewayConnection
+  implements OnGatewayConnection, OnGatewayDisconnect
 {
   private readonly logger = new Logger(OptionsGateway.name);
+
+  /** socket.id -> userId, so disconnect can find the owner without re-parsing
+   * a token that may have expired in the meantime. */
+  private readonly socketUsers = new Map<string, string>();
+  /** userId -> live socket ids. A user's streamer session is torn down when
+   * this empties, so a browser refresh (disconnect then reconnect) does not
+   * thrash the Schwab connection as long as the sets overlap. */
+  private readonly userSockets = new Map<string, Set<string>>();
 
   @WebSocketServer()
   server: Server;
@@ -156,10 +176,12 @@ export class OptionsGateway
     private readonly jwtService: JwtService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
-    @Inject(forwardRef(() => SchwabStreamerService))
-    private readonly streamerService: SchwabStreamerService,
+    @Inject(forwardRef(() => SchwabStreamerPool))
+    private readonly streamerPool: SchwabStreamerPool,
   ) {
     super();
+    // One pair of internal listeners per bot consumer, not per user, so this
+    // does not need to scale with tenant count.
     this.setMaxListeners(20);
   }
 
@@ -173,20 +195,65 @@ export class OptionsGateway
       return;
     }
 
+    let userId: string;
     try {
-      await this.jwtService.verifyAsync(token, this.jwtConfiguration);
-      this.logger.log(`Client connected: ${client.id}`);
-      // Replay current state so a client joining after the ladder/streamer
-      // already stabilized isn't stuck waiting for the next change event.
-      const snapshot = this.streamerService.getSnapshotForNewClient();
-      client.emit('stream-status', snapshot.streamStatus);
-      if (snapshot.ladder) {
-        client.emit('ladder-recentered', snapshot.ladder);
+      const payload = await this.jwtService.verifyAsync<ActiveUserData>(
+        token,
+        this.jwtConfiguration,
+      );
+      if (!payload?.sub) {
+        throw new Error('token carries no subject');
       }
+      userId = payload.sub;
     } catch {
       this.logger.warn(`Rejecting socket ${client.id}: invalid/expired token`);
       client.disconnect(true);
+      return;
     }
+
+    await client.join(schwabUserRoom(userId));
+    this.socketUsers.set(client.id, userId);
+    const sockets = this.userSockets.get(userId) ?? new Set<string>();
+    sockets.add(client.id);
+    this.userSockets.set(userId, sockets);
+    this.logger.log(`Client connected: ${client.id} (user ${userId})`);
+
+    let session: ReturnType<SchwabStreamerPool['acquire']>;
+    try {
+      session = this.streamerPool.acquire(userId);
+    } catch (err) {
+      // Pool at capacity. Tell the client explicitly rather than leaving it
+      // waiting for ticks that will never arrive.
+      client.emit('stream-status', {
+        connected: false,
+        lastFrameAt: null,
+        reason: (err as Error).message,
+      });
+      return;
+    }
+
+    // Replay current state so a client joining after the ladder/streamer
+    // already stabilized isn't stuck waiting for the next change event.
+    const snapshot = session.getSnapshotForNewClient();
+    client.emit('stream-status', snapshot.streamStatus);
+    if (snapshot.ladder) {
+      client.emit('ladder-recentered', snapshot.ladder);
+    }
+  }
+
+  handleDisconnect(client: Socket): void {
+    const userId = this.socketUsers.get(client.id);
+    this.socketUsers.delete(client.id);
+    if (!userId) return;
+
+    const sockets = this.userSockets.get(userId);
+    sockets?.delete(client.id);
+    if (sockets?.size) return;
+
+    // Last tab closed: stop paying for a Schwab streamer nobody is watching.
+    this.userSockets.delete(userId);
+    this.streamerPool.release(userId);
+    this.logger.log(`Last client for user ${userId} disconnected`);
   }
 
   private extractToken(client: Socket): string | undefined {
@@ -206,81 +273,107 @@ export class OptionsGateway
   }
 
   /**
-   * Switches the shared ladder to a new US equity/ETF/index underlying.
-   * This affects every connected client (there's one shared Schwab streamer
-   * connection, not one per socket) - last request wins. Returns an ack if
-   * the client's `emit` included a callback; fire-and-forget otherwise.
+   * Switches this user's ladder to a new US equity/ETF/index underlying.
+   *
+   * No longer affects other clients: each user drives their own streamer
+   * session, so this is per-connection rather than the previous
+   * last-request-wins-for-everybody behaviour.
    */
   @SubscribeMessage('subscribe-underlying')
   async handleSubscribeUnderlying(
+    @ConnectedSocket() client: Socket,
     @MessageBody() body: { symbol: string },
   ): Promise<SwitchUnderlyingResult> {
+    const session = this.sessionFor(client);
+    if (!session) {
+      return {
+        status: 'error',
+        symbol: body?.symbol ?? '',
+        message: 'No active Schwab streamer session for this connection',
+      };
+    }
     this.logger.log(`Client requested underlying: ${body?.symbol}`);
-    return this.streamerService.switchUnderlying(body?.symbol);
+    return session.switchUnderlying(body?.symbol);
   }
 
   /**
-   * Starts/swaps/stops the single tracked-option premium chart stream
-   * (frontend contract section 9b) - shared across all connected clients,
-   * last request wins, same pattern as `subscribe-underlying`. Send
-   * `symbol: null` to unsubscribe without affecting the underlying's
-   * `CHART_EQUITY` stream (started automatically alongside
-   * `subscribe-underlying`, not via this event).
+   * Starts/swaps/stops this user's tracked-option premium chart stream
+   * (frontend contract section 9b). Send `symbol: null` to unsubscribe
+   * without affecting the underlying's `CHART_EQUITY` stream (started
+   * automatically alongside `subscribe-underlying`, not via this event).
    */
   @SubscribeMessage('subscribe-option-chart')
   async handleSubscribeOptionChart(
+    @ConnectedSocket() client: Socket,
     @MessageBody() body: { symbol: string | null },
   ): Promise<SwitchUnderlyingResult> {
+    const session = this.sessionFor(client);
+    if (!session) {
+      return {
+        status: 'error',
+        symbol: body?.symbol ?? '',
+        message: 'No active Schwab streamer session for this connection',
+      };
+    }
     this.logger.log(`Client requested option chart: ${body?.symbol}`);
-    return this.streamerService.subscribeOptionChart(body?.symbol ?? null);
+    return session.subscribeOptionChart(body?.symbol ?? null);
   }
 
-  emitOptionTicks(ticks: OptionTick[]): void {
-    this.server?.emit('option-ticks', ticks);
-    this.emit('option-ticks', ticks);
+  private sessionFor(client: Socket) {
+    const userId = this.socketUsers.get(client.id);
+    return userId ? this.streamerPool.peek(userId) : null;
   }
 
-  emitUnderlyingPrice(payload: UnderlyingPricePayload): void {
-    this.server?.emit('underlying-price', payload);
-    this.emit('underlying-price', payload);
+  /**
+   * Single chokepoint for outbound delivery.
+   *
+   * Room-scoped rather than `server.emit`, and the internal EventEmitter
+   * carries the userId so in-process consumers can route too. Going through
+   * one method means a new event type cannot accidentally reintroduce a
+   * broadcast.
+   */
+  private dispatch(userId: string, event: string, payload: unknown): void {
+    this.server?.to(schwabUserRoom(userId)).emit(event, payload);
+    this.emit(event, userId, payload);
   }
 
-  emitLadderRecentered(payload: LadderRecenteredPayload): void {
-    this.server?.emit('ladder-recentered', payload);
-    this.emit('ladder-recentered', payload);
+  emitOptionTicks(userId: string, ticks: OptionTick[]): void {
+    this.dispatch(userId, 'option-ticks', ticks);
   }
 
-  emitStreamStatus(payload: StreamStatusPayload): void {
-    this.server?.emit('stream-status', payload);
-    this.emit('stream-status', payload);
+  emitUnderlyingPrice(userId: string, payload: UnderlyingPricePayload): void {
+    this.dispatch(userId, 'underlying-price', payload);
   }
 
-  emitAccountSnapshot(payload: AccountSnapshotPayload): void {
-    this.server?.emit('account-snapshot', payload);
-    this.emit('account-snapshot', payload);
+  emitLadderRecentered(userId: string, payload: LadderRecenteredPayload): void {
+    this.dispatch(userId, 'ladder-recentered', payload);
   }
 
-  emitChartCandle(payload: ChartCandlePayload): void {
-    this.server?.emit('chart-candle', payload);
-    this.emit('chart-candle', payload);
+  emitStreamStatus(userId: string, payload: StreamStatusPayload): void {
+    this.dispatch(userId, 'stream-status', payload);
+  }
+
+  emitAccountSnapshot(userId: string, payload: AccountSnapshotPayload): void {
+    this.dispatch(userId, 'account-snapshot', payload);
+  }
+
+  emitChartCandle(userId: string, payload: ChartCandlePayload): void {
+    this.dispatch(userId, 'chart-candle', payload);
   }
 
   /** Frontend contract section 10d — lets the chart flip entry→closed and
    * clear stop lines without polling `GET /orders/working` itself. */
-  emitOrderUpdate(payload: OrderUpdatePayload): void {
-    this.server?.emit('order-update', payload);
-    this.emit('order-update', payload);
+  emitOrderUpdate(userId: string, payload: OrderUpdatePayload): void {
+    this.dispatch(userId, 'order-update', payload);
   }
 
   /** Bot control-plane telemetry (BotModule §14) — mirrors `GET /bot/status`. */
-  emitBotStatus(payload: BotStatusPayload): void {
-    this.server?.emit('bot-status', payload);
-    this.emit('bot-status', payload);
+  emitBotStatus(userId: string, payload: BotStatusPayload): void {
+    this.dispatch(userId, 'bot-status', payload);
   }
 
   /** Bot live-watch activity feed (§14j) — each new event as it happens. */
-  emitBotEvent(payload: BotEventPayload): void {
-    this.server?.emit('bot-event', payload);
-    this.emit('bot-event', payload);
+  emitBotEvent(userId: string, payload: BotEventPayload): void {
+    this.dispatch(userId, 'bot-event', payload);
   }
 }

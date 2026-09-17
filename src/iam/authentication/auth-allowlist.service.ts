@@ -11,9 +11,9 @@ import { ConfigType } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import authConfig from '@config/auth.config';
-
 import { Users } from '@users/entities/users.entity';
+
+import authConfig from '@config/auth.config';
 
 import { AuthAllowedEmail } from '@iam/entities/auth-allowed-email.entity';
 
@@ -46,7 +46,10 @@ export class AuthAllowlistService implements OnModuleInit {
    * Fail closed: email must be on the allowlist and the user (if provided)
    * must not be locked. Uses a generic 401 to avoid email enumeration.
    */
-  async assertCanAuthenticate(email: string, user?: Users | null): Promise<void> {
+  async assertCanAuthenticate(
+    email: string,
+    user?: Users | null,
+  ): Promise<void> {
     const allowed = await this.isEmailAllowed(email);
     if (!allowed || user?.isLocked) {
       throw new UnauthorizedException();

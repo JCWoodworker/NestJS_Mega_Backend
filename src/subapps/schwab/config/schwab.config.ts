@@ -37,4 +37,23 @@ export default registerAs('schwab', () => ({
    * Also used to backfill the pre-multi-tenant `schwab_tokens` row.
    */
   ownerUserId: process.env.SCHWAB_OWNER_USER_ID?.trim() || null,
+  /**
+   * Hard ceiling on concurrent Schwab streamer sessions, one per watching
+   * user. Each is a live WebSocket plus timers on a single dyno, so this is
+   * the real scaling limit of the current design — better to refuse a new
+   * session explicitly than to run the dyno out of memory while other users
+   * hold open positions. Raise only after measuring.
+   */
+  maxStreamerSessions: +process.env.SCHWAB_MAX_STREAMER_SESSIONS || 10,
+  /**
+   * Minimum spacing per watching user for the account/order pollers.
+   *
+   * Schwab's documented limit is roughly 120 requests/minute for the whole
+   * app, and these two pollers each cost one request per user per round. At
+   * the old fixed 4s interval, ~8 concurrent users would consume the entire
+   * budget on balance checks and start starving order placement. Spacing
+   * scales with watcher count so the total rate stays bounded instead.
+   */
+  accountPollMinSpacingMs:
+    +process.env.SCHWAB_ACCOUNT_POLL_MIN_SPACING_MS || 1500,
 }));
