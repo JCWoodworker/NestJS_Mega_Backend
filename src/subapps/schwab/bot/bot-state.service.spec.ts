@@ -47,6 +47,7 @@ function buildService() {
     flattenAndHalt: jest.fn().mockResolvedValue(undefined),
     onControlPlaneChange: jest.fn(),
     getTransientPhase: jest.fn().mockReturnValue(null),
+    getLastPremiumBidAt: jest.fn().mockReturnValue(null),
   };
   const botSettingsService = {
     getSettings: jest.fn().mockResolvedValue({
@@ -210,6 +211,71 @@ describe('BotStateService invariants', () => {
     const status = await service.getStatus();
     expect(status.minEquityOk).toBe(true);
     expect(status.minEquityThreshold).toBe(5000);
+  });
+
+  it('dayStartEquity follows the active lane (paper ledger vs live balances)', async () => {
+    const { service, getRowSnapshot } = buildService();
+    await service.setLane(BotLane.BOT_PAPER);
+    getRowSnapshot().paperDayStartEquity = 5800;
+    expect((await service.getStatus()).dayStartEquity).toBe(5800);
+
+    service.updateLiveBalances(9000, 9000, 8500);
+    await service.enableLive(true);
+    await service.setLane(BotLane.BOT_LIVE, true);
+    expect((await service.getStatus()).dayStartEquity).toBe(8500);
+  });
+
+  it('cooldownUntil is the lastTradeAt + cooldownMins instant, null once elapsed', async () => {
+    const { service, getRowSnapshot } = buildService();
+    await service.setLane(BotLane.BOT_PAPER);
+    const lastTradeAt = new Date();
+    getRowSnapshot().lastTradeAt = lastTradeAt;
+
+    // botSettingsService mock reports cooldownMins: 30.
+    const status = await service.getStatus();
+    expect(status.cooldownUntil).toBe(lastTradeAt.getTime() + 30 * 60_000);
+
+    getRowSnapshot().lastTradeAt = new Date(Date.now() - 31 * 60_000);
+    expect((await service.getStatus()).cooldownUntil).toBeNull();
+  });
+
+  it('premiumWatchOk is false when a premium stop is armed but no bid is reaching the engine', async () => {
+    const { service, getRowSnapshot, botEngine } = buildService();
+    await service.setLane(BotLane.BOT_PAPER);
+
+    // Flat: nothing to watch.
+    expect((await service.getStatus()).premiumWatchOk).toBe(true);
+
+    getRowSnapshot().openPosition = {
+      symbol: 'SPY   260903C00770000',
+      quantity: 1,
+      entryPrice: 1,
+      stopUnderlying: null,
+      targetUnderlying: null,
+      stopPremium: 0.75,
+      targetPremium: 1.4,
+      source: BotLane.BOT_PAPER,
+    };
+    expect((await service.getStatus()).premiumWatchOk).toBe(false);
+
+    botEngine.getLastPremiumBidAt.mockReturnValue(Date.now());
+    expect((await service.getStatus()).premiumWatchOk).toBe(true);
+  });
+
+  it('premiumWatchOk stays true when only underlying levels are armed', async () => {
+    const { service, getRowSnapshot } = buildService();
+    await service.setLane(BotLane.BOT_PAPER);
+    getRowSnapshot().openPosition = {
+      symbol: 'SPY   260903C00770000',
+      quantity: 1,
+      entryPrice: 1,
+      stopUnderlying: 760,
+      targetUnderlying: 765,
+      stopPremium: null,
+      targetPremium: null,
+      source: BotLane.BOT_PAPER,
+    };
+    expect((await service.getStatus()).premiumWatchOk).toBe(true);
   });
 
   it('rejects BOT_PAPER lane when paper equity is below $5,000', async () => {

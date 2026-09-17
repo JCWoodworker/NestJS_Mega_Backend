@@ -48,6 +48,9 @@ export interface BotStatusView {
   lockoutReason: string | null;
   equity: number;
   settledCash: number;
+  /** Equity at session start for the active lane — denominator for the
+   * percentage loss/profit gates the desk mirrors. */
+  dayStartEquity: number;
   /** Bot-paper ledger (always present; independent of active lane). */
   paperEquity: number;
   paperSettledCash: number;
@@ -60,12 +63,22 @@ export interface BotStatusView {
   todayBotPnl: number;
   tradesToday: number;
   liveArmed: boolean;
+  /** Epoch ms new entries unblock, or null when not in cooldown. */
+  cooldownUntil: number | null;
+  /** False when a premium soft-stop is armed but the engine is not currently
+   * getting option bids — the underlying stop still evaluates, the premium
+   * one does not. */
+  premiumWatchOk: boolean;
   recentEvents: BotEventPayload[];
 }
 
 /** How many recent events to embed in `GET /status` for late socket joiners
  * (frontend contract §14j). Full history is `GET /bot/events`. */
 const RECENT_EVENTS_COUNT = 20;
+
+/** An armed premium stop is considered unwatched if the soft-exit loop has not
+ * read an option bid in this long (heartbeat is ~7s). */
+const PREMIUM_WATCH_STALE_MS = 20_000;
 
 function assertMinEquity(equity: number, context: string): void {
   if (equity >= MIN_EQUITY) return;
@@ -201,6 +214,13 @@ export class BotStateService {
         this.botEventService.recent(RECENT_EVENTS_COUNT),
       ]);
 
+    const now = Date.now();
+    const cooldownEndsAt = row.lastTradeAt
+      ? row.lastTradeAt.getTime() + settings.cooldownMins * 60_000
+      : null;
+    const cooldownUntil =
+      cooldownEndsAt != null && cooldownEndsAt > now ? cooldownEndsAt : null;
+
     const nowHhMm = etNowHhMm();
     const phase = computePhase({
       mode: row.mode,
@@ -213,14 +233,20 @@ export class BotStateService {
         settings.tradeWindowStart,
         settings.tradeWindowEnd,
       ),
-      inCooldown: Boolean(
-        row.lastTradeAt &&
-          Date.now() - row.lastTradeAt.getTime() <
-            settings.cooldownMins * 60_000,
-      ),
+      inCooldown: cooldownUntil != null,
     });
 
     const minEquityThreshold = MIN_EQUITY;
+    const premiumArmed = Boolean(
+      row.openPosition &&
+        (row.openPosition.stopPremium != null ||
+          row.openPosition.targetPremium != null),
+    );
+    const lastPremiumBidAt = this.botEngine.getLastPremiumBidAt();
+    const premiumWatchOk =
+      !premiumArmed ||
+      (lastPremiumBidAt != null &&
+        now - lastPremiumBidAt <= PREMIUM_WATCH_STALE_MS);
 
     return {
       mode: row.mode,
@@ -231,6 +257,9 @@ export class BotStateService {
       lockoutReason: row.lockoutReason,
       equity,
       settledCash,
+      dayStartEquity: isPaper
+        ? Number(row.paperDayStartEquity)
+        : this.liveDayStartEquity,
       paperEquity: Number(row.paperEquity),
       paperSettledCash: Number(row.paperSettledCash),
       minEquityOk: equity >= minEquityThreshold,
@@ -241,6 +270,8 @@ export class BotStateService {
       todayBotPnl,
       tradesToday,
       liveArmed: row.liveArmed,
+      cooldownUntil,
+      premiumWatchOk,
       recentEvents,
     };
   }

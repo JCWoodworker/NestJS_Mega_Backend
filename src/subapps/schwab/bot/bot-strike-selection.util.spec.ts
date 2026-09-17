@@ -3,6 +3,7 @@ import { OptionChainQuote } from '@schwab/market-data/option-chain.mapper';
 import {
   computeBudget,
   selectContract,
+  selectContractDetailed,
   sizePosition,
 } from './bot-strike-selection.util';
 
@@ -115,5 +116,80 @@ describe('selectContract', () => {
 
   it('returns null when no candidates match', () => {
     expect(selectContract([], 'CALL', filters)).toBeNull();
+  });
+});
+
+describe('selectContractDetailed diagnostics (NO_CONTRACT_MATCH detail)', () => {
+  const filters = {
+    deltaMin: 0.4,
+    deltaMax: 0.6,
+    minPremium: 0.6,
+    maxPremium: 2.5,
+    maxSpreadPct: 5,
+  };
+
+  it('counts each filter that rejected a right-side quote', () => {
+    const chain = [
+      quote({ symbol: 'SPY   260903C00770000', delta: 0.9, bid: 1, ask: 1.02 }),
+      quote({ symbol: 'SPY   260903C00771000', delta: 0.5, bid: 3, ask: 3.05 }),
+      quote({ symbol: 'SPY   260903C00772000', delta: 0.5, bid: 1, ask: 1.5 }),
+      quote({
+        symbol: 'SPY   260903P00770000',
+        delta: -0.5,
+        bid: 1,
+        ask: 1.02,
+      }),
+    ];
+    const { contract, diagnostics } = selectContractDetailed(
+      chain,
+      'CALL',
+      filters,
+    );
+    expect(contract).toBeNull();
+    expect(diagnostics.chainSize).toBe(4);
+    expect(diagnostics.rightMatches).toBe(3);
+    expect(diagnostics.rejects).toMatchObject({
+      delta: 1,
+      premium: 1,
+      spread: 1,
+    });
+  });
+
+  it('reports the nearest miss so the operator can see how far off the band is', () => {
+    const chain = [
+      quote({ symbol: 'SPY   260903C00770000', delta: 0.95, bid: 1, ask: 1.02 }),
+      quote({ symbol: 'SPY   260903C00771000', delta: 0.62, bid: 1, ask: 1.02 }),
+    ];
+    const { diagnostics } = selectContractDetailed(chain, 'CALL', filters);
+    expect(diagnostics.best?.symbol).toBe('SPY   260903C00771000');
+    expect(diagnostics.best?.delta).toBe(0.62);
+  });
+
+  it('counts unquotable contracts separately from band misses', () => {
+    const chain = [
+      quote({ symbol: 'SPY   260903C00770000', delta: null, bid: 1, ask: 1.02 }),
+    ];
+    const { diagnostics } = selectContractDetailed(chain, 'CALL', filters);
+    expect(diagnostics.rejects.noQuote).toBe(1);
+    expect(diagnostics.rejects.delta).toBe(0);
+  });
+
+  it('has no best and no rejects when a candidate matches', () => {
+    const chain = [
+      quote({ symbol: 'SPY   260903C00770000', delta: 0.5, bid: 1, ask: 1.02 }),
+    ];
+    const { contract, diagnostics } = selectContractDetailed(
+      chain,
+      'CALL',
+      filters,
+    );
+    expect(contract?.symbol).toBe('SPY   260903C00770000');
+    expect(diagnostics.best).toBeNull();
+    expect(diagnostics.rejects).toEqual({
+      delta: 0,
+      premium: 0,
+      spread: 0,
+      noQuote: 0,
+    });
   });
 });

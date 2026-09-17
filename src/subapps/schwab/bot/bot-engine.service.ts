@@ -37,7 +37,7 @@ import {
 } from './bot-strategy.util';
 import {
   computeBudget,
-  selectContract,
+  selectContractDetailed,
   sizePosition,
 } from './bot-strike-selection.util';
 import { computeExitLevels, decideSoftExit } from './bot-exit.util';
@@ -65,6 +65,9 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
   private transientPhase: 'ENTERING' | 'EXITING' | null = null;
   private lastEmittedPhase: BotPhase | null = null;
   private lastPremiumQuoteAt = 0;
+  /** Epoch ms the soft-exit loop last obtained an option bid. Null means the
+   * premium stop/target is armed but currently not being evaluated. */
+  private lastPremiumBidAt: number | null = null;
   private softExitChecking = false;
 
   constructor(
@@ -82,6 +85,14 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
 
   getTransientPhase(): 'ENTERING' | 'EXITING' | null {
     return this.transientPhase;
+  }
+
+  /** Epoch ms of the last option bid the soft-exit loop managed to read, or
+   * null if it has not read one for the current position. `getStatus` turns
+   * this into `premiumWatchOk` so the desk can show when a premium stop is
+   * armed but not actually being evaluated. */
+  getLastPremiumBidAt(): number | null {
+    return this.lastPremiumBidAt;
   }
 
   onModuleInit(): void {
@@ -369,7 +380,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       symbol: 'SPY',
       strikeCount: 16,
     });
-    const contract = selectContract(chain, direction, {
+    const { contract, diagnostics } = selectContractDetailed(chain, direction, {
       deltaMin: settings.deltaMin,
       deltaMax: settings.deltaMax,
       minPremium: settings.minPremium,
@@ -381,7 +392,18 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         lane: row.lane,
         type: BotEventType.SKIP,
         direction: direction as BotDirection,
+        symbol: contract?.symbol,
         reason: 'NO_CONTRACT_MATCH',
+        payload: {
+          ...diagnostics,
+          filters: {
+            deltaMin: settings.deltaMin,
+            deltaMax: settings.deltaMax,
+            minPremium: settings.minPremium,
+            maxPremium: settings.maxPremium,
+            maxSpreadPct: settings.maxSpreadPct,
+          },
+        },
       });
       return;
     }
@@ -485,12 +507,17 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       symbol: contract.symbol,
       quantity: qty,
       entryPrice: result.fillPrice,
+      openedAt: Date.now(),
+      entryUnderlying: spot ?? null,
+      direction: direction as BotDirection,
+      atrUsed: levels.atrUsed,
       stopUnderlying: spot != null ? levels.stopUnderlying : null,
       targetUnderlying: spot != null ? levels.targetUnderlying : null,
       stopPremium: levels.stopPremium,
       targetPremium: levels.targetPremium,
       source: row.lane,
     };
+    this.lastPremiumBidAt = null;
     row.lastSignal = {
       at: signal.at,
       strategies: signal.strategies as BotStrategy[],
@@ -539,7 +566,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       const row = await this.botStateService.getRow();
       if (!row.openPosition || !row.lane) return;
       const pos = row.openPosition;
-      const direction = row.lastSignal?.direction;
+      const direction = pos.direction ?? row.lastSignal?.direction;
 
       let optionBid: number | null = null;
       const now = Date.now();
@@ -569,6 +596,8 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
+      if (optionBid != null) this.lastPremiumBidAt = now;
+
       const reason = decideSoftExit({
         direction,
         spot,
@@ -592,7 +621,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     const row = await this.botStateService.getRow();
     if (!row.openPosition || !row.lane) return;
     const accountHash = await this.botStateService.resolveAccountHash();
-    const direction = row.lastSignal?.direction;
+    const direction = row.openPosition.direction ?? row.lastSignal?.direction;
     const spot = this.streamerService.getLastKnownSpotPrice();
 
     const streamed = this.streamerService.getLastOptionQuote(
@@ -671,6 +700,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     );
     const closedPosition = row.openPosition;
     row.openPosition = null;
+    this.lastPremiumBidAt = null;
     await this.botStateService.save(row);
     await this.botEventService.record({
       lane: row.lane,

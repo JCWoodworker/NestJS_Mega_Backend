@@ -1141,13 +1141,21 @@ frontend already has `/options` open.
   lockoutReason: string | null      // e.g. 'MAX_LOSS_USD', 'HARD_FLATTEN_EOD', 'KILL_SWITCH', 'RECON_MISMATCH', 'SOCKET_LOSS'
   equity: number
   settledCash: number
+  dayStartEquity: number            // active lane's session start (% gate denominator)
   paperEquity: number               // bot-paper ledger (always present)
   paperSettledCash: number
   minEquityOk: boolean              // equity >= $5,000 (paper and live)
   minEquityThreshold: number        // 5000
+  cooldownUntil: number | null      // epoch ms entries unblock; null when clear
+  premiumWatchOk: boolean           // false = premium stop armed but no bid reaching the engine
   openPosition: null | {
     symbol: string; quantity: number; entryPrice: number
     stopUnderlying: number | null; targetUnderlying: number | null
+    stopPremium?: number | null; targetPremium?: number | null
+    openedAt?: number               // epoch ms of the entry fill
+    entryUnderlying?: number | null // SPY spot at entry
+    direction?: 'CALL' | 'PUT'      // side the soft-exit logic evaluates
+    atrUsed?: number | null
     source: 'BOT_PAPER' | 'BOT_LIVE'
   }
   lastSignal: null | {
@@ -1463,6 +1471,20 @@ Current state:
 
 ## Changelog
 
+- **2026-09-17 (bot status telemetry for the desk's Bot Status panel)**: `GET /bot/status` adds
+  `dayStartEquity` (lane-aware; paper had no other source for the `%`-of-day-start gates),
+  `cooldownUntil`, and `premiumWatchOk` — the last one exposes a real safety gap: when neither
+  the stream nor the throttled REST fallback yields an option bid, the premium soft-stop is not
+  evaluated while the underlying stop still is, and nothing surfaced that. `openPosition` gains
+  `openedAt`, `entryUnderlying`, `direction`, `atrUsed` (jsonb column — no migration); the
+  soft-exit and close paths now prefer `openPosition.direction` over `lastSignal.direction`.
+  `selectContract` gained `selectContractDetailed`, so `SKIP / NO_CONTRACT_MATCH` carries
+  `chainSize`, `rightMatches`, per-filter `rejects`, nearest-miss `best`, and the `filters` in
+  force — previously the most likely reason a real signal produced no trade was indistinguishable
+  from a broken bot. Frontend consumes all of this in a new bot-mode Bot Status panel. Note for
+  future contract edits: the desk had been reading `premiumStop`/`premiumTarget` while this
+  backend has always sent `stopPremium`/`targetPremium`, so bid stop/target silently never
+  rendered — the field names are now documented above.
 - **2026-09-17 (frequent entries: ANY combine + two-sided defaults)**: Added
   `combineMode: 'ANY'` (OR — first enabled strategy signal fires). Default is now **ANY**
   (was CONFIRMING-only). Defaults also flip to calls+puts capability/preference, window

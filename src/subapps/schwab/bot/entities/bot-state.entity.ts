@@ -19,6 +19,14 @@ export interface BotOpenPosition {
   stopPremium?: number | null;
   /** Option premium target (bid ≥ this → PREMIUM_TARGET). */
   targetPremium?: number | null;
+  /** Epoch ms of the entry fill — time in trade. */
+  openedAt?: number;
+  /** SPY spot at entry; underlying stop distance is unreadable without it. */
+  entryUnderlying?: number | null;
+  /** Side the soft-exit logic evaluates against (mirrors `lastSignal.direction`). */
+  direction?: BotDirection;
+  /** ATR that produced `stopUnderlying` / `targetUnderlying`. */
+  atrUsed?: number | null;
   source: BotLane;
 }
 
