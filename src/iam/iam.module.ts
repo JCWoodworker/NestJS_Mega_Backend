@@ -3,15 +3,16 @@ import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import authConfig from '@config/auth.config';
-
 import { Users } from '@users/entities/users.entity';
+
+import authConfig from '@config/auth.config';
 
 import { SubappsService } from '@subapps/subapps.service';
 
 import { OblBusinesses } from '@onlybizlinks/entities/oblBusinesses.entity';
 import { OblUsersAndBusinesses } from '@onlybizlinks/entities/oblUsersAndBusinesses.entity';
 
+import { AdminBootstrapService } from './authentication/admin-bootstrap.service';
 import { AllowedEmailsController } from './authentication/allowed-emails.controller';
 import { AuthAllowlistService } from './authentication/auth-allowlist.service';
 import { AuthenticationController } from './authentication/authentication.controller';
@@ -34,6 +35,7 @@ import { HashingService } from './hashing/hashing.service';
       useClass: BcryptService,
     },
     AccessTokenGuard,
+    AdminBootstrapService,
     AuthenticationService,
     AuthAllowlistService,
     RefreshTokensService,
