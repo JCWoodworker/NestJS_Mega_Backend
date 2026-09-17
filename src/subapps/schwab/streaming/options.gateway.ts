@@ -82,6 +82,8 @@ export interface BotStatusPayload {
   lockoutReason: string | null;
   equity: number;
   settledCash: number;
+  paperEquity: number;
+  paperSettledCash: number;
   minEquityOk: boolean;
   minEquityThreshold: number;
   openPosition: unknown;

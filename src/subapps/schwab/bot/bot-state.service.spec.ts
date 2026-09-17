@@ -16,9 +16,9 @@ function buildService() {
     lockout: false,
     lockoutReason: null,
     liveArmed: false,
-    paperEquity: 1000,
-    paperSettledCash: 1000,
-    paperDayStartEquity: 1000,
+    paperEquity: 6000,
+    paperSettledCash: 6000,
+    paperDayStartEquity: 6000,
     openPosition: null,
     lastSignal: null,
     lastError: null,
@@ -193,23 +193,54 @@ describe('BotStateService invariants', () => {
     expect(botEngine.flattenAndHalt).not.toHaveBeenCalled();
   });
 
-  it('minEquityOk is false below the $100 floor for paper equity', async () => {
+  it('minEquityOk is false below the $5,000 floor for paper equity', async () => {
     const { service, getRowSnapshot } = buildService();
     await service.setLane(BotLane.BOT_PAPER);
-    getRowSnapshot().paperEquity = 50;
+    getRowSnapshot().paperEquity = 4999;
     const status = await service.getStatus();
-    expect(status.equity).toBe(50);
+    expect(status.equity).toBe(4999);
     expect(status.minEquityOk).toBe(false);
-    expect(status.minEquityThreshold).toBe(100);
+    expect(status.minEquityThreshold).toBe(5000);
   });
 
-  it('minEquityOk is true at/above the $100 floor', async () => {
+  it('minEquityOk is true at/above the $5,000 floor for paper', async () => {
     const { service, getRowSnapshot } = buildService();
     await service.setLane(BotLane.BOT_PAPER);
-    getRowSnapshot().paperEquity = 1000;
+    getRowSnapshot().paperEquity = 6000;
     const status = await service.getStatus();
     expect(status.minEquityOk).toBe(true);
-    expect(status.minEquityThreshold).toBe(100);
+    expect(status.minEquityThreshold).toBe(5000);
+  });
+
+  it('rejects BOT_PAPER lane when paper equity is below $5,000', async () => {
+    const { service, getRowSnapshot } = buildService();
+    getRowSnapshot().paperEquity = 1000;
+    await expect(service.setLane(BotLane.BOT_PAPER)).rejects.toThrow(
+      BadRequestException,
+    );
+  });
+
+  it('resetPaper sets equity/settled/day-start and refuses under the floor', async () => {
+    const { service, getRowSnapshot } = buildService();
+    getRowSnapshot().paperEquity = 99996;
+    getRowSnapshot().paperSettledCash = 99996;
+    const status = await service.resetPaper(6000);
+    expect(status.paperEquity).toBe(6000);
+    expect(status.paperSettledCash).toBe(6000);
+    expect(getRowSnapshot().paperSettledCash).toBe(6000);
+    expect(getRowSnapshot().paperDayStartEquity).toBe(6000);
+    await expect(service.resetPaper(100)).rejects.toThrow(BadRequestException);
+  });
+
+  it('resetPaper refuses while a BOT_PAPER position is open', async () => {
+    const { service, getRowSnapshot } = buildService();
+    getRowSnapshot().openPosition = {
+      symbol: 'X',
+      quantity: 1,
+      entryPrice: 1,
+      source: BotLane.BOT_PAPER,
+    };
+    await expect(service.resetPaper(6000)).rejects.toThrow(ConflictException);
   });
 
   it('minEquityThreshold is $5,000 for BOT_LIVE and gates minEquityOk accordingly', async () => {

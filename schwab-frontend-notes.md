@@ -1114,11 +1114,12 @@ as the rest of the Schwab subapp:
 |--------|------|------|-------|
 | GET | `/status` | — | `BotStatus` (see below); poll this or listen for `bot-status`. |
 | POST | `/mode` | `{ mode: 'MANUAL' \| 'BOT' }` | `MANUAL`/`BOT` are mutually exclusive. |
-| POST | `/lane` | `{ lane: 'BOT_PAPER' \| 'BOT_LIVE', confirmLive?: boolean }` | `BOT_LIVE` requires `confirmLive: true` **and** a prior `/live/enable`, else **400**. Also requires live equity ≥ **$5,000**, else **400**. Switching lanes while a bot position is open in the *other* lane returns **409**. |
+| POST | `/lane` | `{ lane: 'BOT_PAPER' \| 'BOT_LIVE', confirmLive?: boolean }` | `BOT_LIVE` requires `confirmLive: true` **and** a prior `/live/enable`, else **400**. Paper and live both require equity ≥ **$5,000**, else **400**. Switching lanes while a bot position is open in the *other* lane returns **409**. |
 | POST | `/kill` | `{ scope: 'ALL' \| 'PAPER' \| 'LIVE' }` | Flattens any open bot position in scope, cancels bot-tagged working orders (live), and sets `lockout: true`, `lockoutReason: 'KILL_SWITCH'`. |
 | POST | `/unlock` | `{}` | **New 2026-09-04.** Operator recovery from a kill-switch / precautionary lockout, same trading session — see "Clearing a lockout" below. |
-| POST | `/live/enable` | `{ confirm: true }` | Arms live trading; `confirm !== true` → **400**. Live equity must be ≥ **$5,000**, else **400**. Arming alone does not start trading — `lane` must still be set to `BOT_LIVE`. |
+| POST | `/live/enable` | `{ confirm: true }` | Arms live trading; `confirm !== true` → **400**. Equity must be ≥ **$5,000**, else **400**. Arming alone does not start trading — `lane` must still be set to `BOT_LIVE`. |
 | POST | `/live/disable` | `{}` | Disarms live; if currently `BOT_LIVE`, flattens + halts (scope `LIVE`) first, then clears the lane. |
+| POST | `/paper/reset` | `{ equity?: number }` | Reset bot-paper ledger to `equity` (default **$6,000**, min **$5,000**). **409** if an open BOT_PAPER position exists. |
 | GET | `/settings` | — | `BotSettings` (see below). |
 | PUT | `/settings` | partial `BotSettings` patch | Server is the source of truth; unspecified fields are unchanged. |
 
@@ -1140,8 +1141,10 @@ frontend already has `/options` open.
   lockoutReason: string | null      // e.g. 'MAX_LOSS_USD', 'HARD_FLATTEN_EOD', 'KILL_SWITCH', 'RECON_MISMATCH', 'SOCKET_LOSS'
   equity: number
   settledCash: number
-  minEquityOk: boolean              // equity >= lane floor ($100 paper / $5,000 BOT_LIVE)
-  minEquityThreshold: number        // 100 | 5000
+  paperEquity: number               // bot-paper ledger (always present)
+  paperSettledCash: number
+  minEquityOk: boolean              // equity >= $5,000 (paper and live)
+  minEquityThreshold: number        // 5000
   openPosition: null | {
     symbol: string; quantity: number; entryPrice: number
     stopUnderlying: number | null; targetUnderlying: number | null
@@ -1458,6 +1461,11 @@ Current state:
 
 ## Changelog
 
+- **2026-09-17 (paper mimics live: shared $5k floor + $6k paper reset)**: Paper and live now
+  share the same **$5,000** min equity. Bot-paper ledger defaults to **$6,000**;
+  `POST /bot/paper/reset` resets equity/settled/day-start (refuses with open paper position).
+  `GET /bot/status` always includes `paperEquity` / `paperSettledCash`. Migration resets the
+  existing paper singleton to $6,000 when no open BOT_PAPER position.
 - **2026-09-16 (BOT_LIVE $5,000 floor + settings Basic/Advanced)**: Lane-aware min equity —
   paper stays **$100**; BOT_LIVE arm (`POST /bot/live/enable`), lane-switch (`POST /bot/lane`),
   and entry gating require **$5,000** live equity. `GET /bot/status` adds `minEquityThreshold`

@@ -161,7 +161,7 @@ export function buildSuggestedSettings(
 
   if (!liveEligible) {
     warnings.push(
-      `BOT_LIVE requires at least $${MIN_EQUITY_LIVE.toLocaleString('en-US')} equity — these settings are for BOT_PAPER practice until then.`,
+      `Bot requires at least $${MIN_EQUITY_LIVE.toLocaleString('en-US')} equity for both BOT_PAPER and BOT_LIVE — raise paper capital (POST /bot/paper/reset) or fund the live account.`,
     );
   }
 

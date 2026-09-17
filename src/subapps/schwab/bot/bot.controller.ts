@@ -16,10 +16,12 @@ import { BotStateService } from './bot-state.service';
 import { KillDto } from './dto/kill.dto';
 import { ListEventsDto } from './dto/list-events.dto';
 import { LiveEnableDto } from './dto/live-enable.dto';
+import { ResetPaperDto } from './dto/reset-paper.dto';
 import { SetLaneDto } from './dto/set-lane.dto';
 import { SetModeDto } from './dto/set-mode.dto';
 import { UpdateBotSettingsDto } from './dto/update-bot-settings.dto';
 import { BotEventType } from './enums/bot-event-type.enum';
+import { DEFAULT_PAPER_EQUITY } from './bot-equity-thresholds.const';
 
 @Throttle({ default: { limit: 120, ttl: 60000 } })
 @Controller('bot')
@@ -155,6 +157,15 @@ export class BotController {
   @HttpCode(HttpStatus.OK)
   async disableLive() {
     return this.botStateService.disableLive();
+  }
+
+  /** Reset bot-paper ledger to a starting equity (default $6,000). */
+  @Post('paper/reset')
+  @HttpCode(HttpStatus.OK)
+  async resetPaper(@Body() dto: ResetPaperDto) {
+    return this.botStateService.resetPaper(
+      dto.equity ?? DEFAULT_PAPER_EQUITY,
+    );
   }
 
   @Get('settings')

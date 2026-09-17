@@ -78,7 +78,7 @@ export class BotState {
     precision: 18,
     scale: 4,
     name: 'paper_equity',
-    default: 1000,
+    default: 6000,
   })
   paperEquity: number;
 
@@ -87,7 +87,7 @@ export class BotState {
     precision: 18,
     scale: 4,
     name: 'paper_settled_cash',
-    default: 1000,
+    default: 6000,
   })
   paperSettledCash: number;
 
@@ -96,7 +96,7 @@ export class BotState {
     precision: 18,
     scale: 4,
     name: 'paper_day_start_equity',
-    default: 1000,
+    default: 6000,
   })
   paperDayStartEquity: number;
 

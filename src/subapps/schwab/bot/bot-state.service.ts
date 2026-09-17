@@ -21,8 +21,8 @@ import { mapAccountBalances } from '@schwab/shared/account-data.mapper';
 import { BotEventPayload } from '@schwab/streaming/options.gateway';
 
 import {
-  MIN_EQUITY_LIVE,
-  MIN_EQUITY_PAPER,
+  DEFAULT_PAPER_EQUITY,
+  MIN_EQUITY,
 } from './bot-equity-thresholds.const';
 import { BotEngineService } from './bot-engine.service';
 import { BotEventService } from './bot-event.service';
@@ -48,8 +48,11 @@ export interface BotStatusView {
   lockoutReason: string | null;
   equity: number;
   settledCash: number;
+  /** Bot-paper ledger (always present; independent of active lane). */
+  paperEquity: number;
+  paperSettledCash: number;
   minEquityOk: boolean;
-  /** Dollar floor used for `minEquityOk` (paper $100 / live $5,000). */
+  /** Dollar floor used for `minEquityOk` ($5,000 for paper and live). */
   minEquityThreshold: number;
   openPosition: BotOpenPosition | null;
   lastSignal: BotLastSignal | null;
@@ -64,14 +67,10 @@ export interface BotStatusView {
  * (frontend contract §14j). Full history is `GET /bot/events`. */
 const RECENT_EVENTS_COUNT = 20;
 
-function minEquityThresholdFor(lane: BotLane | null): number {
-  return lane === BotLane.BOT_LIVE ? MIN_EQUITY_LIVE : MIN_EQUITY_PAPER;
-}
-
-function assertLiveEquityOk(liveEquity: number): void {
-  if (liveEquity >= MIN_EQUITY_LIVE) return;
+function assertMinEquity(equity: number, context: string): void {
+  if (equity >= MIN_EQUITY) return;
   throw new BadRequestException(
-    `BOT_LIVE requires at least $${MIN_EQUITY_LIVE.toLocaleString('en-US')} equity (current live equity: $${liveEquity.toFixed(2)})`,
+    `${context} requires at least $${MIN_EQUITY.toLocaleString('en-US')} equity (current: $${equity.toFixed(2)})`,
   );
 }
 
@@ -221,7 +220,7 @@ export class BotStateService {
       ),
     });
 
-    const minEquityThreshold = minEquityThresholdFor(row.lane);
+    const minEquityThreshold = MIN_EQUITY;
 
     return {
       mode: row.mode,
@@ -232,6 +231,8 @@ export class BotStateService {
       lockoutReason: row.lockoutReason,
       equity,
       settledCash,
+      paperEquity: Number(row.paperEquity),
+      paperSettledCash: Number(row.paperSettledCash),
       minEquityOk: equity >= minEquityThreshold,
       minEquityThreshold,
       openPosition: row.openPosition,
@@ -307,7 +308,11 @@ export class BotStateService {
           'BOT_LIVE requires live to be armed via POST /bot/live/enable',
         );
       }
-      assertLiveEquityOk(this.liveEquity);
+      assertMinEquity(this.liveEquity, 'BOT_LIVE');
+    }
+    if (lane === BotLane.BOT_PAPER) {
+      const paperRow = await this.getRow();
+      assertMinEquity(Number(paperRow.paperEquity), 'BOT_PAPER');
     }
 
     const row = await this.getRow();
@@ -337,7 +342,7 @@ export class BotStateService {
     if (confirm !== true) {
       throw new BadRequestException('confirm must be true');
     }
-    assertLiveEquityOk(this.liveEquity);
+    assertMinEquity(this.liveEquity, 'BOT_LIVE');
     const row = await this.getRow();
     row.liveArmed = true;
     await this.save(row);
@@ -346,6 +351,44 @@ export class BotStateService {
       type: BotEventType.OPERATOR_LIVE,
       reason: 'LIVE_ARMED',
       payload: { liveArmed: true },
+    });
+    this.botEngine.onControlPlaneChange();
+    return this.getStatus();
+  }
+
+  /**
+   * Reset the bot-paper ledger to a fixed starting equity (default $6,000).
+   * Refuses while a paper position is open so we don't orphan fills.
+   */
+  async resetPaper(equity = DEFAULT_PAPER_EQUITY): Promise<BotStatusView> {
+    if (!Number.isFinite(equity) || equity < MIN_EQUITY) {
+      throw new BadRequestException(
+        `Paper reset equity must be a number >= $${MIN_EQUITY.toLocaleString('en-US')}`,
+      );
+    }
+    const row = await this.getRow();
+    if (
+      row.openPosition &&
+      row.openPosition.source === BotLane.BOT_PAPER
+    ) {
+      throw new ConflictException(
+        'Flatten the open BOT_PAPER position before resetting paper capital',
+      );
+    }
+    const before = {
+      paperEquity: Number(row.paperEquity),
+      paperSettledCash: Number(row.paperSettledCash),
+      paperDayStartEquity: Number(row.paperDayStartEquity),
+    };
+    row.paperEquity = equity;
+    row.paperSettledCash = equity;
+    row.paperDayStartEquity = equity;
+    await this.save(row);
+    await this.botEventService.record({
+      lane: row.lane,
+      type: BotEventType.OPERATOR_SETTINGS,
+      reason: 'PAPER_RESET',
+      payload: { before, after: { paperEquity: equity, paperSettledCash: equity, paperDayStartEquity: equity } },
     });
     this.botEngine.onControlPlaneChange();
     return this.getStatus();
