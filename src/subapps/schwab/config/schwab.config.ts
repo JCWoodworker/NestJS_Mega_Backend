@@ -28,4 +28,13 @@ export default registerAs('schwab', () => ({
    * datasets and double the Schwab call volume.
    */
   botRecordingEnabled: process.env.BOT_RECORDING_ENABLED === 'true',
+  /**
+   * The one account the bot improvement loop trains on. Distinct from the
+   * admin *role*: role says who may operate the lab UI, this says whose
+   * trading data *is* the lab. Every other user's bot runs normally and
+   * contributes nothing to the corpus.
+   *
+   * Also used to backfill the pre-multi-tenant `schwab_tokens` row.
+   */
+  ownerUserId: process.env.SCHWAB_OWNER_USER_ID?.trim() || null,
 }));

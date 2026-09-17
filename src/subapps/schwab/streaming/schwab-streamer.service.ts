@@ -13,6 +13,7 @@ import * as WebSocket from 'ws';
 
 import { SchwabAuthService } from '@schwab/auth/schwab-auth.service';
 import schwabConfig from '@schwab/config/schwab.config';
+import { runAsUser } from '@schwab/shared/schwab-user-context';
 
 import {
   mapChartEquityCandle,
@@ -205,11 +206,30 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
     this.socket?.close();
   }
 
+  /**
+   * Interim single-tenant bridge. This service is still one process-wide
+   * socket, so it runs as the configured owner — which is exactly the
+   * account it has always used. Phase 3 replaces it with a per-user session
+   * pool, at which point the tenant comes from the session instead.
+   */
+  private runAsOwner<T>(fn: () => Promise<T>): Promise<T> {
+    if (!this.config.ownerUserId) {
+      return Promise.reject(
+        new Error(
+          'SCHWAB_OWNER_USER_ID is not configured — the streamer has no account to connect as',
+        ),
+      );
+    }
+    return runAsUser(this.config.ownerUserId, fn);
+  }
+
   private async connect(): Promise<void> {
     if (this.destroyed) return;
 
     try {
-      const accessToken = await this.authService.getValidAccessToken();
+      const accessToken = await this.authService.getValidAccessToken(
+        this.config.ownerUserId,
+      );
       this.streamerInfo = await this.fetchStreamerInfo();
       this.openSocket(accessToken);
     } catch (err) {
@@ -223,8 +243,8 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async fetchStreamerInfo(): Promise<StreamerInfo> {
-    const response = await firstValueFrom(
-      this.httpService.get('/trader/v1/userPreference'),
+    const response = await this.runAsOwner(() =>
+      firstValueFrom(this.httpService.get('/trader/v1/userPreference')),
     );
     const streamerInfo = response.data?.streamerInfo?.[0];
     if (!streamerInfo) {
@@ -403,10 +423,12 @@ export class SchwabStreamerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async fetchInitialUnderlyingPrice(): Promise<number> {
-    const response = await firstValueFrom(
-      this.httpService.get('/marketdata/v1/quotes', {
-        params: { symbols: this.underlyingSymbol },
-      }),
+    const response = await this.runAsOwner(() =>
+      firstValueFrom(
+        this.httpService.get('/marketdata/v1/quotes', {
+          params: { symbols: this.underlyingSymbol },
+        }),
+      ),
     );
     const quote = response.data?.[this.underlyingSymbol]?.quote;
     return quote?.lastPrice ?? quote?.mark ?? 0;

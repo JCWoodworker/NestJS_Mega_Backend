@@ -2,6 +2,7 @@ import { Controller, Get, Query, Res } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Response } from 'express';
 
+import { ActiveUser } from '@iam/decorators/active-user.decorator';
 import { Auth } from '@iam/decorators/auth.decorator';
 import { AuthType } from '@iam/enums/auth-type.enum';
 
@@ -30,9 +31,15 @@ export class SchwabAuthController {
    * carry Authorization). `returnTo` must be an allowlisted origin / scheme.
    */
   @Get('connect')
-  connect(@Query('returnTo') returnTo: string) {
+  connect(
+    @ActiveUser('sub') userId: string,
+    @Query('returnTo') returnTo: string,
+  ) {
     return {
-      authorizationUrl: this.schwabAuthService.buildAuthorizationUrl(returnTo),
+      authorizationUrl: this.schwabAuthService.buildAuthorizationUrl(
+        userId,
+        returnTo,
+      ),
     };
   }
 
@@ -49,7 +56,7 @@ export class SchwabAuthController {
   }
 
   @Get('status')
-  status() {
-    return this.schwabAuthService.getConnectionStatus();
+  status(@ActiveUser('sub') userId: string) {
+    return this.schwabAuthService.getConnectionStatus(userId);
   }
 }

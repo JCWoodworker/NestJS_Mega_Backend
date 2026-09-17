@@ -14,6 +14,7 @@ import { SchwabAuthService } from '@schwab/auth/schwab-auth.service';
 import schwabConfig from '@schwab/config/schwab.config';
 import { MarketDataService } from '@schwab/market-data/market-data.service';
 import { etDateKey } from '@schwab/pnl/et-date.util';
+import { runAsUser } from '@schwab/shared/schwab-user-context';
 
 import { commissionForRoundTrip } from './bot-fees.const';
 import { etNowHhMm, isWithinWindow } from './bot-strategy.util';
@@ -312,11 +313,23 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
     if (this.ticking) return;
     this.ticking = true;
     try {
+      // The improvement loop trains on the owner's account only, so the
+      // recorder reads market data through the owner's Schwab connection.
+      // Without a configured owner there is nothing to record against.
+      const ownerUserId = this.config.ownerUserId;
+      if (!ownerUserId) {
+        this.logDeduped(
+          'Skipping recording tick: SCHWAB_OWNER_USER_ID is not configured',
+        );
+        return;
+      }
+
       // Every Schwab call is doomed without a token, and the price-history
       // wrapper swallows the underlying 'not connected' detail — so check
       // first and skip quietly, the way the sibling pollers do, rather than
       // emitting a failure every minute of every session.
-      const { connected } = await this.schwabAuthService.getConnectionStatus();
+      const { connected } =
+        await this.schwabAuthService.getConnectionStatus(ownerUserId);
       if (!connected) {
         this.logDeduped(
           'Skipping recording tick: Schwab account not connected',
@@ -325,11 +338,13 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
       }
 
       const nowHhMm = etNowHhMm();
-      if (isWithinWindow(nowHhMm, SNAPSHOT_START, SNAPSHOT_END)) {
-        await this.snapshotChain(nowHhMm);
-      } else if (nowHhMm >= BACKFILL_AFTER && nowHhMm < '23:59') {
-        await this.backfillMarketDay();
-      }
+      await runAsUser(ownerUserId, async () => {
+        if (isWithinWindow(nowHhMm, SNAPSHOT_START, SNAPSHOT_END)) {
+          await this.snapshotChain(nowHhMm);
+        } else if (nowHhMm >= BACKFILL_AFTER && nowHhMm < '23:59') {
+          await this.backfillMarketDay();
+        }
+      });
       this.lastTickProblem = null;
     } catch (err) {
       // A persistent failure would otherwise log 390 times a session.
