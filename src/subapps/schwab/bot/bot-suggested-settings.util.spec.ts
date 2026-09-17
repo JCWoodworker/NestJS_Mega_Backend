@@ -1,3 +1,4 @@
+import { MIN_EQUITY_LIVE } from './bot-equity-thresholds.const';
 import {
   buildSuggestedSettings,
   classifySettingsTier,
@@ -47,6 +48,8 @@ function baseSettings(overrides: Record<string, unknown> = {}) {
   } as any;
 }
 
+const PRACTICE_WARNING = `BOT_LIVE requires at least $${MIN_EQUITY_LIVE.toLocaleString('en-US')} equity — these settings are for BOT_PAPER practice until then.`;
+
 describe('classifySettingsTier', () => {
   it('maps equity bands', () => {
     expect(classifySettingsTier(110)).toBe('MICRO');
@@ -61,6 +64,7 @@ describe('buildSuggestedSettings', () => {
   it('MICRO: single strategy, riskPct < 100, no PUT when canBuyPuts false', () => {
     const result = buildSuggestedSettings(110, baseSettings());
     expect(result.tier).toBe('MICRO');
+    expect(result.liveEligible).toBe(false);
     expect(result.suggested.strategiesEnabled).toEqual([
       BotStrategy.VWAP_PULLBACK,
     ]);
@@ -70,17 +74,34 @@ describe('buildSuggestedSettings', () => {
     expect(result.suggested.directionsEnabled).toEqual([BotDirection.CALL]);
     expect(result.suggested.directionsEnabled).not.toContain(BotDirection.PUT);
     expect(result.patch.riskPct).toBeDefined();
+    expect(result.warnings).toContain(PRACTICE_WARNING);
     expect(result.warnings.length).toBeGreaterThan(0);
+  });
+
+  it('SMALL is practice-only (not liveEligible)', () => {
+    const result = buildSuggestedSettings(800, baseSettings());
+    expect(result.tier).toBe('SMALL');
+    expect(result.liveEligible).toBe(false);
+    expect(result.warnings).toContain(PRACTICE_WARNING);
   });
 
   it('STANDARD at $3k uses dual strategies and higher minPremium', () => {
     const result = buildSuggestedSettings(3000, baseSettings());
     expect(result.tier).toBe('STANDARD');
+    expect(result.liveEligible).toBe(false);
     expect(result.suggested.strategiesEnabled).toEqual([
       BotStrategy.VWAP_PULLBACK,
       BotStrategy.ORB_5M,
     ]);
     expect(result.suggested.minPremium).toBeGreaterThanOrEqual(1);
+    expect(result.warnings).toContain(PRACTICE_WARNING);
+  });
+
+  it('COMFORTABLE at $5k+ is liveEligible without the practice warning', () => {
+    const result = buildSuggestedSettings(5000, baseSettings());
+    expect(result.tier).toBe('COMFORTABLE');
+    expect(result.liveEligible).toBe(true);
+    expect(result.warnings).not.toContain(PRACTICE_WARNING);
   });
 
   it('includes PUT when canBuyPuts is true', () => {

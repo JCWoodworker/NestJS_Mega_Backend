@@ -101,13 +101,42 @@ describe('BotStateService invariants', () => {
 
   it('allows BOT_LIVE lane once armed + confirmed', async () => {
     const { service } = buildService();
+    service.updateLiveBalances(5000, 5000, 5000);
     await service.enableLive(true);
     const status = await service.setLane(BotLane.BOT_LIVE, true);
     expect(status.lane).toBe(BotLane.BOT_LIVE);
   });
 
+  it('enableLive rejects when live equity is below $5,000', async () => {
+    const { service } = buildService();
+    service.updateLiveBalances(4999.99, 4999.99, 4999.99);
+    await expect(service.enableLive(true)).rejects.toThrow(BadRequestException);
+    await expect(service.enableLive(true)).rejects.toThrow(/\$5,000/);
+  });
+
+  it('enableLive succeeds when live equity is at/above $5,000', async () => {
+    const { service } = buildService();
+    service.updateLiveBalances(5000, 5000, 5000);
+    const status = await service.enableLive(true);
+    expect(status.liveArmed).toBe(true);
+  });
+
+  it('rejects BOT_LIVE lane when live equity drops below $5,000 after arming', async () => {
+    const { service } = buildService();
+    service.updateLiveBalances(6000, 6000, 6000);
+    await service.enableLive(true);
+    service.updateLiveBalances(1000, 1000, 1000);
+    await expect(service.setLane(BotLane.BOT_LIVE, true)).rejects.toThrow(
+      BadRequestException,
+    );
+    await expect(service.setLane(BotLane.BOT_LIVE, true)).rejects.toThrow(
+      /\$5,000/,
+    );
+  });
+
   it('enableLive rejects confirm !== true', async () => {
     const { service } = buildService();
+    service.updateLiveBalances(5000, 5000, 5000);
     await expect(service.enableLive(false as any)).rejects.toThrow(
       BadRequestException,
     );
@@ -125,6 +154,7 @@ describe('BotStateService invariants', () => {
     const row = getRowSnapshot();
     row.openPosition = { symbol: 'X', quantity: 1, entryPrice: 1 };
 
+    service.updateLiveBalances(5000, 5000, 5000);
     await service.enableLive(true);
     await expect(service.setLane(BotLane.BOT_LIVE, true)).rejects.toThrow(
       ConflictException,
@@ -142,6 +172,7 @@ describe('BotStateService invariants', () => {
 
   it('disableLive flattens+halts LIVE scope only when lane is BOT_LIVE, and clears armed flag', async () => {
     const { service, botEngine, getRowSnapshot } = buildService();
+    service.updateLiveBalances(5000, 5000, 5000);
     await service.enableLive(true);
     await service.setLane(BotLane.BOT_LIVE, true);
 
@@ -169,6 +200,7 @@ describe('BotStateService invariants', () => {
     const status = await service.getStatus();
     expect(status.equity).toBe(50);
     expect(status.minEquityOk).toBe(false);
+    expect(status.minEquityThreshold).toBe(100);
   });
 
   it('minEquityOk is true at/above the $100 floor', async () => {
@@ -177,6 +209,24 @@ describe('BotStateService invariants', () => {
     getRowSnapshot().paperEquity = 1000;
     const status = await service.getStatus();
     expect(status.minEquityOk).toBe(true);
+    expect(status.minEquityThreshold).toBe(100);
+  });
+
+  it('minEquityThreshold is $5,000 for BOT_LIVE and gates minEquityOk accordingly', async () => {
+    const { service } = buildService();
+    service.updateLiveBalances(4500, 4500, 4500);
+    await expect(service.enableLive(true)).rejects.toThrow(BadRequestException);
+
+    service.updateLiveBalances(5500, 5500, 5500);
+    await service.enableLive(true);
+    const status = await service.setLane(BotLane.BOT_LIVE, true);
+    expect(status.minEquityThreshold).toBe(5000);
+    expect(status.minEquityOk).toBe(true);
+
+    service.updateLiveBalances(4000, 4000, 4000);
+    const below = await service.getStatus();
+    expect(below.minEquityThreshold).toBe(5000);
+    expect(below.minEquityOk).toBe(false);
   });
 
   it('phase is STOPPED in MANUAL mode / with no lane', async () => {

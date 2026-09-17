@@ -20,6 +20,10 @@ import { etDateKey, etDayBounds } from '@schwab/pnl/et-date.util';
 import { mapAccountBalances } from '@schwab/shared/account-data.mapper';
 import { BotEventPayload } from '@schwab/streaming/options.gateway';
 
+import {
+  MIN_EQUITY_LIVE,
+  MIN_EQUITY_PAPER,
+} from './bot-equity-thresholds.const';
 import { BotEngineService } from './bot-engine.service';
 import { BotEventService } from './bot-event.service';
 import { computePhase } from './bot-phase.util';
@@ -45,6 +49,8 @@ export interface BotStatusView {
   equity: number;
   settledCash: number;
   minEquityOk: boolean;
+  /** Dollar floor used for `minEquityOk` (paper $100 / live $5,000). */
+  minEquityThreshold: number;
   openPosition: BotOpenPosition | null;
   lastSignal: BotLastSignal | null;
   lastError: string | null;
@@ -58,7 +64,16 @@ export interface BotStatusView {
  * (frontend contract §14j). Full history is `GET /bot/events`. */
 const RECENT_EVENTS_COUNT = 20;
 
-const MIN_EQUITY = 100;
+function minEquityThresholdFor(lane: BotLane | null): number {
+  return lane === BotLane.BOT_LIVE ? MIN_EQUITY_LIVE : MIN_EQUITY_PAPER;
+}
+
+function assertLiveEquityOk(liveEquity: number): void {
+  if (liveEquity >= MIN_EQUITY_LIVE) return;
+  throw new BadRequestException(
+    `BOT_LIVE requires at least $${MIN_EQUITY_LIVE.toLocaleString('en-US')} equity (current live equity: $${liveEquity.toFixed(2)})`,
+  );
+}
 
 /**
  * Lockout reasons an operator can clear same-session via `POST /bot/unlock`
@@ -206,6 +221,8 @@ export class BotStateService {
       ),
     });
 
+    const minEquityThreshold = minEquityThresholdFor(row.lane);
+
     return {
       mode: row.mode,
       lane: row.lane,
@@ -215,7 +232,8 @@ export class BotStateService {
       lockoutReason: row.lockoutReason,
       equity,
       settledCash,
-      minEquityOk: equity >= MIN_EQUITY,
+      minEquityOk: equity >= minEquityThreshold,
+      minEquityThreshold,
       openPosition: row.openPosition,
       lastSignal: row.lastSignal,
       lastError: row.lastError,
@@ -289,6 +307,7 @@ export class BotStateService {
           'BOT_LIVE requires live to be armed via POST /bot/live/enable',
         );
       }
+      assertLiveEquityOk(this.liveEquity);
     }
 
     const row = await this.getRow();
@@ -318,6 +337,7 @@ export class BotStateService {
     if (confirm !== true) {
       throw new BadRequestException('confirm must be true');
     }
+    assertLiveEquityOk(this.liveEquity);
     const row = await this.getRow();
     row.liveArmed = true;
     await this.save(row);

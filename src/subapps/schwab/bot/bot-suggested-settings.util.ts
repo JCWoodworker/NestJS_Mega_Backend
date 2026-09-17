@@ -1,3 +1,4 @@
+import { MIN_EQUITY_LIVE } from './bot-equity-thresholds.const';
 import { BotSettingsView } from './bot-settings.service';
 import { BotSettingsTier } from './enums/bot-event-type.enum';
 import {
@@ -9,6 +10,8 @@ import {
 export interface SuggestedSettingsResult {
   equity: number;
   tier: BotSettingsTier;
+  /** True when equity meets the BOT_LIVE floor ($5,000). */
+  liveEligible: boolean;
   suggested: BotSettingsView;
   patch: Partial<BotSettingsView>;
   rationale: string[];
@@ -28,6 +31,7 @@ export function buildSuggestedSettings(
   current: BotSettingsView,
 ): SuggestedSettingsResult {
   const tier = classifySettingsTier(equity);
+  const liveEligible = equity >= MIN_EQUITY_LIVE;
   const rationale: string[] = [];
   const warnings: string[] = [];
 
@@ -155,6 +159,12 @@ export function buildSuggestedSettings(
     );
   }
 
+  if (!liveEligible) {
+    warnings.push(
+      `BOT_LIVE requires at least $${MIN_EQUITY_LIVE.toLocaleString('en-US')} equity — these settings are for BOT_PAPER practice until then.`,
+    );
+  }
+
   rationale.push(`Tier ${tier} for equity $${equity.toFixed(2)}.`);
 
   const patch: Partial<BotSettingsView> = {};
@@ -166,5 +176,5 @@ export function buildSuggestedSettings(
     }
   }
 
-  return { equity, tier, suggested, patch, rationale, warnings };
+  return { equity, tier, liveEligible, suggested, patch, rationale, warnings };
 }

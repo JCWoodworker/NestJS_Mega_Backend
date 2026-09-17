@@ -83,6 +83,7 @@ export interface BotStatusPayload {
   equity: number;
   settledCash: number;
   minEquityOk: boolean;
+  minEquityThreshold: number;
   openPosition: unknown;
   lastSignal: unknown;
   lastError: string | null;
