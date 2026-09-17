@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { SchwabAuthModule } from '@schwab/auth/schwab-auth.module';
 import schwabConfig from '@schwab/config/schwab.config';
 import { SchwabHttpModule } from '@schwab/http/schwab-http.module';
 import { MarketDataModule } from '@schwab/market-data/market-data.module';
@@ -44,6 +45,7 @@ import { BotTrade } from './entities/bot-trade.entity';
       SchwabRealizedTrade,
     ]),
     SchwabHttpModule,
+    forwardRef(() => SchwabAuthModule),
     OrdersModule,
     MarketDataModule,
     forwardRef(() => SchwabStreamingModule),

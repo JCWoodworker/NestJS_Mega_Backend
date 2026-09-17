@@ -10,6 +10,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { createHash } from 'crypto';
 import { Repository } from 'typeorm';
 
+import { SchwabAuthService } from '@schwab/auth/schwab-auth.service';
 import schwabConfig from '@schwab/config/schwab.config';
 import { MarketDataService } from '@schwab/market-data/market-data.service';
 import { etDateKey } from '@schwab/pnl/et-date.util';
@@ -103,6 +104,8 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
    * cannot write the same minute twice. */
   private lastSnapshotMinute: string | null = null;
   private lastBackfilledDate: string | null = null;
+  /** Last recurring tick problem, so it is logged on change rather than every minute. */
+  private lastTickProblem: string | null = null;
 
   constructor(
     @InjectRepository(BotTradeTape)
@@ -116,6 +119,7 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
     @InjectRepository(BotCapitalEvent)
     private readonly capitalEventRepository: Repository<BotCapitalEvent>,
     private readonly marketDataService: MarketDataService,
+    private readonly schwabAuthService: SchwabAuthService,
     @Inject(schwabConfig.KEY)
     private readonly config: ConfigType<typeof schwabConfig>,
   ) {}
@@ -308,17 +312,38 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
     if (this.ticking) return;
     this.ticking = true;
     try {
+      // Every Schwab call is doomed without a token, and the price-history
+      // wrapper swallows the underlying 'not connected' detail — so check
+      // first and skip quietly, the way the sibling pollers do, rather than
+      // emitting a failure every minute of every session.
+      const { connected } = await this.schwabAuthService.getConnectionStatus();
+      if (!connected) {
+        this.logDeduped(
+          'Skipping recording tick: Schwab account not connected',
+        );
+        return;
+      }
+
       const nowHhMm = etNowHhMm();
       if (isWithinWindow(nowHhMm, SNAPSHOT_START, SNAPSHOT_END)) {
         await this.snapshotChain(nowHhMm);
       } else if (nowHhMm >= BACKFILL_AFTER && nowHhMm < '23:59') {
         await this.backfillMarketDay();
       }
+      this.lastTickProblem = null;
     } catch (err) {
-      this.logger.warn(`recording tick failed: ${(err as Error).message}`);
+      // A persistent failure would otherwise log 390 times a session.
+      this.logDeduped(`recording tick failed: ${(err as Error).message}`);
     } finally {
       this.ticking = false;
     }
+  }
+
+  /** Log a recurring problem once, and again only when it changes. */
+  private logDeduped(message: string): void {
+    if (this.lastTickProblem === message) return;
+    this.lastTickProblem = message;
+    this.logger.warn(message);
   }
 
   private async snapshotChain(nowHhMm: string): Promise<void> {
