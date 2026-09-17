@@ -1,7 +1,7 @@
 import * as Joi from '@hapi/joi';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD, RouterModule } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR, RouterModule } from '@nestjs/core';
 import { DevtoolsModule } from '@nestjs/devtools-integration';
 import { JwtModule } from '@nestjs/jwt';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -32,6 +32,7 @@ import { BotModule } from '@subapps/schwab/bot/bot.module';
 import { MarketDataModule } from '@subapps/schwab/market-data/market-data.module';
 import { OrdersModule } from '@subapps/schwab/orders/orders.module';
 import { PnlModule } from '@subapps/schwab/pnl/pnl.module';
+import { SchwabUserContextInterceptor } from '@subapps/schwab/shared/schwab-user-context.interceptor';
 import { SubappsModule } from '@subapps/subapps.module';
 import { WoodpricingModule } from '@subapps/woodpricing/woodpricing.module';
 
@@ -166,6 +167,14 @@ import { AppService } from './app.service';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    {
+      // Must come after the guards so `request.user` is populated. Global
+      // rather than Schwab-scoped because the Schwab HTTP interceptor that
+      // consumes the context is reachable from any controller that injects a
+      // Schwab service.
+      provide: APP_INTERCEPTOR,
+      useClass: SchwabUserContextInterceptor,
     },
     AccessTokenGuard,
   ],
