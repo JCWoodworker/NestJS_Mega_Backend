@@ -21,9 +21,18 @@ export class OrderSourceTagService {
     await this.tagRepository.save({ orderId, accountHash, source });
   }
 
-  async lookup(orderId: string | null | undefined): Promise<OrderSource> {
+  /**
+   * `accountHash` is required: order ids are unique only within an account,
+   * so looking up by id alone could return another user's tag.
+   */
+  async lookup(
+    orderId: string | null | undefined,
+    accountHash: string,
+  ): Promise<OrderSource> {
     if (!orderId) return OrderSource.MANUAL_LIVE;
-    const row = await this.tagRepository.findOne({ where: { orderId } });
+    const row = await this.tagRepository.findOne({
+      where: { orderId, accountHash },
+    });
     return row?.source ?? OrderSource.MANUAL_LIVE;
   }
 }

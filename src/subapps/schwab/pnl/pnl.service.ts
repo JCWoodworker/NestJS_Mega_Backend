@@ -17,6 +17,7 @@ import {
 
 import schwabConfig from '@schwab/config/schwab.config';
 import { OrdersService } from '@schwab/orders/orders.service';
+import { SchwabAccountResolver } from '@schwab/shared/schwab-account-resolver.service';
 
 import { DailyPnlService } from './daily-pnl.service';
 import {
@@ -45,9 +46,8 @@ import { TransactionSyncService } from './transaction-sync.service';
 
 @Injectable()
 export class PnlService {
-  private cachedAccountHash: string | null = null;
-
   constructor(
+    private readonly accountResolver: SchwabAccountResolver,
     private readonly ordersService: OrdersService,
     private readonly transactionSyncService: TransactionSyncService,
     private readonly dailyPnlService: DailyPnlService,
@@ -194,6 +194,7 @@ export class PnlService {
   async updateManualTransaction(id: string, dto: UpdateManualTransactionDto) {
     const row = await this.transactionRepository.findOne({ where: { id } });
     if (!row) throw new NotFoundException('Transaction not found');
+    await this.assertOwnsTransaction(row.accountHash);
     if (row.source !== TransactionSource.MANUAL) {
       throw new BadRequestException('Only MANUAL transactions can be edited');
     }
@@ -227,6 +228,7 @@ export class PnlService {
   async deleteManualTransaction(id: string) {
     const row = await this.transactionRepository.findOne({ where: { id } });
     if (!row) throw new NotFoundException('Transaction not found');
+    await this.assertOwnsTransaction(row.accountHash);
     if (row.source !== TransactionSource.MANUAL) {
       throw new BadRequestException('Only MANUAL transactions can be deleted');
     }
@@ -303,6 +305,7 @@ export class PnlService {
 
   /** Manual trigger for ops / after reconnect. */
   async triggerSync(): Promise<{ ok: true }> {
+    // Runs under the caller's context, so this refreshes their own account.
     await this.transactionSyncService.syncRecent();
     return { ok: true };
   }
@@ -330,18 +333,38 @@ export class PnlService {
     return undefined;
   }
 
-  private async resolveAccountHash(override?: string): Promise<string> {
-    if (override) return override;
-    if (this.config.accountHash) return this.config.accountHash;
-    if (this.cachedAccountHash) return this.cachedAccountHash;
+  /**
+   * Resolves which account a P&L query is about, per user.
+   *
+   * An explicit `override` still has to belong to the caller —
+   * `assertAccountHashAllowed` checks it against the accounts their own
+   * Schwab token can reach, so a user cannot read another user's P&L by
+   * guessing a hash.
+   *
+   * `config.accountHash` is not consulted: one deployment-wide value would
+   * resolve every user's queries to the owner's account.
+   */
+  /**
+   * These rows are addressed by bare UUID, so without this any signed-in
+   * user could edit or delete another user's manual transactions by
+   * guessing an id. Ownership is derived from the row's account hash rather
+   * than a column on the row, since `assertAccountHashAllowed` already
+   * answers "can this caller's Schwab token reach that account".
+   */
+  private async assertOwnsTransaction(accountHash: string): Promise<void> {
+    await this.ordersService.assertAccountHashAllowed(accountHash);
+  }
 
-    const accounts = await this.ordersService.listAccounts();
-    if (!accounts.length) {
-      throw new BadRequestException(
-        'No Schwab accounts linked to this app yet',
-      );
+  private async resolveAccountHash(override?: string): Promise<string> {
+    if (override) {
+      await this.ordersService.assertAccountHashAllowed(override);
+      return override;
     }
-    this.cachedAccountHash = accounts[0].hashValue;
-    return this.cachedAccountHash;
+
+    try {
+      return await this.accountResolver.resolve();
+    } catch (err) {
+      throw new BadRequestException((err as Error).message);
+    }
   }
 }

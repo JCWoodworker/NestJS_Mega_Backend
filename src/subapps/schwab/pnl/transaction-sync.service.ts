@@ -6,8 +6,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { firstValueFrom } from 'rxjs';
 import { Repository } from 'typeorm';
 
+import { SchwabToken } from '@schwab/auth/entities/schwab-token.entity';
 import schwabConfig from '@schwab/config/schwab.config';
-import { OrdersService } from '@schwab/orders/orders.service';
+import { SchwabAccountResolver } from '@schwab/shared/schwab-account-resolver.service';
+import { requireUserId, runAsUser } from '@schwab/shared/schwab-user-context';
 
 import { SchwabTradeFill } from './entities/schwab-trade-fill.entity';
 import { SchwabTransaction } from './entities/schwab-transaction.entity';
@@ -40,12 +42,14 @@ const SCHWAB_TRANSACTION_TYPES = [
 @Injectable()
 export class TransactionSyncService implements OnModuleInit {
   private readonly logger = new Logger(TransactionSyncService.name);
-  private cachedAccountHash: string | null = null;
-  private syncing = false;
+  /** Keyed by user so one user's long sync doesn't skip everyone else's. */
+  private readonly syncing = new Set<string>();
 
   constructor(
     private readonly httpService: HttpService,
-    private readonly ordersService: OrdersService,
+    private readonly accountResolver: SchwabAccountResolver,
+    @InjectRepository(SchwabToken)
+    private readonly tokenRepository: Repository<SchwabToken>,
     private readonly realizedPnlService: RealizedPnlService,
     private readonly orderSourceTagService: OrderSourceTagService,
     @InjectRepository(SchwabTransaction)
@@ -58,20 +62,47 @@ export class TransactionSyncService implements OnModuleInit {
 
   onModuleInit(): void {
     // Fire-and-forget initial sync so history is available shortly after boot.
-    setTimeout(() => void this.syncRecent(), 15_000);
+    setTimeout(() => void this.syncAllUsers(), 15_000);
   }
 
   @Cron('0 */15 * * * *')
   async cronSync(): Promise<void> {
-    await this.syncRecent();
+    await this.syncAllUsers();
   }
 
-  async syncRecent(lookbackDays = 30): Promise<void> {
-    if (this.syncing) {
-      this.logger.debug('Transaction sync already in progress; skipping');
+  /**
+   * Syncs every user who has connected Schwab. Sequential rather than
+   * parallel on purpose: Schwab's rate limit is per-app, not per-user, and
+   * this job walks several transaction types per account, so fanning out
+   * would spend the whole budget the moment a handful of users connect.
+   */
+  async syncAllUsers(lookbackDays = 30): Promise<void> {
+    const tokens = await this.tokenRepository.find();
+    for (const token of tokens) {
+      try {
+        await runAsUser(token.userId, () =>
+          this.syncRecent(lookbackDays, token.userId),
+        );
+      } catch (err) {
+        // Already logged per-user inside syncRecent; one user's failure must
+        // not stop the rest of the queue.
+        this.logger.debug(
+          `Transaction sync skipped for user ${token.userId}: ${
+            (err as Error).message
+          }`,
+        );
+      }
+    }
+  }
+
+  async syncRecent(lookbackDays = 30, userId = requireUserId()): Promise<void> {
+    if (this.syncing.has(userId)) {
+      this.logger.debug(
+        `Transaction sync already in progress for user ${userId}; skipping`,
+      );
       return;
     }
-    this.syncing = true;
+    this.syncing.add(userId);
     try {
       const accountHash = await this.resolveAccountHash();
       const endDate = new Date();
@@ -137,7 +168,10 @@ export class TransactionSyncService implements OnModuleInit {
             const fillsWithSource = await Promise.all(
               mapped.fills.map(async (fill) => {
                 const source = fill.orderId
-                  ? await this.orderSourceTagService.lookup(fill.orderId)
+                  ? await this.orderSourceTagService.lookup(
+                      fill.orderId,
+                      accountHash,
+                    )
                   : OrderSource.MANUAL_LIVE;
                 return {
                   accountHash,
@@ -168,14 +202,16 @@ export class TransactionSyncService implements OnModuleInit {
       const message = err?.response?.data?.message || err.message;
       if (message?.includes('not connected')) {
         this.logger.debug(
-          'Skipping transaction sync: Schwab account not connected yet',
+          `Skipping transaction sync for user ${userId}: Schwab account not connected yet`,
         );
       } else {
-        this.cachedAccountHash = null;
-        this.logger.warn(`Transaction sync failed: ${message}`);
+        this.accountResolver.invalidate(userId);
+        this.logger.warn(
+          `Transaction sync failed for user ${userId}: ${message}`,
+        );
       }
     } finally {
-      this.syncing = false;
+      this.syncing.delete(userId);
     }
   }
 
@@ -219,14 +255,6 @@ export class TransactionSyncService implements OnModuleInit {
   }
 
   private async resolveAccountHash(): Promise<string> {
-    if (this.config.accountHash) return this.config.accountHash;
-    if (this.cachedAccountHash) return this.cachedAccountHash;
-
-    const accounts = await this.ordersService.listAccounts();
-    if (!accounts.length) {
-      throw new Error('No Schwab accounts linked to this app yet');
-    }
-    this.cachedAccountHash = accounts[0].hashValue;
-    return this.cachedAccountHash;
+    return this.accountResolver.resolve();
   }
 }

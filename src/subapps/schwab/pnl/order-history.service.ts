@@ -44,7 +44,7 @@ export class OrderHistoryService {
       });
       const source =
         existing?.source ??
-        (await this.orderSourceTagService.lookup(update.orderId));
+        (await this.orderSourceTagService.lookup(update.orderId, accountHash));
 
       const payload: Partial<SchwabOrderHistory> = {
         accountHash,
@@ -94,7 +94,7 @@ export class OrderHistoryService {
       });
       const source =
         existing?.source ??
-        (await this.orderSourceTagService.lookup(update.orderId));
+        (await this.orderSourceTagService.lookup(update.orderId, accountHash));
 
       const payload: Partial<SchwabOrderHistory> = {
         accountHash,

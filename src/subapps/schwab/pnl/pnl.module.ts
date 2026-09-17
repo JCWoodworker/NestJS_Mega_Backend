@@ -2,9 +2,11 @@ import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { SchwabToken } from '@schwab/auth/entities/schwab-token.entity';
 import schwabConfig from '@schwab/config/schwab.config';
 import { SchwabHttpModule } from '@schwab/http/schwab-http.module';
 import { OrdersModule } from '@schwab/orders/orders.module';
+import { SchwabSharedModule } from '@schwab/shared/schwab-shared.module';
 
 import { DailyPnlService } from './daily-pnl.service';
 import { SchwabDailyPnl } from './entities/schwab-daily-pnl.entity';
@@ -30,9 +32,14 @@ import { TransactionSyncService } from './transaction-sync.service';
       SchwabDailyPnl,
       SchwabOrderHistory,
       SchwabOrderSourceTag,
+      // The 15-minute sync iterates every connected user, so it reads the
+      // token table directly rather than going through the auth module
+      // (which would reintroduce a cycle).
+      SchwabToken,
     ]),
     SchwabHttpModule,
     forwardRef(() => OrdersModule),
+    forwardRef(() => SchwabSharedModule),
   ],
   controllers: [PnlController],
   providers: [

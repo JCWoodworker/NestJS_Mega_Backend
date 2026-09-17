@@ -74,16 +74,21 @@ export class OrdersService {
   ) {}
 
   /**
-   * Reject hashes that are not the configured desk account and not linked to
-   * this Schwab app token — prevents any allowlisted JWT from trading an
-   * arbitrary accountHash the broker token can reach.
+   * Reject any hash not linked to the *calling user's* Schwab token.
+   *
+   * `listAccounts()` runs under the caller's AsyncLocalStorage context, so
+   * this is inherently per-user: it can only ever return accounts reachable
+   * by the token the caller connected.
+   *
+   * The `SCHWAB_ACCOUNT_HASH` short-circuit that used to live here was
+   * removed deliberately. It is one deployment-wide value, so under
+   * multi-tenant it would have let *any* signed-in user place orders on the
+   * owner's brokerage account.
    */
   async assertAccountHashAllowed(accountHash: string): Promise<void> {
     if (!accountHash?.trim()) {
       throw new ForbiddenException('accountHash is required');
     }
-    const configured = this.config.accountHash?.trim();
-    if (configured && accountHash === configured) return;
 
     const linked = await this.listAccounts();
     if (linked.some((a) => a.hashValue === accountHash)) return;

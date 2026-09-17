@@ -132,7 +132,10 @@ export class BotExecutionService {
       : working;
     if (!candidates.length) return false;
     for (const order of candidates) {
-      const source = await this.orderSourceTagService.lookup(order.orderId);
+      const source = await this.orderSourceTagService.lookup(
+        order.orderId,
+        accountHash,
+      );
       if (source === OrderSource.BOT_LIVE) return true;
     }
     return false;
@@ -142,7 +145,10 @@ export class BotExecutionService {
   async cancelBotWorkingOrders(accountHash: string): Promise<void> {
     const working = await this.ordersService.getWorkingOrders(accountHash);
     for (const order of working) {
-      const source = await this.orderSourceTagService.lookup(order.orderId);
+      const source = await this.orderSourceTagService.lookup(
+        order.orderId,
+        accountHash,
+      );
       if (source === OrderSource.BOT_LIVE) {
         try {
           await this.ordersService.cancelOrder(accountHash, order.orderId);
