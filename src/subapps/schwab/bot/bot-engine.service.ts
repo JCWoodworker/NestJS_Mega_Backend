@@ -45,7 +45,7 @@ import { BotEventType, BotPhase } from './enums/bot-event-type.enum';
 import { BotLane } from './enums/bot-lane.enum';
 import { BotMode } from './enums/bot-mode.enum';
 import { KillScope } from './enums/kill-scope.enum';
-import { BotDirection, BotStrategy } from './enums/strategy.enum';
+import { BotCombineMode, BotDirection, BotStrategy } from './enums/strategy.enum';
 
 const HEARTBEAT_MS = 7_000;
 /** "Refuse entry if option/underlying quote older than ~2s" (plan §Strategy loop). */
@@ -267,15 +267,24 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       const enabledKeys = settings.strategiesEnabled.map(
         (s) => s as 'VWAP_PULLBACK' | 'ORB_5M',
       );
-      const combined = combineSignals(enabledKeys, results);
+      const combined = combineSignals(
+        enabledKeys,
+        results,
+        chartTime ?? Date.now(),
+        settings.combineMode,
+      );
       if (!combined) {
         await this.botEventService.recordDeduped(
           {
             lane: row.lane,
             type: BotEventType.NO_SIGNAL,
-            reason: 'CONFIRMING_NO_AGREEMENT',
+            reason:
+              settings.combineMode === BotCombineMode.ANY
+                ? 'ANY_NO_SIGNAL'
+                : 'CONFIRMING_NO_AGREEMENT',
             strategies: enabledKeys,
             payload: {
+              combineMode: settings.combineMode,
               results,
               vwap,
               atr,

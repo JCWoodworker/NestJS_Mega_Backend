@@ -15,10 +15,10 @@ function buildService() {
     vwapPullbackEnabled: true,
     orb5mEnabled: true,
     callsEnabled: true,
-    putsEnabled: false,
+    putsEnabled: true,
     canBuyCalls: true,
-    canBuyPuts: false,
-    combineMode: BotCombineMode.CONFIRMING,
+    canBuyPuts: true,
+    combineMode: BotCombineMode.ANY,
     riskPct: 10,
     useMaxLossUsd: false,
     maxLossUsd: null,
@@ -35,10 +35,10 @@ function buildService() {
     maxSpreadPct: 5,
     deltaMin: 0.4,
     deltaMax: 0.6,
-    tradeWindowStart: '10:00',
+    tradeWindowStart: '09:30',
     tradeWindowEnd: '15:00',
     hardFlattenTime: '15:30',
-    cooldownMins: 30,
+    cooldownMins: 5,
     atrPeriod: 14,
     usePremiumStop: true,
     premiumStopPct: 25,
@@ -78,7 +78,7 @@ describe('BotSettingsService — strategiesEnabled / combineMode (contract §14b
       BotStrategy.VWAP_PULLBACK,
       BotStrategy.ORB_5M,
     ]);
-    expect(settings.combineMode).toBe(BotCombineMode.CONFIRMING);
+    expect(settings.combineMode).toBe(BotCombineMode.ANY);
   });
 
   it('PUT with strategiesEnabled=[ORB_5M] disables VWAP_PULLBACK and keeps ORB_5M', async () => {
@@ -109,24 +109,27 @@ describe('BotSettingsService — strategiesEnabled / combineMode (contract §14b
     expect(getRowSnapshot().riskPct).toBe(25);
   });
 
-  it('PUT accepts combineMode alongside other fields and persists it', async () => {
+  it('PUT accepts combineMode ANY alongside other fields and persists it', async () => {
     const { service, getRowSnapshot } = buildService();
     const view = await service.updateSettings({
-      combineMode: BotCombineMode.CONFIRMING,
+      combineMode: BotCombineMode.ANY,
       riskPct: 15,
     });
-    expect(view.combineMode).toBe(BotCombineMode.CONFIRMING);
+    expect(view.combineMode).toBe(BotCombineMode.ANY);
     expect(getRowSnapshot().riskPct).toBe(15);
   });
 });
 
 describe('BotSettingsService — directionsEnabled / canBuy* (contract §14b)', () => {
-  it('GET view defaults to CALL-only preference and calls-only capability', async () => {
+  it('GET view defaults to CALL+PUT preference and both capabilities', async () => {
     const { service } = buildService();
     const settings = await service.getSettings();
-    expect(settings.directionsEnabled).toEqual([BotDirection.CALL]);
+    expect(settings.directionsEnabled).toEqual([
+      BotDirection.CALL,
+      BotDirection.PUT,
+    ]);
     expect(settings.canBuyCalls).toBe(true);
-    expect(settings.canBuyPuts).toBe(false);
+    expect(settings.canBuyPuts).toBe(true);
   });
 
   it('PUT with directionsEnabled=[CALL,PUT] enables both preference flags', async () => {
@@ -156,15 +159,18 @@ describe('BotSettingsService — directionsEnabled / canBuy* (contract §14b)', 
     const { service, getRowSnapshot } = buildService();
     await service.updateSettings({ riskPct: 25 });
     expect(getRowSnapshot().callsEnabled).toBe(true);
-    expect(getRowSnapshot().putsEnabled).toBe(false);
+    expect(getRowSnapshot().putsEnabled).toBe(true);
   });
 
   it('PUT can flip canBuyPuts capability independently of preference', async () => {
     const { service, getRowSnapshot } = buildService();
-    const view = await service.updateSettings({ canBuyPuts: true });
-    expect(view.canBuyPuts).toBe(true);
-    expect(getRowSnapshot().canBuyPuts).toBe(true);
-    expect(view.directionsEnabled).toEqual([BotDirection.CALL]);
+    const view = await service.updateSettings({ canBuyPuts: false });
+    expect(view.canBuyPuts).toBe(false);
+    expect(getRowSnapshot().canBuyPuts).toBe(false);
+    expect(view.directionsEnabled).toEqual([
+      BotDirection.CALL,
+      BotDirection.PUT,
+    ]);
   });
 
   it('emits OPERATOR_SETTINGS with before/after on update', async () => {
@@ -192,7 +198,7 @@ describe('UpdateBotSettingsDto validation (contract §14b)', () => {
   it('accepts the full contract patch (strategiesEnabled + combineMode) with no errors', async () => {
     const errors = await validateBody({
       strategiesEnabled: ['VWAP_PULLBACK', 'ORB_5M'],
-      combineMode: 'CONFIRMING',
+      combineMode: 'ANY',
       riskPct: 12,
     });
     expect(errors).toHaveLength(0);
@@ -213,7 +219,14 @@ describe('UpdateBotSettingsDto validation (contract §14b)', () => {
     expect(errors.some((e) => e.property === 'strategiesEnabled')).toBe(true);
   });
 
-  it('rejects a combineMode value other than CONFIRMING', async () => {
+  it('accepts combineMode CONFIRMING and ANY', async () => {
+    expect(
+      await validateBody({ combineMode: 'CONFIRMING' }),
+    ).toHaveLength(0);
+    expect(await validateBody({ combineMode: 'ANY' })).toHaveLength(0);
+  });
+
+  it('rejects an unknown combineMode value', async () => {
     const errors = await validateBody({ combineMode: 'OR' });
     expect(errors.some((e) => e.property === 'combineMode')).toBe(true);
   });

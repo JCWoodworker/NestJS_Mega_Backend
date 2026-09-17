@@ -37,8 +37,7 @@ export class UpdateBotSettingsDto {
   @IsEnum(BotDirection, { each: true })
   directionsEnabled?: BotDirection[];
 
-  /** Only `CONFIRMING` (AND) is currently supported — enum has a single member
-   * so this both validates the contract field and rejects anything else. */
+  /** `CONFIRMING` = AND (all enabled must agree); `ANY` = OR (first signal wins). */
   @IsOptional()
   @IsEnum(BotCombineMode)
   combineMode?: BotCombineMode;

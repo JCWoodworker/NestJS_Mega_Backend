@@ -205,6 +205,7 @@ describe('combineSignals', () => {
       ['VWAP_PULLBACK', 'ORB_5M'],
       { VWAP_PULLBACK: 'CALL', ORB_5M: 'CALL' },
       1000,
+      'CONFIRMING',
     );
     expect(result).toMatchObject({
       at: 1000,
@@ -213,19 +214,67 @@ describe('combineSignals', () => {
     });
   });
 
-  it('does not fire when strategies disagree', () => {
+  it('CONFIRMING does not fire when strategies disagree', () => {
     expect(
-      combineSignals(['VWAP_PULLBACK', 'ORB_5M'], {
-        VWAP_PULLBACK: 'CALL',
-        ORB_5M: 'PUT',
-      }),
+      combineSignals(
+        ['VWAP_PULLBACK', 'ORB_5M'],
+        { VWAP_PULLBACK: 'CALL', ORB_5M: 'PUT' },
+        Date.now(),
+        'CONFIRMING',
+      ),
     ).toBeNull();
   });
 
-  it('does not fire when an enabled strategy has no signal', () => {
+  it('CONFIRMING does not fire when an enabled strategy has no signal', () => {
     expect(
-      combineSignals(['VWAP_PULLBACK', 'ORB_5M'], { VWAP_PULLBACK: 'CALL' }),
+      combineSignals(
+        ['VWAP_PULLBACK', 'ORB_5M'],
+        { VWAP_PULLBACK: 'CALL' },
+        Date.now(),
+        'CONFIRMING',
+      ),
     ).toBeNull();
+  });
+
+  it('ANY fires when only one strategy signals', () => {
+    const result = combineSignals(
+      ['VWAP_PULLBACK', 'ORB_5M'],
+      { VWAP_PULLBACK: 'CALL', ORB_5M: null },
+      2000,
+      'ANY',
+    );
+    expect(result).toMatchObject({
+      at: 2000,
+      strategies: ['VWAP_PULLBACK'],
+      direction: 'CALL',
+    });
+    expect(result?.reason).toContain('ANY');
+  });
+
+  it('ANY uses first enabled signal when strategies disagree', () => {
+    const result = combineSignals(
+      ['VWAP_PULLBACK', 'ORB_5M'],
+      { VWAP_PULLBACK: 'CALL', ORB_5M: 'PUT' },
+      3000,
+      'ANY',
+    );
+    expect(result).toMatchObject({
+      strategies: ['VWAP_PULLBACK'],
+      direction: 'CALL',
+    });
+  });
+
+  it('ANY attributes both when they agree', () => {
+    const result = combineSignals(
+      ['VWAP_PULLBACK', 'ORB_5M'],
+      { VWAP_PULLBACK: 'PUT', ORB_5M: 'PUT' },
+      4000,
+      'ANY',
+    );
+    expect(result).toMatchObject({
+      strategies: ['VWAP_PULLBACK', 'ORB_5M'],
+      direction: 'PUT',
+    });
   });
 
   it('fires with a single enabled strategy', () => {

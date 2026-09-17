@@ -78,8 +78,10 @@ export class BotController {
       summary = `IN_POSITION: ${status.openPosition.symbol} x${status.openPosition.quantity}`;
     } else if (lastDecision?.type === BotEventType.NO_SIGNAL) {
       const results = (lastDecision.payload as any)?.results ?? {};
+      const mode =
+        (lastDecision.payload as any)?.combineMode ?? settings.combineMode;
       summary =
-        `SCANNING: last candles NO_SIGNAL (CONFIRMING ` +
+        `SCANNING: last candles NO_SIGNAL (${mode} ` +
         `VWAP=${results.VWAP_PULLBACK ?? 'n/a'} ORB=${
           results.ORB_5M ?? 'n/a'
         }); ` +
@@ -92,7 +94,7 @@ export class BotController {
     } else if (status.phase === 'COOLDOWN') {
       summary = `COOLDOWN: ${settings.cooldownMins}m after last trade`;
     } else {
-      summary = `${status.phase}: armed, waiting for confirming signal`;
+      summary = `${status.phase}: armed, waiting for strategy signal (${settings.combineMode})`;
     }
 
     if (Object.keys(suggested.patch).length > 0) {

@@ -37,7 +37,7 @@ export function buildSuggestedSettings(
 
   const suggested: BotSettingsView = { ...current };
 
-  suggested.combineMode = BotCombineMode.CONFIRMING;
+  suggested.combineMode = BotCombineMode.ANY;
   suggested.canBuyCalls = current.canBuyCalls;
   suggested.canBuyPuts = current.canBuyPuts;
   suggested.atrPeriod = 14;
@@ -69,12 +69,15 @@ export function buildSuggestedSettings(
   }
 
   if (tier === 'MICRO') {
-    suggested.strategiesEnabled = [BotStrategy.VWAP_PULLBACK];
+    suggested.strategiesEnabled = [
+      BotStrategy.VWAP_PULLBACK,
+      BotStrategy.ORB_5M,
+    ];
     suggested.riskPct = 35;
     suggested.minPremium = 0.4;
     suggested.maxPremium = 1.5;
     suggested.maxSpreadPct = 8;
-    suggested.cooldownMins = 20;
+    suggested.cooldownMins = 5;
     suggested.useMaxLossUsd = true;
     suggested.maxLossUsd = Math.max(20, Math.round(equity * 0.3));
     suggested.profitUsd = Math.round(equity * 0.4);
@@ -83,7 +86,7 @@ export function buildSuggestedSettings(
     suggested.premiumStopPct = 20;
     suggested.premiumTargetPct = 35;
     rationale.push(
-      'MICRO (<$500): single strategy so CONFIRMING is not stuck waiting for ORB + VWAP agreement.',
+      'MICRO (<$500): ANY combine — either VWAP or ORB can enter; expect more trades and fee drag.',
     );
     rationale.push(
       `riskPct ${suggested.riskPct}% — avoid all-in on a fee-heavy micro account.`,
@@ -106,7 +109,7 @@ export function buildSuggestedSettings(
     suggested.minPremium = 0.6;
     suggested.maxPremium = 2.0;
     suggested.maxSpreadPct = 6;
-    suggested.cooldownMins = 15;
+    suggested.cooldownMins = 5;
     suggested.useMaxLossUsd = true;
     suggested.maxLossUsd = Math.round(equity * 0.25);
     suggested.profitUsd = Math.round(equity * 0.35);
@@ -115,7 +118,7 @@ export function buildSuggestedSettings(
     suggested.premiumStopPct = 25;
     suggested.premiumTargetPct = 40;
     rationale.push(
-      'SMALL ($500–$2k): dual strategies OK; modest riskPct and fee-aware premium band.',
+      'SMALL ($500–$2k): dual strategies under ANY (OR); modest riskPct and fee-aware premium band.',
     );
   } else if (tier === 'STANDARD') {
     suggested.strategiesEnabled = [
@@ -126,7 +129,7 @@ export function buildSuggestedSettings(
     suggested.minPremium = 1.0;
     suggested.maxPremium = 2.5;
     suggested.maxSpreadPct = 5;
-    suggested.cooldownMins = 15;
+    suggested.cooldownMins = 5;
     suggested.useMaxLossUsd = true;
     suggested.maxLossUsd = Math.round(equity * 0.2);
     suggested.profitUsd = Math.round(equity * 0.25);
@@ -135,7 +138,7 @@ export function buildSuggestedSettings(
     suggested.premiumStopPct = 25;
     suggested.premiumTargetPct = 40;
     rationale.push(
-      'STANDARD ($2k–$5k): higher minPremium so commission is a smaller % of each trade.',
+      'STANDARD ($2k–$5k): higher minPremium so commission is a smaller % of each trade; ANY combine for more entries.',
     );
   } else {
     suggested.strategiesEnabled = [
@@ -146,7 +149,7 @@ export function buildSuggestedSettings(
     suggested.minPremium = 0.6;
     suggested.maxPremium = 2.5;
     suggested.maxSpreadPct = 5;
-    suggested.cooldownMins = 30;
+    suggested.cooldownMins = 5;
     suggested.useMaxLossUsd = true;
     suggested.maxLossUsd = Math.round(equity * 0.15);
     suggested.profitUsd = Math.round(equity * 0.2);
@@ -155,7 +158,7 @@ export function buildSuggestedSettings(
     suggested.premiumStopPct = 25;
     suggested.premiumTargetPct = 40;
     rationale.push(
-      'COMFORTABLE (≥$5k): closer to original §14b defaults with room for law-of-large-numbers.',
+      'COMFORTABLE (≥$5k): both strategies, ANY combine, short cooldown — trade often on calls and puts.',
     );
   }
 

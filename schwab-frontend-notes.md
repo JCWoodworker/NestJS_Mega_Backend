@@ -1286,20 +1286,21 @@ Trade post-mortems / bot context: [`schwab-bot-lessons-learned.md`](./schwab-bot
   shape is always the array. Soften any help copy that says the bot "does calls or puts" — that was
   aspirational; today's default is calls-only until the operator opts into puts.
 - `canBuyCalls` / `canBuyPuts`: booleans — **operator-declared** account capability (defaults
-  `true` / `false`). These are **not** live-verified against Schwab: the Trader API's account
+  `true` / `true`). These are **not** live-verified against Schwab: the Trader API's account
   object does not expose options-approval level, and under FINRA's standard tiers long puts are
   normally approved together with long calls (same Level-2 "buy options" tier — no margin needed
   for either). If Schwab is blocking puts on a specific account, that is an account-approval gap
   worth confirming with Schwab, not something Nest can auto-detect. Frontend should grey out
   PUT / BOTH in the direction toggle when `canBuyPuts === false`, and require an explicit confirm
   step before flipping `canBuyPuts` to `true`.
-- `combineMode`: `'CONFIRMING'` only (AND — all enabled strategies must agree on direction)
+- `combineMode`: `'ANY'` (default, OR — first enabled strategy with a signal fires) or
+  `'CONFIRMING'` (AND — all enabled strategies must agree on direction)
 - `riskPct` 0.1–100 (10) — applies to the *next* entry only
 - Loss gates: `useMaxLossUsd`/`maxLossUsd`, `useMaxLossPct`/`maxLossPct` (nullable values, both off by default)
 - Profit gates: `useProfitUsd`/`profitUsd`, `useProfitPctDayStart`/`profitPctDayStart`, `useProfitPctCurrent`/`profitPctCurrent` (all off by default; halts on the *first* gate that hits). **PUT also accepts frontend aliases** `profitTargetUsd` → `profitUsd`, `profitTargetPctDayStart` → `profitPctDayStart`, `profitTargetPctCurrent` → `profitPctCurrent` (alias wins when both are present in the same body). GET still returns the canonical `profit*` names.
 - Strike filters: `minPremium` (0.60), `maxPremium` (2.50), `maxSpreadPct` (5), `deltaMin` (0.40), `deltaMax` (0.60)
-- Windows (ET, `HH:MM`): `tradeWindowStart` (10:00), `tradeWindowEnd` (15:00), `hardFlattenTime` (15:30)
-- `cooldownMins` (30) — minimum gap between bot entries
+- Windows (ET, `HH:MM`): `tradeWindowStart` (09:30), `tradeWindowEnd` (15:00), `hardFlattenTime` (15:30)
+- `cooldownMins` (5) — minimum gap between bot entries
 - `atrPeriod` (14)
 - `paperSlippageCents` (1) — paper fills are `ask + slippage` on entry, `bid - slippage` on exit
 
@@ -1310,9 +1311,10 @@ Trade post-mortems / bot context: [`schwab-bot-lessons-learned.md`](./schwab-bot
 - VWAP (session anchored 9:30 ET), ATR(14), and 9:30–9:35 ET opening-range high/low, recomputed on
   every closed 1m candle.
 - `VWAP_PULLBACK` (pullback into VWAP with the prevailing trend) and `ORB_5M` (breakout of the
-  opening range) each independently emit `CALL`/`PUT`/no-signal; `CONFIRMING` mode requires every
-  *enabled* strategy to agree before a trade fires.
-- **Direction gate (preference ∩ capability):** even after strategies agree, Nest skips the entry
+  opening range) each independently emit `CALL`/`PUT`/no-signal. Default `ANY` mode takes the
+  first enabled signal; optional `CONFIRMING` requires every *enabled* strategy to agree before
+  a trade fires.
+- **Direction gate (preference ∩ capability):** even after strategies fire, Nest skips the entry
   if the signal direction is not in `directionsEnabled` **or** the matching `canBuyCalls` /
   `canBuyPuts` flag is false. Skip is visible in the activity feed as
   `BotEvent { type: 'SKIP', reason: 'DIRECTION_DISABLED' }` — not a silent drop. Hiding the PUT
@@ -1461,6 +1463,12 @@ Current state:
 
 ## Changelog
 
+- **2026-09-17 (frequent entries: ANY combine + two-sided defaults)**: Added
+  `combineMode: 'ANY'` (OR — first enabled strategy signal fires). Default is now **ANY**
+  (was CONFIRMING-only). Defaults also flip to calls+puts capability/preference, window
+  start **09:30**, cooldown **5m**. Migration updates the live settings singleton.
+  NO_SIGNAL reasons: `ANY_NO_SIGNAL` vs `CONFIRMING_NO_AGREEMENT`. Desk Basic settings
+  expose ANY vs CONFIRMING toggle.
 - **2026-09-17 (paper mimics live: shared $5k floor + $6k paper reset)**: Paper and live now
   share the same **$5,000** min equity. Bot-paper ledger defaults to **$6,000**;
   `POST /bot/paper/reset` resets equity/settled/day-start (refuses with open paper position).

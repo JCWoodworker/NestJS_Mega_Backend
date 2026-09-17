@@ -23,9 +23,8 @@ export class BotSettings {
   @Column({ type: 'boolean', name: 'calls_enabled', default: true })
   callsEnabled: boolean;
 
-  /** Operator preference — trade PUT direction when strategies fire PUT.
-   * Default false (calls-only) until the operator opts in. */
-  @Column({ type: 'boolean', name: 'puts_enabled', default: false })
+  /** Operator preference — trade PUT direction when strategies fire PUT. */
+  @Column({ type: 'boolean', name: 'puts_enabled', default: true })
   putsEnabled: boolean;
 
   /** Operator-declared account capability (not live-verified against Schwab).
@@ -33,14 +32,14 @@ export class BotSettings {
   @Column({ type: 'boolean', name: 'can_buy_calls', default: true })
   canBuyCalls: boolean;
 
-  @Column({ type: 'boolean', name: 'can_buy_puts', default: false })
+  @Column({ type: 'boolean', name: 'can_buy_puts', default: true })
   canBuyPuts: boolean;
 
   @Column({
     type: 'enum',
     enum: BotCombineMode,
     name: 'combine_mode',
-    default: BotCombineMode.CONFIRMING,
+    default: BotCombineMode.ANY,
   })
   combineMode: BotCombineMode;
 
@@ -170,7 +169,7 @@ export class BotSettings {
     type: 'varchar',
     length: 5,
     name: 'trade_window_start',
-    default: '10:00',
+    default: '09:30',
   })
   tradeWindowStart: string;
 
@@ -190,7 +189,7 @@ export class BotSettings {
   })
   hardFlattenTime: string;
 
-  @Column({ type: 'integer', name: 'cooldown_mins', default: 30 })
+  @Column({ type: 'integer', name: 'cooldown_mins', default: 5 })
   cooldownMins: number;
 
   @Column({ type: 'integer', name: 'atr_period', default: 14 })

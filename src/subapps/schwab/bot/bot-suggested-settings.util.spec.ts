@@ -61,13 +61,15 @@ describe('classifySettingsTier', () => {
 });
 
 describe('buildSuggestedSettings', () => {
-  it('MICRO: single strategy, riskPct < 100, no PUT when canBuyPuts false', () => {
+  it('MICRO: dual strategies under ANY, riskPct < 100, no PUT when canBuyPuts false', () => {
     const result = buildSuggestedSettings(110, baseSettings());
     expect(result.tier).toBe('MICRO');
     expect(result.liveEligible).toBe(false);
     expect(result.suggested.strategiesEnabled).toEqual([
       BotStrategy.VWAP_PULLBACK,
+      BotStrategy.ORB_5M,
     ]);
+    expect(result.suggested.combineMode).toBe(BotCombineMode.ANY);
     expect(result.suggested.riskPct).toBeLessThan(100);
     expect(result.suggested.premiumStopPct).toBe(20);
     expect(result.suggested.usePremiumStop).toBe(true);

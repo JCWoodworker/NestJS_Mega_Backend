@@ -12,7 +12,7 @@ export enum BotEventType {
   PHASE = 'PHASE',
   /** Pre-signal gate blocked evaluation (window, cooldown, stale quote, …). */
   GATE_SKIP = 'GATE_SKIP',
-  /** Strategies evaluated but CONFIRMING did not fire. */
+  /** Strategies evaluated but combine mode did not fire. */
   NO_SIGNAL = 'NO_SIGNAL',
   OPERATOR_SETTINGS = 'OPERATOR_SETTINGS',
   OPERATOR_MODE = 'OPERATOR_MODE',

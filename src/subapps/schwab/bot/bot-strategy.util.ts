@@ -117,15 +117,41 @@ export interface CombinedSignal {
 }
 
 /**
- * CONFIRMING = AND: all enabled strategies that produce a signal must agree.
- * If an enabled strategy has no signal, the combo does not fire.
+ * Combine enabled strategy outputs.
+ * - CONFIRMING (AND): every enabled strategy must signal and agree.
+ * - ANY (OR): first enabled strategy with a signal fires; if several agree,
+ *   all agreeing names are attributed. Disagreeing later signals are ignored.
  */
 export function combineSignals(
   enabled: Array<'VWAP_PULLBACK' | 'ORB_5M'>,
   results: Partial<Record<'VWAP_PULLBACK' | 'ORB_5M', SignalDirection | null>>,
   nowMs = Date.now(),
+  mode: 'CONFIRMING' | 'ANY' = 'ANY',
 ): CombinedSignal | null {
   if (!enabled.length) return null;
+
+  if (mode === 'ANY') {
+    const strategies: Array<'VWAP_PULLBACK' | 'ORB_5M'> = [];
+    let direction: SignalDirection | null = null;
+    for (const s of enabled) {
+      const d = results[s] ?? null;
+      if (!d) continue;
+      if (!direction) {
+        direction = d;
+        strategies.push(s);
+      } else if (d === direction) {
+        strategies.push(s);
+      }
+    }
+    if (!direction || !strategies.length) return null;
+    return {
+      at: nowMs,
+      strategies,
+      direction,
+      reason: `ANY ${strategies.join('+')} → ${direction}`,
+    };
+  }
+
   const directions: SignalDirection[] = [];
   const strategies: Array<'VWAP_PULLBACK' | 'ORB_5M'> = [];
   for (const s of enabled) {
