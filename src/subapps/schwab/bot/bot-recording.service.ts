@@ -14,7 +14,7 @@ import { SchwabAuthService } from '@schwab/auth/schwab-auth.service';
 import schwabConfig from '@schwab/config/schwab.config';
 import { MarketDataService } from '@schwab/market-data/market-data.service';
 import { etDateKey } from '@schwab/pnl/et-date.util';
-import { runAsUser } from '@schwab/shared/schwab-user-context';
+import { currentUserId, runAsUser } from '@schwab/shared/schwab-user-context';
 
 import { commissionForRoundTrip } from './bot-fees.const';
 import { etNowHhMm, isWithinWindow } from './bot-strategy.util';
@@ -142,6 +142,33 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
     if (this.timer) clearInterval(this.timer);
   }
 
+  // --- Corpus ownership -----------------------------------------------------
+
+  /**
+   * Whether the caller's trades belong in the improvement-loop corpus.
+   *
+   * The nightly analyzer learns from one paper account and rewrites strategy
+   * code from what it finds. Every user runs their own bot in both lanes, so
+   * this gate — not a permission on the lane — is the only thing keeping a
+   * customer's paper trades out of the training set. A second account's
+   * trades in here would silently poison every counterfactual the analyzer
+   * computes, and the resulting proposal would look perfectly plausible.
+   *
+   * Lives in this service rather than at the call sites because there are
+   * three writers today and the loop will add more; one chokepoint is the
+   * only version that stays correct.
+   *
+   * Note this does not cost customers their own history: bot fills still
+   * land in the per-user P&L tables that feed the history page. P&L tables
+   * are user-facing trade history; these tables are the owner's research
+   * corpus.
+   */
+  private writesCorpus(lane: BotLane | null): boolean {
+    const userId = currentUserId() ?? this.config.ownerUserId;
+    if (!userId || userId !== this.config.ownerUserId) return false;
+    return lane != null && this.config.improvementLanes.includes(lane);
+  }
+
   // --- Trade tape -----------------------------------------------------------
 
   /**
@@ -160,6 +187,7 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
     optionAsk: number | null;
     spot: number | null;
   }): Promise<void> {
+    if (!this.writesCorpus(params.lane)) return;
     try {
       await this.tapeRepository.insert({
         tradeKey: tradeKeyFor(params.symbol, params.openedAt),
@@ -205,6 +233,7 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
     exitReason: string | null;
     configVersion: string | null;
   }): Promise<void> {
+    if (!this.writesCorpus(params.lane)) return;
     const tradeKey = tradeKeyFor(params.symbol, params.openedAt);
     try {
       const rows = await this.tapeRepository.find({
@@ -291,6 +320,7 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
     balanceBefore: number;
     balanceAfter: number;
   }): Promise<void> {
+    if (!this.writesCorpus(params.lane)) return;
     try {
       const at = new Date();
       await this.capitalEventRepository.insert({

@@ -56,4 +56,16 @@ export default registerAs('schwab', () => ({
    */
   accountPollMinSpacingMs:
     +process.env.SCHWAB_ACCOUNT_POLL_MIN_SPACING_MS || 1500,
+  /**
+   * Which of the owner's lanes feed the improvement-loop corpus.
+   *
+   * Paper only by default. This narrows previous behaviour, where BOT_LIVE
+   * closes were recorded too — the loop tunes the paper strategy, and mixing
+   * live fills into the same dataset would train it on a different execution
+   * regime. Config rather than a constant so widening it later needs no
+   * re-plumbing.
+   */
+  improvementLanes: (process.env.BOT_IMPROVEMENT_LANES?.trim()
+    ? process.env.BOT_IMPROVEMENT_LANES.split(',').map((lane) => lane.trim())
+    : ['BOT_PAPER']) as string[],
 }));
