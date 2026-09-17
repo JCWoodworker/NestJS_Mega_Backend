@@ -48,7 +48,9 @@ function baseSettings(overrides: Record<string, unknown> = {}) {
   } as any;
 }
 
-const PRACTICE_WARNING = `Bot requires at least $${MIN_EQUITY_LIVE.toLocaleString('en-US')} equity for both BOT_PAPER and BOT_LIVE — raise paper capital (POST /bot/paper/reset) or fund the live account.`;
+const PRACTICE_WARNING = `Bot requires at least $${MIN_EQUITY_LIVE.toLocaleString(
+  'en-US',
+)} equity for both BOT_PAPER and BOT_LIVE — raise paper capital (POST /bot/paper/reset) or fund the live account.`;
 
 describe('classifySettingsTier', () => {
   it('maps equity bands', () => {

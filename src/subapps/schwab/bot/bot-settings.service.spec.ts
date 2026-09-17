@@ -220,9 +220,7 @@ describe('UpdateBotSettingsDto validation (contract §14b)', () => {
   });
 
   it('accepts combineMode CONFIRMING and ANY', async () => {
-    expect(
-      await validateBody({ combineMode: 'CONFIRMING' }),
-    ).toHaveLength(0);
+    expect(await validateBody({ combineMode: 'CONFIRMING' })).toHaveLength(0);
     expect(await validateBody({ combineMode: 'ANY' })).toHaveLength(0);
   });
 

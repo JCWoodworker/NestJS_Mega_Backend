@@ -20,4 +20,12 @@ export default registerAs('schwab', () => ({
   accountSnapshotPollMs: +process.env.SCHWAB_ACCOUNT_SNAPSHOT_POLL_MS || 4000,
   orderUpdatePollMs: +process.env.SCHWAB_ORDER_UPDATE_POLL_MS || 3000,
   strikeLadderSize: 16,
+  underlyingSymbol: process.env.SCHWAB_UNDERLYING_SYMBOL || 'SPY',
+  /**
+   * Per-minute chain snapshots and SPY backfill for the bot analytics loop.
+   * Defaults OFF and is enabled on exactly one app (prod) — both apps run the
+   * same code, so leaving this on everywhere would produce duplicate, divergent
+   * datasets and double the Schwab call volume.
+   */
+  botRecordingEnabled: process.env.BOT_RECORDING_ENABLED === 'true',
 }));

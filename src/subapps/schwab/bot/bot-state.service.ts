@@ -20,15 +20,17 @@ import { etDateKey, etDayBounds } from '@schwab/pnl/et-date.util';
 import { mapAccountBalances } from '@schwab/shared/account-data.mapper';
 import { BotEventPayload } from '@schwab/streaming/options.gateway';
 
+import { BotEngineService } from './bot-engine.service';
 import {
   DEFAULT_PAPER_EQUITY,
   MIN_EQUITY,
 } from './bot-equity-thresholds.const';
-import { BotEngineService } from './bot-engine.service';
 import { BotEventService } from './bot-event.service';
 import { computePhase } from './bot-phase.util';
+import { BotRecordingService } from './bot-recording.service';
 import { BotSettingsService } from './bot-settings.service';
 import { etNowHhMm, isWithinWindow } from './bot-strategy.util';
+import { BotCapitalEventReason } from './entities/bot-capital-event.entity';
 import {
   BotLastSignal,
   BotOpenPosition,
@@ -83,7 +85,9 @@ const PREMIUM_WATCH_STALE_MS = 20_000;
 function assertMinEquity(equity: number, context: string): void {
   if (equity >= MIN_EQUITY) return;
   throw new BadRequestException(
-    `${context} requires at least $${MIN_EQUITY.toLocaleString('en-US')} equity (current: $${equity.toFixed(2)})`,
+    `${context} requires at least $${MIN_EQUITY.toLocaleString(
+      'en-US',
+    )} equity (current: $${equity.toFixed(2)})`,
   );
 }
 
@@ -126,6 +130,7 @@ export class BotStateService {
     private readonly botEngine: BotEngineService,
     private readonly botSettingsService: BotSettingsService,
     private readonly botEventService: BotEventService,
+    private readonly botRecordingService: BotRecordingService,
   ) {}
 
   /** Polled from BotEngineService's heartbeat — keeps equity/settledCash
@@ -394,14 +399,13 @@ export class BotStateService {
   async resetPaper(equity = DEFAULT_PAPER_EQUITY): Promise<BotStatusView> {
     if (!Number.isFinite(equity) || equity < MIN_EQUITY) {
       throw new BadRequestException(
-        `Paper reset equity must be a number >= $${MIN_EQUITY.toLocaleString('en-US')}`,
+        `Paper reset equity must be a number >= $${MIN_EQUITY.toLocaleString(
+          'en-US',
+        )}`,
       );
     }
     const row = await this.getRow();
-    if (
-      row.openPosition &&
-      row.openPosition.source === BotLane.BOT_PAPER
-    ) {
+    if (row.openPosition && row.openPosition.source === BotLane.BOT_PAPER) {
       throw new ConflictException(
         'Flatten the open BOT_PAPER position before resetting paper capital',
       );
@@ -419,7 +423,24 @@ export class BotStateService {
       lane: row.lane,
       type: BotEventType.OPERATOR_SETTINGS,
       reason: 'PAPER_RESET',
-      payload: { before, after: { paperEquity: equity, paperSettledCash: equity, paperDayStartEquity: equity } },
+      payload: {
+        before,
+        after: {
+          paperEquity: equity,
+          paperSettledCash: equity,
+          paperDayStartEquity: equity,
+        },
+      },
+    });
+    // Ledger the injection separately from the event feed: events are trimmed
+    // at 30 days, and cumulative performance is derived as
+    // `balance − starting capital − Σ injections`, so losing a reset would make
+    // the equity curve permanently overstate results.
+    await this.botRecordingService.recordCapitalEvent({
+      reason: BotCapitalEventReason.MANUAL_RESET,
+      lane: row.lane,
+      balanceBefore: before.paperEquity,
+      balanceAfter: equity,
     });
     this.botEngine.onControlPlaneChange();
     return this.getStatus();

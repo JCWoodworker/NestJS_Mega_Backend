@@ -19,7 +19,10 @@ import { SchwabStreamerService } from '@schwab/streaming/schwab-streamer.service
 
 import { BotEventService } from './bot-event.service';
 import { BotExecutionService } from './bot-execution.service';
+import { computeExitLevels, decideSoftExit } from './bot-exit.util';
+import { commissionForLeg } from './bot-fees.const';
 import { BotMarketDataService } from './bot-market-data.service';
+import { BotRecordingService, configVersionOf } from './bot-recording.service';
 import { BotSettingsService } from './bot-settings.service';
 import { BotStateService } from './bot-state.service';
 import {
@@ -40,12 +43,15 @@ import {
   selectContractDetailed,
   sizePosition,
 } from './bot-strike-selection.util';
-import { computeExitLevels, decideSoftExit } from './bot-exit.util';
 import { BotEventType, BotPhase } from './enums/bot-event-type.enum';
 import { BotLane } from './enums/bot-lane.enum';
 import { BotMode } from './enums/bot-mode.enum';
 import { KillScope } from './enums/kill-scope.enum';
-import { BotCombineMode, BotDirection, BotStrategy } from './enums/strategy.enum';
+import {
+  BotCombineMode,
+  BotDirection,
+  BotStrategy,
+} from './enums/strategy.enum';
 
 const HEARTBEAT_MS = 7_000;
 /** "Refuse entry if option/underlying quote older than ~2s" (plan §Strategy loop). */
@@ -77,6 +83,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     private readonly botMarketDataService: BotMarketDataService,
     private readonly botExecutionService: BotExecutionService,
     private readonly botEventService: BotEventService,
+    private readonly botRecordingService: BotRecordingService,
     private readonly marketDataService: MarketDataService,
     private readonly ordersService: OrdersService,
     private readonly optionsGateway: OptionsGateway,
@@ -526,8 +533,13 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     };
     row.lastTradeAt = new Date();
     if (row.lane === BotLane.BOT_PAPER) {
+      // Commission is charged per leg. Without it the paper ledger overstates
+      // the edge, and every "should have exited sooner" conclusion inherits
+      // that bias — a scalper's margin is thin enough that fees decide it.
       row.paperSettledCash =
-        Number(row.paperSettledCash) - result.fillPrice * qty * 100;
+        Number(row.paperSettledCash) -
+        result.fillPrice * qty * 100 -
+        commissionForLeg(qty);
     }
     await this.botStateService.save(row);
     await this.botEventService.record({
@@ -570,8 +582,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
 
       let optionBid: number | null = null;
       const now = Date.now();
-      const needsPremium =
-        pos.stopPremium != null || pos.targetPremium != null;
+      const needsPremium = pos.stopPremium != null || pos.targetPremium != null;
       if (needsPremium) {
         const streamed = this.streamerService.getLastOptionQuote(pos.symbol);
         if (
@@ -579,7 +590,10 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
           now - streamed.at <= PREMIUM_STREAM_MAX_AGE_MS
         ) {
           optionBid = streamed.bid;
-        } else if (now - this.lastPremiumQuoteAt >= PREMIUM_REST_FALLBACK_MIN_MS) {
+        } else if (
+          now - this.lastPremiumQuoteAt >=
+          PREMIUM_REST_FALLBACK_MIN_MS
+        ) {
           this.lastPremiumQuoteAt = now;
           try {
             const chain = await this.marketDataService.getOptionChain({
@@ -597,6 +611,20 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       }
 
       if (optionBid != null) this.lastPremiumBidAt = now;
+
+      // The bid was just fetched to evaluate stops — record it before deciding,
+      // so the tape captures the path even on the tick that triggers the exit.
+      if (pos.openedAt != null) {
+        void this.botRecordingService.recordTapeSample({
+          symbol: pos.symbol,
+          openedAt: pos.openedAt,
+          lane: row.lane,
+          at: now,
+          optionBid,
+          optionAsk: null,
+          spot,
+        });
+      }
 
       const reason = decideSoftExit({
         direction,
@@ -636,8 +664,10 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
           symbols: row.openPosition.symbol,
         });
         const quote = chain.find((q) => q.symbol === row.openPosition!.symbol);
-        quoteBid = quoteBid ?? (quote?.bid != null ? Number(quote.bid) : undefined);
-        quoteAsk = quoteAsk ?? (quote?.ask != null ? Number(quote.ask) : undefined);
+        quoteBid =
+          quoteBid ?? (quote?.bid != null ? Number(quote.bid) : undefined);
+        quoteAsk =
+          quoteAsk ?? (quote?.ask != null ? Number(quote.ask) : undefined);
       } catch {
         /* fall through to entryPrice */
       }
@@ -691,7 +721,8 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     if (result.filled && row.lane === BotLane.BOT_PAPER) {
       row.paperSettledCash =
         Number(row.paperSettledCash) +
-        result.fillPrice * row.openPosition.quantity * 100;
+        result.fillPrice * row.openPosition.quantity * 100 -
+        commissionForLeg(row.openPosition.quantity);
       row.paperEquity = row.paperSettledCash;
     }
 
@@ -714,6 +745,33 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       orderId: result.orderId ?? undefined,
       reason: reasonTag,
     });
+
+    if (closedPosition.openedAt != null) {
+      await this.botRecordingService.recordTradeClose({
+        symbol: closedPosition.symbol,
+        openedAt: closedPosition.openedAt,
+        closedAt: Date.now(),
+        lane: closedPosition.source,
+        direction: direction ?? null,
+        quantity: closedPosition.quantity,
+        entryPrice: closedPosition.entryPrice,
+        exitPrice: result.fillPrice,
+        entryUnderlying: closedPosition.entryUnderlying ?? null,
+        exitUnderlying: spot ?? null,
+        stopPremium: closedPosition.stopPremium ?? null,
+        targetPremium: closedPosition.targetPremium ?? null,
+        stopUnderlying: closedPosition.stopUnderlying,
+        targetUnderlying: closedPosition.targetUnderlying,
+        atrUsed: closedPosition.atrUsed ?? null,
+        strategies: row.lastSignal?.strategies ?? null,
+        entryReason: row.lastSignal?.reason ?? null,
+        exitReason: reasonTag,
+        configVersion: configVersionOf(
+          settings as unknown as Record<string, unknown>,
+        ),
+      });
+    }
+
     await this.emitStatus(true);
   }
 

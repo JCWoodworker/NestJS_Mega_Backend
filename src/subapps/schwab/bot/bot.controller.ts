@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 
+import { DEFAULT_PAPER_EQUITY } from './bot-equity-thresholds.const';
 import { BotEventService } from './bot-event.service';
 import { BotSettingsService } from './bot-settings.service';
 import { BotStateService } from './bot-state.service';
@@ -21,7 +22,6 @@ import { SetLaneDto } from './dto/set-lane.dto';
 import { SetModeDto } from './dto/set-mode.dto';
 import { UpdateBotSettingsDto } from './dto/update-bot-settings.dto';
 import { BotEventType } from './enums/bot-event-type.enum';
-import { DEFAULT_PAPER_EQUITY } from './bot-equity-thresholds.const';
 
 @Throttle({ default: { limit: 120, ttl: 60000 } })
 @Controller('bot')
@@ -165,9 +165,7 @@ export class BotController {
   @Post('paper/reset')
   @HttpCode(HttpStatus.OK)
   async resetPaper(@Body() dto: ResetPaperDto) {
-    return this.botStateService.resetPaper(
-      dto.equity ?? DEFAULT_PAPER_EQUITY,
-    );
+    return this.botStateService.resetPaper(dto.equity ?? DEFAULT_PAPER_EQUITY);
   }
 
   @Get('settings')

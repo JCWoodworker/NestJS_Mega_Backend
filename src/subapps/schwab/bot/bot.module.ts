@@ -15,12 +15,18 @@ import { BotEngineService } from './bot-engine.service';
 import { BotEventService } from './bot-event.service';
 import { BotExecutionService } from './bot-execution.service';
 import { BotMarketDataService } from './bot-market-data.service';
+import { BotRecordingService } from './bot-recording.service';
 import { BotSettingsService } from './bot-settings.service';
 import { BotStateService } from './bot-state.service';
 import { BotController } from './bot.controller';
+import { BotCapitalEvent } from './entities/bot-capital-event.entity';
+import { BotChainSnapshot } from './entities/bot-chain-snapshot.entity';
 import { BotEvent } from './entities/bot-event.entity';
+import { BotMarketDay } from './entities/bot-market-day.entity';
 import { BotSettings } from './entities/bot-settings.entity';
 import { BotState } from './entities/bot-state.entity';
+import { BotTradeTape } from './entities/bot-trade-tape.entity';
+import { BotTrade } from './entities/bot-trade.entity';
 
 @Module({
   imports: [
@@ -29,6 +35,11 @@ import { BotState } from './entities/bot-state.entity';
       BotSettings,
       BotState,
       BotEvent,
+      BotTradeTape,
+      BotTrade,
+      BotChainSnapshot,
+      BotMarketDay,
+      BotCapitalEvent,
       SchwabTradeFill,
       SchwabRealizedTrade,
     ]),
@@ -45,6 +56,7 @@ import { BotState } from './entities/bot-state.entity';
     BotEventService,
     BotMarketDataService,
     BotExecutionService,
+    BotRecordingService,
     BotEngineService,
   ],
   exports: [BotStateService, BotSettingsService, BotEventService],

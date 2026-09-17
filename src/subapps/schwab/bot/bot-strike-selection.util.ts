@@ -120,7 +120,12 @@ export function selectContractDetailed(
     const score = failures * 10 + distance;
     if (score < bestScore) {
       bestScore = score;
-      best = { symbol: q.symbol, delta: q.delta ?? null, mid: m, spreadPct: sp };
+      best = {
+        symbol: q.symbol,
+        delta: q.delta ?? null,
+        mid: m,
+        spreadPct: sp,
+      };
     }
   }
 

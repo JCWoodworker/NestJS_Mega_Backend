@@ -157,8 +157,18 @@ describe('selectContractDetailed diagnostics (NO_CONTRACT_MATCH detail)', () => 
 
   it('reports the nearest miss so the operator can see how far off the band is', () => {
     const chain = [
-      quote({ symbol: 'SPY   260903C00770000', delta: 0.95, bid: 1, ask: 1.02 }),
-      quote({ symbol: 'SPY   260903C00771000', delta: 0.62, bid: 1, ask: 1.02 }),
+      quote({
+        symbol: 'SPY   260903C00770000',
+        delta: 0.95,
+        bid: 1,
+        ask: 1.02,
+      }),
+      quote({
+        symbol: 'SPY   260903C00771000',
+        delta: 0.62,
+        bid: 1,
+        ask: 1.02,
+      }),
     ];
     const { diagnostics } = selectContractDetailed(chain, 'CALL', filters);
     expect(diagnostics.best?.symbol).toBe('SPY   260903C00771000');
@@ -167,7 +177,12 @@ describe('selectContractDetailed diagnostics (NO_CONTRACT_MATCH detail)', () => 
 
   it('counts unquotable contracts separately from band misses', () => {
     const chain = [
-      quote({ symbol: 'SPY   260903C00770000', delta: null, bid: 1, ask: 1.02 }),
+      quote({
+        symbol: 'SPY   260903C00770000',
+        delta: null,
+        bid: 1,
+        ask: 1.02,
+      }),
     ];
     const { diagnostics } = selectContractDetailed(chain, 'CALL', filters);
     expect(diagnostics.rejects.noQuote).toBe(1);

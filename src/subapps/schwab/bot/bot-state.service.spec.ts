@@ -49,6 +49,9 @@ function buildService() {
     getTransientPhase: jest.fn().mockReturnValue(null),
     getLastPremiumBidAt: jest.fn().mockReturnValue(null),
   };
+  const botRecordingService = {
+    recordCapitalEvent: jest.fn().mockResolvedValue(undefined),
+  };
   const botSettingsService = {
     getSettings: jest.fn().mockResolvedValue({
       tradeWindowStart: '10:00',
@@ -70,9 +73,16 @@ function buildService() {
     botEngine as any,
     botSettingsService as any,
     botEventService as any,
+    botRecordingService as any,
   );
 
-  return { service, botEngine, botEventService, getRowSnapshot: () => row };
+  return {
+    service,
+    botEngine,
+    botEventService,
+    botRecordingService,
+    getRowSnapshot: () => row,
+  };
 }
 
 describe('BotStateService invariants', () => {
@@ -296,6 +306,24 @@ describe('BotStateService invariants', () => {
     expect(getRowSnapshot().paperSettledCash).toBe(6000);
     expect(getRowSnapshot().paperDayStartEquity).toBe(6000);
     await expect(service.resetPaper(100)).rejects.toThrow(BadRequestException);
+  });
+
+  it('resetPaper ledgers the injection so the equity curve stays honest', async () => {
+    const { service, getRowSnapshot, botRecordingService } = buildService();
+    getRowSnapshot().paperEquity = 3800;
+    getRowSnapshot().paperSettledCash = 3800;
+
+    await service.resetPaper(6000);
+
+    // Without this row, topping $3,800 up to $6,000 is indistinguishable from
+    // a $2,200 gain.
+    expect(botRecordingService.recordCapitalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: 'MANUAL_RESET',
+        balanceBefore: 3800,
+        balanceAfter: 6000,
+      }),
+    );
   });
 
   it('resetPaper refuses while a BOT_PAPER position is open', async () => {
