@@ -58,10 +58,34 @@ export class BotCorpusHealthService {
     private readonly config: ConfigType<typeof schwabConfig>,
   ) {}
 
+  /**
+   * Distinct user ids present in the owner-only tables.
+   *
+   * The corpus is meant to contain exactly one account's rows — the whole
+   * analyzer rests on that, since a second account's trades would poison
+   * every counterfactual while looking entirely plausible. The gate enforces
+   * it in code, but a gate regression is silent by nature, so this checks the
+   * data itself and reports anything that is not the owner.
+   */
+  private async findForeignAttribution(
+    ownerUserId: string | null,
+  ): Promise<string[]> {
+    const rows: Array<{ user_id: string }> = await this.tradeRepository.query(
+      `SELECT DISTINCT user_id FROM bot_trades
+       UNION SELECT DISTINCT user_id FROM bot_trade_tape
+       UNION SELECT DISTINCT user_id FROM bot_capital_events`,
+    );
+    return rows
+      .map((row) => row.user_id)
+      .filter((userId) => userId && userId !== ownerUserId);
+  }
+
   async getHealth(): Promise<{
     recordingEnabled: boolean;
     ownerConfigured: boolean;
     etDate: string;
+    /** Non-empty means the corpus is contaminated — see findForeignAttribution. */
+    foreignUserIds: string[];
     tables: CorpusTableHealth[];
   }> {
     const ownerUserId = this.config.ownerUserId;
@@ -83,10 +107,13 @@ export class BotCorpusHealthService {
       where: { etDateKey: today },
     });
 
+    const foreignUserIds = await this.findForeignAttribution(ownerUserId);
+
     return {
       recordingEnabled: this.config.botRecordingEnabled,
       ownerConfigured: !!ownerUserId,
       etDate: today,
+      foreignUserIds,
       tables: [
         {
           table: 'bot_chain_snapshots',

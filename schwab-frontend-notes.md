@@ -1505,7 +1505,77 @@ Current state:
    section 14 for the full contract, manual acceptance pass, and remaining "not yet live-verified"
    caveats (real Schwab fills, live reconciliation, a full trading session, a real day-rollover).
 
+## 15. ✅ Implemented: bot admin / improvement loop (`/bot/admin/*`)
+
+Owner-only control plane for the paper-bot improvement loop. Every endpoint is
+double-gated: `@Roles(Role.Admin)` **and** an owner check against
+`SCHWAB_OWNER_USER_ID`, so it 403s for every other account no matter what the
+client believes its role to be. Nothing here is customer-facing.
+
+```
+GET  /bot/admin/supervisor              → SupervisorStatus (blockers recomputed per request)
+POST /bot/admin/supervisor/reconcile    → clears blockers; does NOT arm
+POST /bot/admin/supervisor/arm          → skips the time window, not the safety checks
+POST /bot/admin/supervisor/stand-down   → flatten + halt now
+GET  /bot/admin/corpus-health           → CorpusHealth (recorder row counts)
+GET  /bot/admin/reports?limit=30        → BotReportSummary[] (newest first, no markdown)
+GET  /bot/admin/reports/:dateKey        → BotReport | null
+POST /bot/admin/reports/:dateKey/rerun  → BotReport (idempotent)
+```
+
+### 15a. Nightly analyzer
+
+Runs on a `30 21 * * *` UTC cron — after the 16:00 ET close in both DST regimes
+— gated on `BOT_DAILY_SUPERVISOR_ENABLED` so exactly one app analyzes. Writes
+one `bot_daily_reports` row per (owner, ET session). Primary key is
+`(user_id, et_date_key)`, so re-running **replaces** a day rather than
+appending a second verdict for it.
+
+Scoped to `SCHWAB_OWNER_USER_ID` only — other users' paper trades never enter
+the corpus and never appear in a report.
+
+### 15b. Readiness gate — why an empty report is normal
+
+`readinessLevel` is judged on the **cumulative** corpus, not the session (no
+single day reaches 30 trades):
+
+| Level | Trades | Meaning |
+| --- | --- | --- |
+| `insufficient` | < 30 | No tuning conclusion is valid. Counterfactual grid is skipped entirely and `policyResults` is `[]`. |
+| `indicative` | 30–99 | Worth reading, not worth acting on. Differences of a few percent are noise. |
+| `trustworthy` | 100+ | A consistent winner is worth proposing as a config change. |
+
+The analyzer ships and runs **before** the data exists, reporting
+`insufficient` rather than staying silent. So: a report with zero trades is
+working as designed; a *missing* report means the job or the recorder broke.
+
+### 15c. Report shape
+
+`aggregate` answers the loop's questions in leverage order — see
+`BotReportAggregate` in `src/types/market.ts`. The two fields that are easy to
+misread:
+
+- `medianCaptureEfficiency` — share of the best available move actually
+  realised. Low means the entries are fine and the **exits** leak the edge.
+- `blindTradePct` — trades whose premium stop never had a bid to evaluate. If
+  this is high, "the stop did not work" is a **missing-data** result, not a
+  strategy result. Fix the quote feed before drawing exit conclusions.
+
+`policyResults` replays each trade's recorded tape under alternative exit rules
+with **entries held fixed**, which is what isolates the exit question. A stop
+and a target touched within the same sample resolve against the trade, since
+assuming the favourable one is how a backtest flatters itself. Trades with no
+usable tape are excluded from both the policy total and `deltaVsActual`, so the
+comparison never mixes denominators.
+
 ## Changelog
+
+- **2026-09-18**: Added section 15 — `/bot/admin/*` owner-only control plane, and the
+  nightly analyzer. Analyzer ships before the corpus exists: it runs from day one and
+  reports `readinessLevel: insufficient` (skipping the counterfactual grid) until the
+  cumulative trade count clears 30, so an empty report is by design and a *missing*
+  report is the real signal. New table `bot_daily_reports` keyed `(user_id, et_date_key)`
+  so re-runs replace a day. FE gained `ReportViewer` on `/admin`.
 
 - **2026-09-17 (bot status telemetry for the desk's Bot Status panel)**: `GET /bot/status` adds
   `dayStartEquity` (lane-aware; paper had no other source for the `%`-of-day-start gates),

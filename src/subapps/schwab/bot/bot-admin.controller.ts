@@ -3,7 +3,9 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Param,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -14,6 +16,7 @@ import { Roles } from '@iam/authorization/decorators/roles.decorator';
 
 import { SchwabOwnerGuard } from '@schwab/shared/schwab-owner.guard';
 
+import { BotAnalyzerService } from './bot-analyzer.service';
 import { BotCorpusHealthService } from './bot-corpus-health.service';
 import { BotSupervisorService } from './bot-supervisor.service';
 
@@ -37,6 +40,7 @@ export class BotAdminController {
   constructor(
     private readonly corpusHealthService: BotCorpusHealthService,
     private readonly supervisorService: BotSupervisorService,
+    private readonly analyzerService: BotAnalyzerService,
   ) {}
 
   /**
@@ -88,5 +92,31 @@ export class BotAdminController {
   @Get('corpus-health')
   async corpusHealth() {
     return this.corpusHealthService.getHealth();
+  }
+
+  /** Stored nightly reports, newest first. */
+  @Get('reports')
+  async reports(@Query('limit') limit?: string) {
+    return this.analyzerService.listReports(
+      Math.min(Math.max(Number(limit) || 30, 1), 120),
+    );
+  }
+
+  /** One session's full report, including the counterfactual grid. */
+  @Get('reports/:dateKey')
+  async report(@Param('dateKey') dateKey: string) {
+    return this.analyzerService.getReport(dateKey);
+  }
+
+  /**
+   * Re-runs the analysis for a session on demand.
+   *
+   * Idempotent — the report's primary key is (user, date), so a re-run
+   * overwrites that day rather than appending a second verdict for it.
+   */
+  @Post('reports/:dateKey/rerun')
+  @HttpCode(HttpStatus.OK)
+  async rerunReport(@Param('dateKey') dateKey: string) {
+    return this.analyzerService.analyzeDay(dateKey);
   }
 }

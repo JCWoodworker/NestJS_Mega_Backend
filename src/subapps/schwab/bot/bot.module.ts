@@ -14,6 +14,7 @@ import { SchwabSharedModule } from '@schwab/shared/schwab-shared.module';
 import { SchwabStreamingModule } from '@schwab/streaming/schwab-streaming.module';
 
 import { BotAdminController } from './bot-admin.controller';
+import { BotAnalyzerService } from './bot-analyzer.service';
 import { BotCorpusHealthService } from './bot-corpus-health.service';
 import { BotEngineService } from './bot-engine.service';
 import { BotEventService } from './bot-event.service';
@@ -26,6 +27,7 @@ import { BotSupervisorService } from './bot-supervisor.service';
 import { BotController } from './bot.controller';
 import { BotCapitalEvent } from './entities/bot-capital-event.entity';
 import { BotChainSnapshot } from './entities/bot-chain-snapshot.entity';
+import { BotDailyReport } from './entities/bot-daily-report.entity';
 import { BotEvent } from './entities/bot-event.entity';
 import { BotMarketDay } from './entities/bot-market-day.entity';
 import { BotSettings } from './entities/bot-settings.entity';
@@ -45,6 +47,7 @@ import { BotTrade } from './entities/bot-trade.entity';
       BotChainSnapshot,
       BotMarketDay,
       BotCapitalEvent,
+      BotDailyReport,
       SchwabTradeFill,
       SchwabRealizedTrade,
     ]),
@@ -67,6 +70,7 @@ import { BotTrade } from './entities/bot-trade.entity';
     BotEngineService,
     BotCorpusHealthService,
     BotSupervisorService,
+    BotAnalyzerService,
   ],
   exports: [BotStateService, BotSettingsService, BotEventService],
 })
