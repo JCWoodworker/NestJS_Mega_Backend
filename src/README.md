@@ -53,8 +53,7 @@ src/
 │   └── hashing/              # Password hashing services
 ├── subapps/                   # Modular subapplications
 │   ├── mycuttingboard/       # E-commerce platform
-│   ├── onlybizlinks/         # Business link aggregation
-│   └── ironview/             # Construction management
+│   └── onlybizlinks/         # Business link aggregation
 ├── users/                     # User management module
 ├── gemini/                    # AI integration module
 ├── scrapers/                  # Web scraping module
@@ -262,7 +261,6 @@ RouterModule.register([
     children: [
       { path: 'mycuttingboard', module: MycuttingboardModule },
       { path: 'onlybizlinks', module: OnlyBizlinksModule },
-      { path: 'ironview', module: IronviewModule },
     ],
   },
 ])
@@ -287,14 +285,6 @@ RouterModule.register([
 - **Features**: Domain-based profiles, social media integration, NFC access
 - **Access Method**: NFC chips in beer flight paddles
 - **Public Endpoints**: Business data retrieval for NFC interaction
-
-#### 3. IronView (`/api/v1/subapps/ironview/`)
-
-**Construction and renovation management system**
-
-- **Entities**: Buildings, Floors, Areas, Rooms, Walls, Wall Images
-- **Features**: Hierarchical building structure, progress tracking, NFC/QR identification
-- **Use Cases**: Construction documentation, progress photography
 
 ### Shared Subapp Services
 
@@ -1046,13 +1036,6 @@ GET    /api/v1/subapps/onlybizlinks/all_businesses # Public
 POST   /api/v1/subapps/onlybizlinks/add_business
 POST   /api/v1/subapps/onlybizlinks/add_custom_link
 POST   /api/v1/subapps/onlybizlinks/add_social_link
-```
-
-#### IronView
-
-```
-GET    /api/v1/subapps/ironview/buildings          # Public
-GET    /api/v1/subapps/ironview/buildings/:id      # Public
 ```
 
 ### AI & Scraping

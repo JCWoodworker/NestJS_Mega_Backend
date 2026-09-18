@@ -14,7 +14,6 @@ All subapps are accessible under the `/subapps/` path prefix, with each subapp h
 
 - `/subapps/mycuttingboard/...`
 - `/subapps/onlybizlinks/...`
-- `/subapps/ironview/...`
 
 This is configured in `app.module.ts` using NestJS's `RouterModule` with nested routing:
 
@@ -26,7 +25,6 @@ RouterModule.register([
     children: [
       { path: 'mycuttingboard', module: MycuttingboardModule },
       { path: 'onlybizlinks', module: OnlyBizlinksModule },
-      { path: 'ironview', module: IronviewModule },
     ],
   },
 ])
@@ -92,39 +90,6 @@ The subapps module provides shared functionality across all subapps:
 - `OblUsersAndBusinesses`: User-business relationships
 
 **Access Method**: Customers tap NFC chips (embedded in beer flight paddles) to access business link pages
-
-### 3. IronView (`/subapps/ironview/`)
-
-**Purpose**: Construction and renovation management system
-
-**Key Features**:
-
-- Hierarchical building structure management
-- Construction progress tracking
-- Wall documentation with NFC/QR code identification
-- Progress photography by construction stage
-- Building, floor, area, and room organization
-- Construction timeline documentation
-
-**Main Entities**:
-
-- `Building`: Properties with addresses and construction dates
-- `Floor`: Building floors with blueprints
-- `Area`: Sections within floors (apartments, offices, etc.)
-- `AreaType`: Predefined area classifications
-- `Room`: Rooms within areas (living room, bedroom, etc.)
-- `Wall`: Individual walls with NFC/QR identification
-- `WallImage`: Progress photos organized by construction stage
-
-**Construction Stages Tracked**:
-
-- Framing
-- Electrical rough-in
-- Plumbing rough-in
-- Drywall
-- Painting
-- Finishing
-- Other custom stages
 
 ## Adding New Subapps
 

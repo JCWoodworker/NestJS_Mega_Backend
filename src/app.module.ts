@@ -22,7 +22,6 @@ import { IamModule } from '@iam/iam.module';
 import { GeminiModule } from '@gemini/gemini.module';
 
 import { FantasyWarRoomModule } from '@subapps/fantasy-war-room/fantasy-war-room.module';
-import { IronviewModule } from '@subapps/ironview/ironview.module';
 import { MycuttingboardModule } from '@subapps/mycuttingboard/mycuttingboard.module';
 import { MywoodappModule } from '@subapps/mywoodapp/mywoodapp.module';
 import { OnlyBizlinksModule } from '@subapps/onlybizlinks/onlybizlinks.module';
@@ -101,10 +100,6 @@ import { AppService } from './app.service';
           {
             path: 'onlybizlinks',
             module: OnlyBizlinksModule,
-          },
-          {
-            path: 'ironview',
-            module: IronviewModule,
           },
           {
             path: 'rilw',
