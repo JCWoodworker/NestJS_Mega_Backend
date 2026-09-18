@@ -115,3 +115,27 @@ export function decideSoftExit(
 
   return null;
 }
+
+/**
+ * Whether an open position should be emergency-flattened for a lost stream.
+ *
+ * The streamer reconnects on its own within a couple seconds for a routine
+ * blip, so reacting to the first heartbeat tick that sees the stream down
+ * treats an ordinary reconnect as an emergency — realizing a loss at
+ * whatever price is available to exit a position that would have been fine
+ * moments later. Requiring the outage to outlast `graceMs` (which should
+ * itself stay short relative to a 0DTE hold) is what tells the two apart.
+ *
+ * `disconnectedForMs: null` means "no session at all", which is worse than a
+ * disconnect (there's nothing that could reconnect on its own) — treated as
+ * an immediate flatten regardless of the grace period.
+ */
+export function shouldForceFlattenForSocketLoss(params: {
+  hasOpenPosition: boolean;
+  disconnectedForMs: number | null;
+  graceMs: number;
+}): boolean {
+  if (!params.hasOpenPosition) return false;
+  if (params.disconnectedForMs == null) return true;
+  return params.disconnectedForMs > params.graceMs;
+}

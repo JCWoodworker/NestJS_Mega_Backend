@@ -23,7 +23,11 @@ import { SchwabStreamerSession } from '@schwab/streaming/schwab-streamer-session
 
 import { BotEventService } from './bot-event.service';
 import { BotExecutionService } from './bot-execution.service';
-import { computeExitLevels, decideSoftExit } from './bot-exit.util';
+import {
+  computeExitLevels,
+  decideSoftExit,
+  shouldForceFlattenForSocketLoss,
+} from './bot-exit.util';
 import { commissionForLeg } from './bot-fees.const';
 import { BotMarketDataService } from './bot-market-data.service';
 import { BotRecordingService, configVersionOf } from './bot-recording.service';
@@ -63,6 +67,18 @@ const QUOTE_FRESHNESS_MS = 2_000;
 /** Prefer stream marks; REST chain only as fallback when stream quote is stale. */
 const PREMIUM_STREAM_MAX_AGE_MS = 2_000;
 const PREMIUM_REST_FALLBACK_MIN_MS = 3_000;
+/**
+ * How long the stream must be continuously down before an open position gets
+ * force-flattened for it.
+ *
+ * The streamer reconnects on its own within ~2s for a routine blip, so
+ * reacting to the first heartbeat tick that sees `loggedIn === false` treats
+ * an ordinary reconnect as an emergency — realizing a loss at whatever price
+ * is available to exit a position that would have been fine ten seconds
+ * later. This is intentionally still well short of the bot's own quote
+ * freshness gates: an outage that outlasts it is no longer "the stream blipped".
+ */
+const SOCKET_LOSS_GRACE_MS = 15_000;
 
 @Injectable()
 export class BotEngineService implements OnModuleInit, OnModuleDestroy {
@@ -946,8 +962,13 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       }
 
       if (
-        !(this.streamerSession?.isStreamConnected() ?? false) &&
-        row.openPosition
+        shouldForceFlattenForSocketLoss({
+          hasOpenPosition: Boolean(row.openPosition),
+          disconnectedForMs: this.streamerSession
+            ? this.streamerSession.getDisconnectedForMs()
+            : null,
+          graceMs: SOCKET_LOSS_GRACE_MS,
+        })
       ) {
         await this.flattenAndHalt('SOCKET_LOSS', KillScope.ALL);
         return;

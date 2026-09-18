@@ -1,10 +1,13 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Between, In, Repository } from 'typeorm';
 
 import schwabConfig from '@schwab/config/schwab.config';
-import { etDateKey } from '@schwab/pnl/et-date.util';
+import { SchwabRealizedTrade } from '@schwab/pnl/entities/schwab-realized-trade.entity';
+import { etDateKey, etDayBounds } from '@schwab/pnl/et-date.util';
+import { SchwabAccountResolver } from '@schwab/shared/schwab-account-resolver.service';
+import { runAsUser } from '@schwab/shared/schwab-user-context';
 
 import { BotCapitalEvent } from './entities/bot-capital-event.entity';
 import { BotChainSnapshot } from './entities/bot-chain-snapshot.entity';
@@ -40,6 +43,7 @@ export interface CorpusTableHealth {
  */
 @Injectable()
 export class BotCorpusHealthService {
+  private readonly logger = new Logger(BotCorpusHealthService.name);
   /** 09:30–16:00 ET at one snapshot per minute. */
   private static readonly SNAPSHOTS_PER_SESSION = 390;
 
@@ -54,6 +58,9 @@ export class BotCorpusHealthService {
     private readonly marketDayRepository: Repository<BotMarketDay>,
     @InjectRepository(BotCapitalEvent)
     private readonly capitalEventRepository: Repository<BotCapitalEvent>,
+    @InjectRepository(SchwabRealizedTrade)
+    private readonly realizedTradeRepository: Repository<SchwabRealizedTrade>,
+    private readonly accountResolver: SchwabAccountResolver,
     @Inject(schwabConfig.KEY)
     private readonly config: ConfigType<typeof schwabConfig>,
   ) {}
@@ -78,6 +85,50 @@ export class BotCorpusHealthService {
     return rows
       .map((row) => row.user_id)
       .filter((userId) => userId && userId !== ownerUserId);
+  }
+
+  /**
+   * How many BOT_PAPER (or configured lane) trades the owner's own P&L
+   * ledger says closed today, independent of the recorder entirely.
+   *
+   * This is the check that would have caught 2026-09-18: the corpus tables
+   * silently stayed at zero for a full session while trades closed normally,
+   * because `bot_trades`'s own row count has no way to know what it *should*
+   * contain. A trade count from a completely different table — one the
+   * recorder never writes to — is what makes a gap visible instead of
+   * looking like an ordinary quiet day.
+   *
+   * Best-effort: resolving the account hash makes a live call the first time
+   * it's not cached, and a disconnected owner would make that throw. A
+   * health check must not itself become another way for this page to break,
+   * so a failure here degrades to "unknown" rather than a 500.
+   */
+  private async countRealTradesToday(
+    ownerUserId: string | null,
+  ): Promise<number | null> {
+    if (!ownerUserId) return null;
+    try {
+      const accountHash = await runAsUser(ownerUserId, () =>
+        this.accountResolver.resolve(),
+      );
+      const { start, end } = etDayBounds(etDateKey(new Date()));
+      // `end` is exclusive by contract (etDayBounds), and Between is
+      // inclusive on both sides - a trade closing at exact UTC midnight
+      // would double count into two ET days, which never happens for
+      // options that stop trading at 16:00 ET, so the mismatch is moot here.
+      return this.realizedTradeRepository.count({
+        where: {
+          accountHash,
+          source: In(this.config.improvementLanes),
+          closedAt: Between(start, end),
+        },
+      });
+    } catch (err) {
+      this.logger.warn(
+        `countRealTradesToday failed: ${(err as Error).message}`,
+      );
+      return null;
+    }
   }
 
   async getHealth(): Promise<{
@@ -106,6 +157,12 @@ export class BotCorpusHealthService {
     const marketDayToday = await this.marketDayRepository.count({
       where: { etDateKey: today },
     });
+    const tradesRecordedToday = ownerUserId
+      ? await this.tradeRepository.count({
+          where: { userId: ownerUserId, etDateKey: today },
+        })
+      : 0;
+    const tradesClosedToday = await this.countRealTradesToday(ownerUserId);
 
     const foreignUserIds = await this.findForeignAttribution(ownerUserId);
 
@@ -139,15 +196,13 @@ export class BotCorpusHealthService {
         {
           table: 'bot_trades',
           rows: trades,
-          today: null,
+          today: tradesRecordedToday,
           expectedPerSession: '3–15 on an active session',
-          // The loudest signal in the checkpoint doc: under ~30 rows total
-          // and no tuning conclusion is valid, because there is no sample.
-          verdict: trades === 0 ? 'empty' : trades < 30 ? 'sparse' : 'ok',
-          note:
-            trades < 30
-              ? 'Under ~30 trades total — not enough sample for any tuning conclusion'
-              : null,
+          ...this.tradesTodayVerdict(
+            tradesRecordedToday,
+            tradesClosedToday,
+            trades,
+          ),
         },
         {
           table: 'bot_trade_tape',
@@ -174,6 +229,37 @@ export class BotCorpusHealthService {
         },
       ],
     };
+  }
+
+  /**
+   * Verdict for the `bot_trades` row, checked in order of how loud the
+   * problem is: a live recording gap first (trades happened, nothing was
+   * written — this is what 2026-09-18 looked like), then the plain
+   * insufficient-sample warning the analyzer's readiness gate already uses.
+   */
+  private tradesTodayVerdict(
+    recordedToday: number,
+    closedToday: number | null,
+    totalRows: number,
+  ): { verdict: CorpusTableHealth['verdict']; note: string | null } {
+    if (closedToday != null && closedToday > recordedToday) {
+      const missed = closedToday - recordedToday;
+      return {
+        verdict: recordedToday === 0 ? 'empty' : 'sparse',
+        note:
+          `${closedToday} trade(s) closed today per the P&L ledger but only ` +
+          `${recordedToday} recorded to the corpus — the recorder missed ${missed}. ` +
+          `Check BotRecordingService logs for the gap window.`,
+      };
+    }
+    if (totalRows === 0) return { verdict: 'empty', note: null };
+    if (totalRows < 30) {
+      return {
+        verdict: 'sparse',
+        note: 'Under ~30 trades total — not enough sample for any tuning conclusion',
+      };
+    }
+    return { verdict: 'ok', note: null };
   }
 
   private async countOwned(

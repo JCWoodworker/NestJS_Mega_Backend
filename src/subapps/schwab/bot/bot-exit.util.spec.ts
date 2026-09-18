@@ -1,4 +1,8 @@
-import { computeExitLevels, decideSoftExit } from './bot-exit.util';
+import {
+  computeExitLevels,
+  decideSoftExit,
+  shouldForceFlattenForSocketLoss,
+} from './bot-exit.util';
 import { BotDirection } from './enums/strategy.enum';
 
 describe('bot-exit.util', () => {
@@ -96,6 +100,65 @@ describe('bot-exit.util', () => {
           targetUnderlying: 775,
         }),
       ).toBe('PREMIUM_TARGET');
+    });
+  });
+
+  /**
+   * 2026-09-18 prod incident: two open positions were force-flattened for
+   * losses within the first 15 minutes of the session, both during what
+   * turned out to be a routine reconnect. This is the fix.
+   */
+  describe('shouldForceFlattenForSocketLoss', () => {
+    it('does nothing without an open position, however long the outage', () => {
+      expect(
+        shouldForceFlattenForSocketLoss({
+          hasOpenPosition: false,
+          disconnectedForMs: 999_999,
+          graceMs: 15_000,
+        }),
+      ).toBe(false);
+    });
+
+    it('tolerates an outage inside the grace period', () => {
+      expect(
+        shouldForceFlattenForSocketLoss({
+          hasOpenPosition: true,
+          disconnectedForMs: 5_000,
+          graceMs: 15_000,
+        }),
+      ).toBe(false);
+    });
+
+    it('flattens once the outage outlasts the grace period', () => {
+      expect(
+        shouldForceFlattenForSocketLoss({
+          hasOpenPosition: true,
+          disconnectedForMs: 15_001,
+          graceMs: 15_000,
+        }),
+      ).toBe(true);
+    });
+
+    it('flattens immediately when there is no session at all', () => {
+      // null means "no session that could reconnect", not "just reconnected" —
+      // worse than a disconnect, so the grace period does not apply.
+      expect(
+        shouldForceFlattenForSocketLoss({
+          hasOpenPosition: true,
+          disconnectedForMs: null,
+          graceMs: 15_000,
+        }),
+      ).toBe(true);
+    });
+
+    it('does not flatten while fully connected', () => {
+      expect(
+        shouldForceFlattenForSocketLoss({
+          hasOpenPosition: true,
+          disconnectedForMs: 0,
+          graceMs: 15_000,
+        }),
+      ).toBe(false);
     });
   });
 });

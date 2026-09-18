@@ -97,6 +97,16 @@ export class SchwabStreamerSession {
   private streamerInfo: StreamerInfo | null = null;
   private requestId = 1;
   private loggedIn = false;
+  /**
+   * Epoch ms when the current outage started, or null while connected.
+   *
+   * Reconnects on a 2s timer and normally succeeds within one or two
+   * attempts, so the raw `loggedIn` flag flips false-then-true again well
+   * inside a single bot heartbeat window. Tracking *when* the outage began
+   * (rather than just whether it's currently down) is what lets a caller
+   * distinguish a routine reconnect blip from a genuinely dead stream.
+   */
+  private disconnectedAt: number | null = null;
 
   private lastFrameAt: number | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
@@ -187,6 +197,19 @@ export class SchwabStreamerSession {
 
   isStreamConnected(): boolean {
     return this.loggedIn;
+  }
+
+  /**
+   * How long the stream has been continuously disconnected, or 0 if it's
+   * currently up.
+   *
+   * Exists so a caller deciding whether to force-flatten an open position
+   * can require the outage to have outlasted a normal reconnect cycle,
+   * rather than reacting to the first heartbeat tick that happens to land
+   * inside a 2-second reconnect window.
+   */
+  getDisconnectedForMs(): number {
+    return this.disconnectedAt == null ? 0 : Date.now() - this.disconnectedAt;
   }
 
   /** Epoch ms of the last streamed frame Schwab sent us, of any kind
@@ -358,6 +381,7 @@ export class SchwabStreamerSession {
 
   private async onLoggedIn(): Promise<void> {
     this.loggedIn = true;
+    this.disconnectedAt = null;
     this.logger.log('Schwab streamer LOGIN succeeded');
     this.optionsGateway.emitStreamStatus(this.userId, {
       connected: true,
@@ -778,6 +802,11 @@ export class SchwabStreamerSession {
 
   private handleSocketClosed(): void {
     this.loggedIn = false;
+    // Only stamp the start of an outage once - a failed reconnect attempt
+    // closes the socket again and re-enters this handler, and resetting the
+    // clock there would make a stream that never recovers look perpetually
+    // "just disconnected" to getDisconnectedForMs().
+    if (this.disconnectedAt == null) this.disconnectedAt = Date.now();
     this.optionsGateway.emitStreamStatus(this.userId, {
       connected: false,
       lastFrameAt: this.lastFrameAt,
