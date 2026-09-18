@@ -1,4 +1,11 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 
 import { Role } from '@users/enums/role.enum';
@@ -8,6 +15,7 @@ import { Roles } from '@iam/authorization/decorators/roles.decorator';
 import { SchwabOwnerGuard } from '@schwab/shared/schwab-owner.guard';
 
 import { BotCorpusHealthService } from './bot-corpus-health.service';
+import { BotSupervisorService } from './bot-supervisor.service';
 
 /**
  * The lab's control plane — operating the bot improvement loop, not trading.
@@ -26,7 +34,50 @@ import { BotCorpusHealthService } from './bot-corpus-health.service';
 @UseGuards(SchwabOwnerGuard)
 @Controller('bot/admin')
 export class BotAdminController {
-  constructor(private readonly corpusHealthService: BotCorpusHealthService) {}
+  constructor(
+    private readonly corpusHealthService: BotCorpusHealthService,
+    private readonly supervisorService: BotSupervisorService,
+  ) {}
+
+  /**
+   * Live supervisor state plus the blockers currently preventing an arm.
+   *
+   * Blockers are recomputed per request rather than replayed from the last
+   * decision, so a lockout cleared by hand disappears from the panel
+   * immediately instead of at the next minute tick.
+   */
+  @Get('supervisor')
+  async supervisor() {
+    return this.supervisorService.getStatus();
+  }
+
+  /**
+   * Clears whatever a refusal is waiting on: flattens a leftover position,
+   * clears a stale lockout, tops the paper ledger back over the floor.
+   *
+   * This is the deliberate human judgement the unattended path refuses to
+   * make for itself. It does not arm — the next tick does, so the normal
+   * safety checks still apply.
+   */
+  @Post('supervisor/reconcile')
+  @HttpCode(HttpStatus.OK)
+  async reconcile() {
+    return this.supervisorService.reconcile();
+  }
+
+  /** Arms now, skipping the arm-time window but not the safety blockers. */
+  @Post('supervisor/arm')
+  @HttpCode(HttpStatus.OK)
+  async arm() {
+    return this.supervisorService.armNow();
+  }
+
+  /** Flatten and halt now. */
+  @Post('supervisor/stand-down')
+  @HttpCode(HttpStatus.OK)
+  async standDown() {
+    return this.supervisorService.standDownNow();
+  }
 
   /**
    * Row counts for the recording tables against what a session should

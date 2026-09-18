@@ -68,4 +68,26 @@ export default registerAs('schwab', () => ({
   improvementLanes: (process.env.BOT_IMPROVEMENT_LANES?.trim()
     ? process.env.BOT_IMPROVEMENT_LANES.split(',').map((lane) => lane.trim())
     : ['BOT_PAPER']) as string[],
+  /**
+   * Unattended session supervisor: arms the owner's paper bot at the open and
+   * stands it down at the close.
+   *
+   * Defaults OFF and belongs on exactly one app. Both apps run the same code,
+   * so two supervisors would arm two bots against the same corpus. It is also
+   * a per-app switch rather than per-user by design — only the owner's paper
+   * lane is ever armed.
+   */
+  botSupervisorEnabled: process.env.BOT_DAILY_SUPERVISOR_ENABLED === 'true',
+  /**
+   * Arms a few minutes after the open rather than at 09:30 exactly: the first
+   * minutes are the widest spreads of the day, and VWAP/ORB need bars before
+   * they mean anything.
+   */
+  supervisorArmAt: process.env.BOT_SUPERVISOR_ARM_AT?.trim() || '09:45',
+  /**
+   * Stands down before the close. The engine's own `hardFlattenTime` should
+   * already have closed any position; this is the backstop that also halts.
+   */
+  supervisorStandDownAt:
+    process.env.BOT_SUPERVISOR_STAND_DOWN_AT?.trim() || '15:45',
 }));

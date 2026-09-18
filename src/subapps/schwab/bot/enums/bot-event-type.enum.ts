@@ -19,6 +19,18 @@ export enum BotEventType {
   OPERATOR_LANE = 'OPERATOR_LANE',
   OPERATOR_LIVE = 'OPERATOR_LIVE',
   ERROR = 'ERROR',
+  /** Unattended supervisor armed the paper bot for the session. */
+  SUPERVISOR_ARM = 'SUPERVISOR_ARM',
+  /**
+   * Supervisor declined to arm and why.
+   *
+   * Recorded rather than only logged: an unattended process that silently
+   * does nothing is indistinguishable from one that is broken, and the admin
+   * panel needs the reason to offer a reconcile.
+   */
+  SUPERVISOR_REFUSED = 'SUPERVISOR_REFUSED',
+  /** Supervisor stood the bot down at the end of the session. */
+  SUPERVISOR_STANDDOWN = 'SUPERVISOR_STANDDOWN',
 }
 
 export type BotEventSide = 'BUY' | 'SELL';

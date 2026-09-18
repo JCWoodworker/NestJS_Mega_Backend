@@ -22,6 +22,7 @@ import { BotMarketDataService } from './bot-market-data.service';
 import { BotRecordingService } from './bot-recording.service';
 import { BotSettingsService } from './bot-settings.service';
 import { BotStateService } from './bot-state.service';
+import { BotSupervisorService } from './bot-supervisor.service';
 import { BotController } from './bot.controller';
 import { BotCapitalEvent } from './entities/bot-capital-event.entity';
 import { BotChainSnapshot } from './entities/bot-chain-snapshot.entity';
@@ -65,6 +66,7 @@ import { BotTrade } from './entities/bot-trade.entity';
     BotRecordingService,
     BotEngineService,
     BotCorpusHealthService,
+    BotSupervisorService,
   ],
   exports: [BotStateService, BotSettingsService, BotEventService],
 })
