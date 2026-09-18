@@ -13,6 +13,8 @@ import { PnlModule } from '@schwab/pnl/pnl.module';
 import { SchwabSharedModule } from '@schwab/shared/schwab-shared.module';
 import { SchwabStreamingModule } from '@schwab/streaming/schwab-streaming.module';
 
+import { BotAdminController } from './bot-admin.controller';
+import { BotCorpusHealthService } from './bot-corpus-health.service';
 import { BotEngineService } from './bot-engine.service';
 import { BotEventService } from './bot-event.service';
 import { BotExecutionService } from './bot-execution.service';
@@ -53,7 +55,7 @@ import { BotTrade } from './entities/bot-trade.entity';
     forwardRef(() => SchwabStreamingModule),
     PnlModule,
   ],
-  controllers: [BotController],
+  controllers: [BotController, BotAdminController],
   providers: [
     BotSettingsService,
     BotStateService,
@@ -62,6 +64,7 @@ import { BotTrade } from './entities/bot-trade.entity';
     BotExecutionService,
     BotRecordingService,
     BotEngineService,
+    BotCorpusHealthService,
   ],
   exports: [BotStateService, BotSettingsService, BotEventService],
 })
