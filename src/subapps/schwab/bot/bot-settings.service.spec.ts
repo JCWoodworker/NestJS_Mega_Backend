@@ -1,6 +1,8 @@
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
+import { enterUserContext } from '@schwab/shared/schwab-user-context';
+
 import { BotSettingsService } from './bot-settings.service';
 import { UpdateBotSettingsDto } from './dto/update-bot-settings.dto';
 import {
@@ -50,8 +52,12 @@ function buildService() {
     updatedAt: new Date(),
   };
 
+  // The service resolves its tenant from AsyncLocalStorage.
+  enterUserContext('test-user-id');
+
   const settingsRepository = {
     find: jest.fn().mockImplementation(async () => (row ? [row] : [])),
+    findOneBy: jest.fn().mockImplementation(async () => row ?? null),
     save: jest.fn().mockImplementation(async (patch: any) => {
       row = { ...row, ...patch };
       return row;

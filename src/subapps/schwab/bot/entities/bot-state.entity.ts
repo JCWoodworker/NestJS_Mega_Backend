@@ -1,6 +1,7 @@
 import {
   Column,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -37,11 +38,17 @@ export interface BotLastSignal {
   reason: string;
 }
 
-/** Singleton runtime state for the bot control plane. */
+/** Runtime state for one user's bot control plane. */
 @Entity('bot_state')
 export class BotState {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  /** Unique: one control-plane row per user. Duplicates previously let a
+   * `take: 1` read pick a stale row non-deterministically. */
+  @Index('UQ_bot_state_user_id', { unique: true })
+  @Column({ type: 'varchar', name: 'user_id' })
+  userId: string;
 
   @Column({
     type: 'enum',

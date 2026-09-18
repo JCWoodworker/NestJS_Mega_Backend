@@ -13,11 +13,12 @@ import { firstValueFrom } from 'rxjs';
 import { Repository } from 'typeorm';
 
 import schwabConfig from '@schwab/config/schwab.config';
-import { OrdersService } from '@schwab/orders/orders.service';
 import { SchwabRealizedTrade } from '@schwab/pnl/entities/schwab-realized-trade.entity';
 import { OrderSource } from '@schwab/pnl/enums/order-source.enum';
 import { etDateKey, etDayBounds } from '@schwab/pnl/et-date.util';
 import { mapAccountBalances } from '@schwab/shared/account-data.mapper';
+import { SchwabAccountResolver } from '@schwab/shared/schwab-account-resolver.service';
+import { requireUserId } from '@schwab/shared/schwab-user-context';
 import { BotEventPayload } from '@schwab/streaming/options.gateway';
 
 import { BotEngineService } from './bot-engine.service';
@@ -109,13 +110,17 @@ const OPERATOR_UNLOCKABLE_REASONS = new Set([
 @Injectable()
 export class BotStateService {
   private readonly logger = new Logger(BotStateService.name);
-  private cachedAccountHash: string | null = null;
-  private liveEquity = 0;
-  private liveSettledCash = 0;
-  private liveDayStartEquity = 0;
+  /** Live account figures, per user. A single set of scalars would have
+   * reported whichever user's balances were polled last to everyone, and
+   * those numbers gate BOT_LIVE entries. */
+  private readonly liveBalances = new Map<
+    string,
+    { equity: number; settledCash: number; dayStartEquity: number }
+  >();
   /** Guards the lazy-create-on-first-read below against a boot-time race
-   * where two concurrent callers both see no row and both insert one. */
-  private creatingRow: Promise<BotState> | null = null;
+   * where two concurrent callers both see no row and both insert one.
+   * Keyed by user so one user's insert cannot satisfy another's read. */
+  private readonly creatingRows = new Map<string, Promise<BotState>>();
 
   constructor(
     @InjectRepository(BotState)
@@ -123,7 +128,7 @@ export class BotStateService {
     @InjectRepository(SchwabRealizedTrade)
     private readonly realizedRepository: Repository<SchwabRealizedTrade>,
     private readonly httpService: HttpService,
-    private readonly ordersService: OrdersService,
+    private readonly accountResolver: SchwabAccountResolver,
     @Inject(schwabConfig.KEY)
     private readonly config: ConfigType<typeof schwabConfig>,
     @Inject(forwardRef(() => BotEngineService))
@@ -156,30 +161,44 @@ export class BotStateService {
     }
   }
 
-  async getRow(): Promise<BotState> {
-    const [existing] = await this.stateRepository.find({
-      take: 1,
-      order: { updatedAt: 'DESC' },
-    });
+  async getRow(userId = requireUserId()): Promise<BotState> {
+    const existing = await this.stateRepository.findOneBy({ userId });
     if (existing) return existing;
 
-    if (!this.creatingRow) {
-      this.creatingRow = this.stateRepository
-        .save(
-          this.stateRepository.create({
-            mode: BotMode.MANUAL,
-            lane: null,
-            running: false,
-            lockout: false,
-            lockoutReason: null,
-            liveArmed: false,
-          }),
-        )
-        .finally(() => {
-          this.creatingRow = null;
-        });
-    }
-    return this.creatingRow;
+    const inFlight = this.creatingRows.get(userId);
+    if (inFlight) return inFlight;
+
+    const creating = this.stateRepository
+      .save(
+        this.stateRepository.create({
+          userId,
+          mode: BotMode.MANUAL,
+          lane: null,
+          running: false,
+          lockout: false,
+          lockoutReason: null,
+          liveArmed: false,
+        }),
+      )
+      .finally(() => {
+        this.creatingRows.delete(userId);
+      });
+    this.creatingRows.set(userId, creating);
+    return creating;
+  }
+
+  /**
+   * Users whose bot needs a heartbeat tick.
+   *
+   * Filtered in SQL rather than by loading every row: a bot left in MANUAL
+   * needs no work, and the point of the scan is to keep the per-tick Schwab
+   * call volume proportional to users who are actually running.
+   */
+  async listActiveBotUsers(): Promise<Array<{ userId: string }>> {
+    return this.stateRepository.find({
+      where: { mode: BotMode.BOT },
+      select: { userId: true },
+    });
   }
 
   async save(row: BotState): Promise<BotState> {
@@ -191,27 +210,29 @@ export class BotStateService {
     equity: number,
     settledCash: number,
     dayStartEquity: number,
+    userId = requireUserId(),
   ) {
-    this.liveEquity = equity;
-    this.liveSettledCash = settledCash;
-    this.liveDayStartEquity = dayStartEquity;
+    this.liveBalances.set(userId, { equity, settledCash, dayStartEquity });
   }
 
-  getLiveBalances() {
-    return {
-      equity: this.liveEquity,
-      settledCash: this.liveSettledCash,
-      dayStartEquity: this.liveDayStartEquity,
-    };
+  getLiveBalances(userId = requireUserId()) {
+    return (
+      this.liveBalances.get(userId) ?? {
+        equity: 0,
+        settledCash: 0,
+        dayStartEquity: 0,
+      }
+    );
   }
 
   async getStatus(): Promise<BotStatusView> {
     const row = await this.getRow();
     const isPaper = row.lane === BotLane.BOT_PAPER;
-    const equity = isPaper ? Number(row.paperEquity) : this.liveEquity;
+    const live = this.getLiveBalances(row.userId);
+    const equity = isPaper ? Number(row.paperEquity) : live.equity;
     const settledCash = isPaper
       ? Number(row.paperSettledCash)
-      : this.liveSettledCash;
+      : live.settledCash;
     const [{ todayBotPnl, tradesToday }, settings, recentEvents] =
       await Promise.all([
         this.todayStats(row.lane),
@@ -232,7 +253,7 @@ export class BotStateService {
       lane: row.lane,
       lockout: row.lockout,
       hasOpenPosition: !!row.openPosition,
-      transientPhase: this.botEngine.getTransientPhase(),
+      transientPhase: this.botEngine.getTransientPhase(row.userId),
       withinTradeWindow: isWithinWindow(
         nowHhMm,
         settings.tradeWindowStart,
@@ -247,7 +268,7 @@ export class BotStateService {
         (row.openPosition.stopPremium != null ||
           row.openPosition.targetPremium != null),
     );
-    const lastPremiumBidAt = this.botEngine.getLastPremiumBidAt();
+    const lastPremiumBidAt = this.botEngine.getLastPremiumBidAt(row.userId);
     const premiumWatchOk =
       !premiumArmed ||
       (lastPremiumBidAt != null &&
@@ -264,7 +285,7 @@ export class BotStateService {
       settledCash,
       dayStartEquity: isPaper
         ? Number(row.paperDayStartEquity)
-        : this.liveDayStartEquity,
+        : live.dayStartEquity,
       paperEquity: Number(row.paperEquity),
       paperSettledCash: Number(row.paperSettledCash),
       minEquityOk: equity >= minEquityThreshold,
@@ -344,7 +365,7 @@ export class BotStateService {
           'BOT_LIVE requires live to be armed via POST /bot/live/enable',
         );
       }
-      assertMinEquity(this.liveEquity, 'BOT_LIVE');
+      assertMinEquity(this.getLiveBalances().equity, 'BOT_LIVE');
     }
     if (lane === BotLane.BOT_PAPER) {
       const paperRow = await this.getRow();
@@ -378,7 +399,7 @@ export class BotStateService {
     if (confirm !== true) {
       throw new BadRequestException('confirm must be true');
     }
-    assertMinEquity(this.liveEquity, 'BOT_LIVE');
+    assertMinEquity(this.getLiveBalances().equity, 'BOT_LIVE');
     const row = await this.getRow();
     row.liveArmed = true;
     await this.save(row);
@@ -511,14 +532,7 @@ export class BotStateService {
   }
 
   async resolveAccountHash(): Promise<string> {
-    if (this.config.accountHash) return this.config.accountHash;
-    if (this.cachedAccountHash) return this.cachedAccountHash;
-    const accounts = await this.ordersService.listAccounts();
-    if (!accounts.length) {
-      throw new Error('No Schwab accounts linked to this app yet');
-    }
-    this.cachedAccountHash = accounts[0].hashValue;
-    return this.cachedAccountHash;
+    return this.accountResolver.resolve();
   }
 
   private async todayStats(

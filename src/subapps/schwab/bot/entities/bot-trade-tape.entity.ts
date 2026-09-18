@@ -16,10 +16,16 @@ import { BotLane } from '../enums/bot-lane.enum';
  * duplicate data on the highest-volume table in the system.
  */
 @Entity('bot_trade_tape')
-@Index(['tradeKey', 'at'])
+@Index(['userId', 'tradeKey', 'at'])
 export class BotTradeTape {
   @PrimaryGeneratedColumn()
   id: number;
+
+  /** Owner-only in practice — see the note on `BotTrade.userId`. Part of the
+   * index because `recordTradeClose` reads the tape back by trade key to
+   * compute excursion, and must not mix in another account's samples. */
+  @Column({ type: 'varchar', name: 'user_id' })
+  userId: string;
 
   /** `${symbol}-${openedAt}` — stable for the life of one position. */
   @Column({ type: 'varchar', length: 64, name: 'trade_key' })

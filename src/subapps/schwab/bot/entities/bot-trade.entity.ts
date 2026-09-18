@@ -26,14 +26,26 @@ import { BotDirection, BotStrategy } from '../enums/strategy.enum';
  * that makes quarter and year views possible.
  */
 @Entity('bot_trades')
-@Index(['tradeKey'], { unique: true })
+@Index(['userId', 'tradeKey'], { unique: true })
 @Index(['etDateKey'])
 @Index(['closedAt'])
 export class BotTrade {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  /** `${symbol}-${openedAt}` — matches `bot_trade_tape.trade_key`. */
+  /**
+   * Only the improvement-loop owner writes here (see
+   * `BotRecordingService.writesCorpus`), so this is defense in depth rather
+   * than a routing key: it makes a gate regression detectable and the
+   * offending rows removable, instead of indistinguishable from the owner's
+   * own data once they have polluted the training set.
+   */
+  @Column({ type: 'varchar', name: 'user_id' })
+  userId: string;
+
+  /** `${symbol}-${openedAt}` — matches `bot_trade_tape.trade_key`. Unique per
+   * user, not globally: two accounts can legitimately open the same contract
+   * at the same millisecond. */
   @Column({ type: 'varchar', length: 64, name: 'trade_key' })
   tradeKey: string;
 

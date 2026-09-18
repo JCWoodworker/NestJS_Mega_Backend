@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
+import { requireUserId } from '@schwab/shared/schwab-user-context';
+
 import { BotEventService } from './bot-event.service';
 import {
   buildSuggestedSettings,
@@ -58,8 +60,9 @@ export interface BotSettingsView {
 export class BotSettingsService {
   /** Guards the lazy-create-on-first-read below against a boot-time race
    * where two concurrent callers both see no row and both insert one —
-   * observed in practice (duplicate `bot_state` rows on first deploy). */
-  private creatingRow: Promise<BotSettings> | null = null;
+   * observed in practice (duplicate `bot_state` rows on first deploy).
+   * Keyed by user so one user's insert cannot satisfy another's read. */
+  private readonly creatingRows = new Map<string, Promise<BotSettings>>();
 
   constructor(
     @InjectRepository(BotSettings)
@@ -67,21 +70,20 @@ export class BotSettingsService {
     private readonly botEventService: BotEventService,
   ) {}
 
-  async getRow(): Promise<BotSettings> {
-    const [existing] = await this.settingsRepository.find({
-      take: 1,
-      order: { updatedAt: 'DESC' },
-    });
+  async getRow(userId = requireUserId()): Promise<BotSettings> {
+    const existing = await this.settingsRepository.findOneBy({ userId });
     if (existing) return existing;
 
-    if (!this.creatingRow) {
-      this.creatingRow = this.settingsRepository
-        .save(this.settingsRepository.create({}))
-        .finally(() => {
-          this.creatingRow = null;
-        });
-    }
-    return this.creatingRow;
+    const inFlight = this.creatingRows.get(userId);
+    if (inFlight) return inFlight;
+
+    const creating = this.settingsRepository
+      .save(this.settingsRepository.create({ userId }))
+      .finally(() => {
+        this.creatingRows.delete(userId);
+      });
+    this.creatingRows.set(userId, creating);
+    return creating;
   }
 
   async getSettings(): Promise<BotSettingsView> {

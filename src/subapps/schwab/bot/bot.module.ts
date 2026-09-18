@@ -10,6 +10,7 @@ import { OrdersModule } from '@schwab/orders/orders.module';
 import { SchwabRealizedTrade } from '@schwab/pnl/entities/schwab-realized-trade.entity';
 import { SchwabTradeFill } from '@schwab/pnl/entities/schwab-trade-fill.entity';
 import { PnlModule } from '@schwab/pnl/pnl.module';
+import { SchwabSharedModule } from '@schwab/shared/schwab-shared.module';
 import { SchwabStreamingModule } from '@schwab/streaming/schwab-streaming.module';
 
 import { BotEngineService } from './bot-engine.service';
@@ -47,6 +48,7 @@ import { BotTrade } from './entities/bot-trade.entity';
     SchwabHttpModule,
     forwardRef(() => SchwabAuthModule),
     OrdersModule,
+    SchwabSharedModule,
     MarketDataModule,
     forwardRef(() => SchwabStreamingModule),
     PnlModule,

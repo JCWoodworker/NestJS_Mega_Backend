@@ -12,6 +12,7 @@ import schwabConfig from '@schwab/config/schwab.config';
 import { MarketDataService } from '@schwab/market-data/market-data.service';
 import { OrdersService } from '@schwab/orders/orders.service';
 import { etDateKey } from '@schwab/pnl/et-date.util';
+import { requireUserId, runAsUser } from '@schwab/shared/schwab-user-context';
 import {
   OptionsGateway,
   ChartCandlePayload,
@@ -67,17 +68,49 @@ const PREMIUM_REST_FALLBACK_MIN_MS = 3_000;
 export class BotEngineService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BotEngineService.name);
   private heartbeatTimer: NodeJS.Timeout | null = null;
-  private evaluating = false;
-  private lastStatusEmitAt = 0;
-  /** ENTERING/EXITING override the state-derived phase while a walk-limit
-   * order chase is actively running — see `bot-phase.util.computePhase`. */
-  private transientPhase: 'ENTERING' | 'EXITING' | null = null;
-  private lastEmittedPhase: BotPhase | null = null;
-  private lastPremiumQuoteAt = 0;
-  /** Epoch ms the soft-exit loop last obtained an option bid. Null means the
-   * premium stop/target is armed but currently not being evaluated. */
-  private lastPremiumBidAt: number | null = null;
-  private softExitChecking = false;
+
+  /**
+   * Per-user engine state.
+   *
+   * One scheduler drives every user's bot, so all of this has to be keyed by
+   * tenant. As plain scalars they were cross-talk waiting to happen: a
+   * shared `evaluating` flag would let one user's in-flight evaluation
+   * silently skip everyone else's entry signals, and a shared
+   * `transientPhase` would report one user's order chase on another user's
+   * status panel.
+   */
+  private readonly state = new Map<
+    string,
+    {
+      evaluating: boolean;
+      lastStatusEmitAt: number;
+      /** ENTERING/EXITING override the state-derived phase while a walk-limit
+       * order chase is actively running — see `bot-phase.util.computePhase`. */
+      transientPhase: 'ENTERING' | 'EXITING' | null;
+      lastEmittedPhase: BotPhase | null;
+      lastPremiumQuoteAt: number;
+      /** Epoch ms the soft-exit loop last obtained an option bid. Null means
+       * the premium stop/target is armed but not being evaluated. */
+      lastPremiumBidAt: number | null;
+      softExitChecking: boolean;
+    }
+  >();
+
+  private stateFor(userId: string = requireUserId()) {
+    const existing = this.state.get(userId);
+    if (existing) return existing;
+    const fresh = {
+      evaluating: false,
+      lastStatusEmitAt: 0,
+      transientPhase: null,
+      lastEmittedPhase: null,
+      lastPremiumQuoteAt: 0,
+      lastPremiumBidAt: null,
+      softExitChecking: false,
+    };
+    this.state.set(userId, fresh);
+    return fresh;
+  }
 
   constructor(
     @Inject(forwardRef(() => BotStateService))
@@ -96,28 +129,27 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   /**
-   * The streamer session whose market data drives the bot.
+   * The streamer session whose market data drives this user's bot.
    *
-   * Still owner-scoped: the bot runs one desk until Phase 4. Returns null
-   * when the owner has no live session, which the staleness gates below
-   * treat as "no fresh data" and therefore refuse to trade on.
+   * Returns null when the user has no live session, which the staleness
+   * gates below treat as "no fresh data" and therefore refuse to trade on —
+   * the correct default, since an unattended bot must not act on quotes it
+   * cannot confirm are current.
    */
   private get streamerSession(): SchwabStreamerSession | null {
-    return this.config.ownerUserId
-      ? this.streamerPool.peek(this.config.ownerUserId)
-      : null;
+    return this.streamerPool.peek(requireUserId());
   }
 
-  getTransientPhase(): 'ENTERING' | 'EXITING' | null {
-    return this.transientPhase;
+  getTransientPhase(userId?: string): 'ENTERING' | 'EXITING' | null {
+    return this.stateFor(userId).transientPhase;
   }
 
   /** Epoch ms of the last option bid the soft-exit loop managed to read, or
    * null if it has not read one for the current position. `getStatus` turns
    * this into `premiumWatchOk` so the desk can show when a premium stop is
    * armed but not actually being evaluated. */
-  getLastPremiumBidAt(): number | null {
-    return this.lastPremiumBidAt;
+  getLastPremiumBidAt(userId?: string): number | null {
+    return this.stateFor(userId).lastPremiumBidAt;
   }
 
   onModuleInit(): void {
@@ -125,10 +157,12 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     this.optionsGateway.on('chart-candle', this.handleChartCandleClose);
     this.optionsGateway.on('underlying-price', this.handleUnderlyingPrice);
     this.heartbeatTimer = setInterval(
-      () => void this.heartbeat(),
+      () => void this.heartbeatAllUsers(),
       HEARTBEAT_MS,
     );
-    void this.botMarketDataService.ensureSeeded();
+    // Candle seeding moved into the per-user heartbeat. At module init there
+    // is no tenant in scope, and seeding eagerly would also spend a Schwab
+    // price-history call for users whose bot is in MANUAL.
   }
 
   onModuleDestroy(): void {
@@ -144,36 +178,32 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Gateway events are now per-user, so the bot must ignore everyone
-   * else's. Without this filter a customer watching SPY would drive entry
-   * evaluation and soft-stop checks on the owner's bot.
+   * Gateway events carry their userId and are dispatched from the streamer's
+   * flush timer, which has no ambient tenant. Establishing the context here
+   * is what lets everything downstream — candle buffers, bot state, Schwab
+   * calls — resolve to the right user. Without it `requireUserId()` throws
+   * inside the strategy path.
    */
-  private isOwnEvent(userId: string): boolean {
-    return !!this.config.ownerUserId && userId === this.config.ownerUserId;
-  }
-
   private handleChartCandleClose = (
     userId: string,
     candle?: ChartCandlePayload,
   ): void => {
-    if (!this.isOwnEvent(userId)) return;
     // Only SPY equity bars drive entry evaluation (option chart shares the
     // same gateway event and would otherwise double-eval).
     if (candle && candle.assetType !== 'EQUITY') return;
-    void this.evaluateEntrySignal(candle?.chartTime);
+    void runAsUser(userId, () => this.evaluateEntrySignal(candle?.chartTime));
   };
 
   private handleUnderlyingPrice = (
     userId: string,
     payload: UnderlyingPricePayload,
   ): void => {
-    if (!this.isOwnEvent(userId)) return;
-    void this.checkSoftStopAndTargets(payload.price);
+    void runAsUser(userId, () => this.checkSoftStopAndTargets(payload.price));
   };
 
   private async evaluateEntrySignal(chartTime?: number): Promise<void> {
-    if (this.evaluating) return;
-    this.evaluating = true;
+    if (this.stateFor().evaluating) return;
+    this.stateFor().evaluating = true;
     try {
       const row = await this.botStateService.getRow();
       if (
@@ -379,7 +409,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         /* ignore secondary failure */
       }
     } finally {
-      this.evaluating = false;
+      this.stateFor().evaluating = false;
     }
   }
 
@@ -503,7 +533,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       underlyingPrice: spot ?? undefined,
     });
 
-    this.transientPhase = 'ENTERING';
+    this.stateFor().transientPhase = 'ENTERING';
     let result: Awaited<ReturnType<BotExecutionService['enter']>>;
     try {
       result = await this.botExecutionService.enter({
@@ -518,7 +548,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         targetUnderlying,
       });
     } finally {
-      this.transientPhase = null;
+      this.stateFor().transientPhase = null;
     }
     if (!result.filled) {
       await this.botEventService.record({
@@ -559,7 +589,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       targetPremium: levels.targetPremium,
       source: row.lane,
     };
-    this.lastPremiumBidAt = null;
+    this.stateFor().lastPremiumBidAt = null;
     row.lastSignal = {
       at: signal.at,
       strategies: signal.strategies as BotStrategy[],
@@ -607,8 +637,9 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async checkSoftStopAndTargets(spot: number): Promise<void> {
-    if (this.softExitChecking || this.transientPhase) return;
-    this.softExitChecking = true;
+    if (this.stateFor().softExitChecking || this.stateFor().transientPhase)
+      return;
+    this.stateFor().softExitChecking = true;
     try {
       const row = await this.botStateService.getRow();
       if (!row.openPosition || !row.lane) return;
@@ -626,10 +657,10 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         ) {
           optionBid = streamed.bid;
         } else if (
-          now - this.lastPremiumQuoteAt >=
+          now - this.stateFor().lastPremiumQuoteAt >=
           PREMIUM_REST_FALLBACK_MIN_MS
         ) {
-          this.lastPremiumQuoteAt = now;
+          this.stateFor().lastPremiumQuoteAt = now;
           try {
             const chain = await this.marketDataService.getOptionChain({
               symbol: 'SPY',
@@ -645,7 +676,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      if (optionBid != null) this.lastPremiumBidAt = now;
+      if (optionBid != null) this.stateFor().lastPremiumBidAt = now;
 
       // The bid was just fetched to evaluate stops — record it before deciding,
       // so the tape captures the path even on the tick that triggers the exit.
@@ -676,7 +707,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     } catch (err) {
       this.logger.warn(`checkSoftStopAndTargets failed: ${err.message}`);
     } finally {
-      this.softExitChecking = false;
+      this.stateFor().softExitChecking = false;
     }
   }
 
@@ -719,7 +750,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       reason: reasonTag,
     });
 
-    this.transientPhase = 'EXITING';
+    this.stateFor().transientPhase = 'EXITING';
     let result: Awaited<ReturnType<BotExecutionService['exit']>>;
     try {
       result = await this.botExecutionService.exit({
@@ -732,7 +763,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         paperSlippageCents: settings.paperSlippageCents,
       });
     } finally {
-      this.transientPhase = null;
+      this.stateFor().transientPhase = null;
     }
 
     if (!result.filled) {
@@ -766,7 +797,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     );
     const closedPosition = row.openPosition;
     row.openPosition = null;
-    this.lastPremiumBidAt = null;
+    this.stateFor().lastPremiumBidAt = null;
     await this.botStateService.save(row);
     await this.botEventService.record({
       lane: row.lane,
@@ -860,6 +891,30 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     this.logger.warn(`Bot flattened and halted: ${reason} (scope=${scope})`);
   }
 
+  /**
+   * One scheduler, every user's bot.
+   *
+   * Sequential rather than parallel: each user's tick makes Schwab REST
+   * calls, and Schwab's rate limit is per-app, so fanning out would spend
+   * the budget that order placement needs. A user whose tick throws must not
+   * stop the rest of the queue — so failures are caught per user.
+   */
+  private async heartbeatAllUsers(): Promise<void> {
+    let rows: Array<{ userId: string }>;
+    try {
+      rows = await this.botStateService.listActiveBotUsers();
+    } catch (err) {
+      this.logger.warn(`heartbeat user scan failed: ${err.message}`);
+      return;
+    }
+
+    for (const { userId } of rows) {
+      await runAsUser(userId, () => this.heartbeat()).catch((err) =>
+        this.logger.warn(`heartbeat failed for user ${userId}: ${err.message}`),
+      );
+    }
+  }
+
   private async heartbeat(): Promise<void> {
     try {
       await this.botStateService.refreshLiveBalances();
@@ -869,6 +924,10 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         await this.emitStatus(false);
         return;
       }
+
+      // Lazy per-user seed: this user's bot is armed, so the strategy is
+      // about to read the candle buffer. No-ops after the first tick.
+      await this.botMarketDataService.ensureSeeded();
 
       const settings = await this.botSettingsService.getSettings();
       const nowHhMm = etNowHhMm();
@@ -1010,26 +1069,22 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
 
   private async emitStatus(force: boolean): Promise<void> {
     const now = Date.now();
-    if (!force && now - this.lastStatusEmitAt < 1000) return;
-    this.lastStatusEmitAt = now;
+    if (!force && now - this.stateFor().lastStatusEmitAt < 1000) return;
+    this.stateFor().lastStatusEmitAt = now;
     const status = await this.botStateService.getStatus();
 
     if (
-      this.lastEmittedPhase !== null &&
-      status.phase !== this.lastEmittedPhase
+      this.stateFor().lastEmittedPhase !== null &&
+      status.phase !== this.stateFor().lastEmittedPhase
     ) {
       await this.botEventService.record({
         lane: status.lane,
         type: BotEventType.PHASE,
-        reason: `${this.lastEmittedPhase} → ${status.phase}`,
+        reason: `${this.stateFor().lastEmittedPhase} → ${status.phase}`,
       });
     }
-    this.lastEmittedPhase = status.phase;
+    this.stateFor().lastEmittedPhase = status.phase;
 
-    // See BotEventService.record — bot telemetry is owner-addressed until
-    // Phase 4 makes bot state per-user.
-    if (this.config.ownerUserId) {
-      this.optionsGateway.emitBotStatus(this.config.ownerUserId, status);
-    }
+    this.optionsGateway.emitBotStatus(requireUserId(), status);
   }
 }

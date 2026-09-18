@@ -1,15 +1,28 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 
 import { etDateKey } from '@schwab/pnl/et-date.util';
+import { enterUserContext } from '@schwab/shared/schwab-user-context';
 
 import { BotStateService } from './bot-state.service';
 import { BotLane } from './enums/bot-lane.enum';
 import { BotMode } from './enums/bot-mode.enum';
 import { KillScope } from './enums/kill-scope.enum';
 
+const TEST_USER = 'test-user-id';
+
+/**
+ * The service resolves its tenant from AsyncLocalStorage, so every test needs
+ * one in scope. `enterUserContext` sets it for the remainder of the execution
+ * context, which avoids wrapping all 38 cases in a callback.
+ */
+beforeEach(() => {
+  enterUserContext(TEST_USER);
+});
+
 function buildService() {
   let row: any = {
     id: '1',
+    userId: TEST_USER,
     mode: BotMode.MANUAL,
     lane: null,
     running: false,
@@ -27,6 +40,7 @@ function buildService() {
 
   const stateRepository = {
     find: jest.fn().mockImplementation(async () => (row ? [row] : [])),
+    findOneBy: jest.fn().mockImplementation(async () => row ?? null),
     save: jest.fn().mockImplementation(async (patch: any) => {
       row = { ...row, ...patch };
       return row;
@@ -39,8 +53,10 @@ function buildService() {
   };
 
   const httpService = { get: jest.fn() };
-  const ordersService = {
-    listAccounts: jest.fn().mockResolvedValue([{ hashValue: 'HASH1' }]),
+  const accountResolver = {
+    resolve: jest.fn().mockResolvedValue('HASH1'),
+    resolveOrNull: jest.fn().mockResolvedValue('HASH1'),
+    invalidate: jest.fn(),
   };
   const config = { accountHash: 'HASH1' };
   const botEngine = {
@@ -68,7 +84,7 @@ function buildService() {
     stateRepository as any,
     realizedRepository as any,
     httpService as any,
-    ordersService as any,
+    accountResolver as any,
     config as any,
     botEngine as any,
     botSettingsService as any,

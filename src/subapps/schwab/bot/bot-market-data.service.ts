@@ -1,8 +1,7 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { ConfigType } from '@nestjs/config';
+import { Injectable, Logger } from '@nestjs/common';
 
-import schwabConfig from '@schwab/config/schwab.config';
 import { MarketDataService } from '@schwab/market-data/market-data.service';
+import { requireUserId } from '@schwab/shared/schwab-user-context';
 import {
   ChartCandlePayload,
   OptionsGateway,
@@ -16,27 +15,37 @@ const RING_SIZE = 100;
 @Injectable()
 export class BotMarketDataService {
   private readonly logger = new Logger(BotMarketDataService.name);
-  private candles: BotCandle[] = [];
-  private seeded = false;
+  /** Per user: the strategy reads this buffer to compute VWAP/ATR, so mixing
+   * two accounts' bars would corrupt both users' indicators. Keyed by user
+   * rather than symbol because each session subscribes one underlying. */
+  private readonly buffers = new Map<
+    string,
+    { candles: BotCandle[]; seeded: boolean }
+  >();
   private listening = false;
 
   constructor(
     private readonly marketDataService: MarketDataService,
     private readonly optionsGateway: OptionsGateway,
-    @Inject(schwabConfig.KEY)
-    private readonly config: ConfigType<typeof schwabConfig>,
   ) {}
 
-  /** Gateway events are per-user now; only the owner's bars belong in the
-   * buffer the strategy reads. Another user's candles would silently corrupt
-   * the owner's VWAP/ATR inputs. */
+  private bufferFor(userId: string) {
+    const existing = this.buffers.get(userId);
+    if (existing) return existing;
+    const fresh = { candles: [] as BotCandle[], seeded: false };
+    this.buffers.set(userId, fresh);
+    return fresh;
+  }
+
+  /** Gateway events carry the userId, so each user's bars land in their own
+   * buffer. EventEmitter listeners are untyped, so getting this wrong would
+   * not have been a compile error. */
   private handleChartCandle = (
     userId: string,
     payload: ChartCandlePayload,
   ): void => {
-    if (!this.config.ownerUserId || userId !== this.config.ownerUserId) return;
     if (payload.assetType !== 'EQUITY') return;
-    this.push({
+    this.push(userId, {
       open: payload.open,
       high: payload.high,
       low: payload.low,
@@ -58,8 +67,9 @@ export class BotMarketDataService {
     this.listening = false;
   }
 
-  async ensureSeeded(symbol = 'SPY'): Promise<void> {
-    if (this.seeded) return;
+  async ensureSeeded(symbol = 'SPY', userId = requireUserId()): Promise<void> {
+    const buffer = this.bufferFor(userId);
+    if (buffer.seeded) return;
     try {
       const { candles } = await this.marketDataService.getPriceHistory({
         symbol,
@@ -68,7 +78,7 @@ export class BotMarketDataService {
         frequencyType: 'minute',
         frequency: 1,
       });
-      this.candles = candles.slice(-RING_SIZE).map((c) => ({
+      buffer.candles = candles.slice(-RING_SIZE).map((c) => ({
         open: c.open,
         high: c.high,
         low: c.low,
@@ -76,26 +86,35 @@ export class BotMarketDataService {
         volume: c.volume,
         chartTime: c.datetime,
       }));
-      this.seeded = true;
-      this.logger.log(`Seeded ${this.candles.length} 1m candles for ${symbol}`);
+      buffer.seeded = true;
+      this.logger.log(
+        `Seeded ${buffer.candles.length} 1m candles for ${symbol} (user ${userId})`,
+      );
     } catch (err) {
       this.logger.warn(`Failed to seed candle buffer: ${err.message}`);
     }
   }
 
-  private push(candle: BotCandle): void {
-    const last = this.candles[this.candles.length - 1];
+  private push(userId: string, candle: BotCandle): void {
+    const buffer = this.bufferFor(userId);
+    const last = buffer.candles[buffer.candles.length - 1];
     if (last && last.chartTime === candle.chartTime) {
-      this.candles[this.candles.length - 1] = candle;
+      buffer.candles[buffer.candles.length - 1] = candle;
     } else {
-      this.candles.push(candle);
+      buffer.candles.push(candle);
     }
-    if (this.candles.length > RING_SIZE) {
-      this.candles.splice(0, this.candles.length - RING_SIZE);
+    if (buffer.candles.length > RING_SIZE) {
+      buffer.candles.splice(0, buffer.candles.length - RING_SIZE);
     }
   }
 
-  getCandles(): BotCandle[] {
-    return this.candles;
+  getCandles(userId = requireUserId()): BotCandle[] {
+    return this.bufferFor(userId).candles;
+  }
+
+  /** Drops a user's buffer when their bot stops, so an idle tenant does not
+   * hold 100 candles indefinitely. */
+  forget(userId: string): void {
+    this.buffers.delete(userId);
   }
 }

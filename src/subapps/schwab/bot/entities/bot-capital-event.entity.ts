@@ -28,10 +28,14 @@ export enum BotCapitalEventReason {
  * which is what breaks when a reset lands mid-period.
  */
 @Entity('bot_capital_events')
-@Index(['at'])
+@Index(['userId', 'at'])
 export class BotCapitalEvent {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  /** Owner-only in practice — see the note on `BotTrade.userId`. */
+  @Column({ type: 'varchar', name: 'user_id' })
+  userId: string;
 
   @Column({ type: 'timestamptz', name: 'at' })
   at: Date;

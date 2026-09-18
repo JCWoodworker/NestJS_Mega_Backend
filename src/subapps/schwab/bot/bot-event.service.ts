@@ -1,9 +1,8 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { ConfigType } from '@nestjs/config';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThan, Repository } from 'typeorm';
 
-import schwabConfig from '@schwab/config/schwab.config';
+import { requireUserId } from '@schwab/shared/schwab-user-context';
 import {
   BotEventPayload,
   OptionsGateway,
@@ -61,13 +60,13 @@ export class BotEventService {
     @InjectRepository(BotEvent)
     private readonly repository: Repository<BotEvent>,
     private readonly optionsGateway: OptionsGateway,
-    @Inject(schwabConfig.KEY)
-    private readonly config: ConfigType<typeof schwabConfig>,
   ) {}
 
   async record(input: RecordBotEventInput): Promise<BotEvent> {
+    const userId = requireUserId();
     const row = await this.repository.save(
       this.repository.create({
+        userId,
         at: String(Date.now()),
         lane: input.lane,
         type: input.type,
@@ -85,13 +84,7 @@ export class BotEventService {
     );
     // Still single-tenant: the bot runs one desk, so its telemetry is
     // addressed to the owner's room. Phase 4 makes bot state per-user and
-    // threads the real userId down to here.
-    if (this.config.ownerUserId) {
-      this.optionsGateway.emitBotEvent(
-        this.config.ownerUserId,
-        this.toPayload(row),
-      );
-    }
+    this.optionsGateway.emitBotEvent(userId, this.toPayload(row));
     this.trim().catch((err) =>
       this.logger.debug(`Retention trim skipped: ${err.message}`),
     );
@@ -106,7 +99,11 @@ export class BotEventService {
     input: RecordBotEventInput,
     chartTime: number | null | undefined,
   ): Promise<BotEvent | null> {
-    const key = `${input.type}:${input.reason ?? ''}:${chartTime ?? 'na'}`;
+    // Keyed by user as well: two bots reaching the same NO_SIGNAL on the same
+    // bar is expected, and a shared key would drop one of them.
+    const key = `${requireUserId()}:${input.type}:${input.reason ?? ''}:${
+      chartTime ?? 'na'
+    }`;
     const now = Date.now();
     const prev = this.recentDedupe.get(key);
     if (prev != null && now - prev < 55_000) {
@@ -135,6 +132,9 @@ export class BotEventService {
     const limit = Math.min(Math.max(query.limit ?? 100, 1), LIST_CAP);
     const qb = this.repository
       .createQueryBuilder('e')
+      // Not optional: this is the one bot table users read directly, so an
+      // unfiltered query would show another user's decisions and fills.
+      .where('e.user_id = :userId', { userId: requireUserId() })
       .orderBy('e.id', 'DESC')
       .take(limit + 1); // one extra to detect hasMoreOlder
 

@@ -46,3 +46,16 @@ export function requireUserId(): string {
 export function currentUserId(): string | null {
   return storage.getStore()?.userId ?? null;
 }
+
+/**
+ * Sets the tenant for the rest of the current execution context, without
+ * wrapping a callback.
+ *
+ * Intended for tests and for synchronous entry points that cannot easily
+ * nest inside `runAsUser`. Prefer `runAsUser` in application code: it scopes
+ * the context to a known boundary, whereas this leaks into everything that
+ * follows on the same async resource.
+ */
+export function enterUserContext(userId: string): void {
+  storage.enterWith({ userId });
+}

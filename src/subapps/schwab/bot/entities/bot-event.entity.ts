@@ -1,4 +1,4 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 import { BotEventSide, BotEventType } from '../enums/bot-event-type.enum';
 import { BotLane } from '../enums/bot-lane.enum';
@@ -9,9 +9,15 @@ import { BotDirection } from '../enums/strategy.enum';
  * Retention is time-based (30 days) via BotEventService, not a fixed row ring.
  */
 @Entity('bot_events')
+@Index(['userId', 'at'])
 export class BotEvent {
   @PrimaryGeneratedColumn()
   id: number;
+
+  /** This is the one bot table users actually read, so every query filters
+   * on it — the activity feed must never show another user's decisions. */
+  @Column({ type: 'varchar', name: 'user_id' })
+  userId: string;
 
   @Column({ type: 'bigint', name: 'at' })
   at: string; // epoch ms — bigint round-trips as string via pg driver

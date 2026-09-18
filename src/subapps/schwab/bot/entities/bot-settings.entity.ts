@@ -1,17 +1,24 @@
 import {
   Column,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 
 import { BotCombineMode } from '../enums/strategy.enum';
 
-/** Singleton settings row — server is source of truth for bot knobs. */
+/** One settings row per user — server is source of truth for bot knobs. */
 @Entity('bot_settings')
 export class BotSettings {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  /** Unique: the improvement loop's config-apply targets the owner's row by
+   * user, and a duplicate would make which row wins non-deterministic. */
+  @Index('UQ_bot_settings_user_id', { unique: true })
+  @Column({ type: 'varchar', name: 'user_id' })
+  userId: string;
 
   @Column({ type: 'boolean', name: 'vwap_pullback_enabled', default: true })
   vwapPullbackEnabled: boolean;
