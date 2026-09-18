@@ -25,4 +25,18 @@ export default registerAs('auth', () => ({
    */
   adminBootstrapEmail:
     process.env.ADMIN_BOOTSTRAP_EMAIL?.trim().toLowerCase() || null,
+  /**
+   * Opens sign-up to anyone, bypassing `auth_allowed_emails`.
+   *
+   * Defaults to **closed**. The allowlist is the only thing standing between
+   * the public internet and account creation on an app that connects real
+   * brokerage accounts, so opening it is a deliberate switch rather than a
+   * side effect of a deploy — and flipping it back is the fastest kill switch
+   * available if something goes wrong.
+   *
+   * When open, the allowlist becomes a no-op for both sign-up and sign-in.
+   * The per-user `is_locked` check still applies either way, so an individual
+   * account can always be shut off.
+   */
+  openSignup: process.env.AUTH_OPEN_SIGNUP === 'true',
 }));

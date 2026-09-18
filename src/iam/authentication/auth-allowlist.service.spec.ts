@@ -41,6 +41,52 @@ describe('AuthAllowlistService', () => {
     service = module.get(AuthAllowlistService);
   });
 
+  describe('with AUTH_OPEN_SIGNUP enabled', () => {
+    let openService: AuthAllowlistService;
+
+    beforeEach(async () => {
+      const module = await Test.createTestingModule({
+        providers: [
+          AuthAllowlistService,
+          {
+            provide: getRepositoryToken(AuthAllowedEmail),
+            useValue: allowedRepository,
+          },
+          {
+            provide: authConfig.KEY,
+            useValue: { bootstrapAllowedEmails: [], openSignup: true },
+          },
+        ],
+      }).compile();
+      openService = module.get(AuthAllowlistService);
+    });
+
+    it('lets anyone authenticate without consulting the allowlist', async () => {
+      allowedRepository.findOneBy.mockResolvedValue(null);
+      await expect(
+        openService.assertCanAuthenticate('stranger@example.com'),
+      ).resolves.toBeUndefined();
+      // The point of the bypass: no lookup at all, so an empty allowlist
+      // cannot lock everyone out.
+      expect(allowedRepository.findOneBy).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Open sign-up must not disarm per-account bans — that check is the only
+     * way to shut off one bad actor without closing registration entirely.
+     */
+    it('still rejects locked accounts', async () => {
+      await expect(
+        openService.assertCanAuthenticate('stranger@example.com', {
+          id: '1',
+          email: 'stranger@example.com',
+          isLocked: true,
+          role: Role.Basic,
+        } as any),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+  });
+
   it('normalizes email case and whitespace', () => {
     expect(service.normalizeEmail('  Foo@Bar.COM ')).toBe('foo@bar.com');
   });

@@ -18,6 +18,8 @@ import { AuthenticationService } from '@iam/authentication/authentication.servic
 @Injectable()
 export class GoogleAuthenticationService implements OnModuleInit {
   private oauthClient: OAuth2Client;
+  /** Google OAuth client IDs whose ID tokens this backend will accept. */
+  private allowedAudiences: string[] = [];
 
   constructor(
     private readonly configService: ConfigService,
@@ -31,12 +33,35 @@ export class GoogleAuthenticationService implements OnModuleInit {
     const clientId = this.configService.get('GOOGLE_CLIENT_ID_CBC');
     const clientSecret = this.configService.get('GOOGLE_CLIENT_SECRET_CBC');
     this.oauthClient = new OAuth2Client(clientId, clientSecret);
+
+    // This backend serves several frontends, each with its own Google OAuth
+    // client, so verification has to accept a set of audiences rather than
+    // one. Unset values are filtered out so a missing env var narrows the
+    // set instead of allowing `undefined` through.
+    this.allowedAudiences = [
+      this.configService.get<string>('GOOGLE_CLIENT_ID'),
+      this.configService.get<string>('GOOGLE_CLIENT_ID_CBC'),
+    ].filter((id): id is string => !!id?.trim());
   }
 
   async authenticate(token: string) {
     try {
+      // `audience` is mandatory here, not optional hardening. Without it
+      // google-auth-library verifies only the signature and issuer — so an ID
+      // token minted for *any* Google OAuth client anywhere would be accepted
+      // as a sign-in to this backend. With accounts now connecting real
+      // brokerage credentials, that is the difference between "Google says
+      // this person owns this email" and "Google says this token is valid for
+      // someone else's app".
+      if (!this.allowedAudiences.length) {
+        throw new UnauthorizedException(
+          'Google sign-in is not configured on this deployment',
+        );
+      }
+
       const loginTicket = await this.oauthClient.verifyIdToken({
         idToken: token,
+        audience: this.allowedAudiences,
       });
       const {
         email,
@@ -54,6 +79,30 @@ export class GoogleAuthenticationService implements OnModuleInit {
       const user = await this.usersRepository.findOneBy({ googleId });
       if (!user) {
         await this.allowlistService.assertCanAuthenticate(normalizedEmail);
+
+        // Link rather than insert when the email already has an account.
+        // Signing up with a password and later clicking "Continue with
+        // Google" is a normal thing to do, and it previously hit the unique
+        // email constraint and surfaced as an opaque 409. Google has verified
+        // ownership of this address, so attaching the googleId is safe and is
+        // what the user expects.
+        const existingByEmail = await this.usersRepository.findOneBy({
+          email: normalizedEmail,
+        });
+        if (existingByEmail) {
+          await this.allowlistService.assertCanAuthenticate(
+            existingByEmail.email,
+            existingByEmail,
+          );
+          existingByEmail.googleId = googleId;
+          existingByEmail.first_name ??= userNameAndImage.firstName;
+          existingByEmail.last_name ??= userNameAndImage.lastName;
+          existingByEmail.image_url ??= userNameAndImage.imageUrl;
+          const linked = await this.usersRepository.save(existingByEmail);
+          const userAndTokens = await this.authService.generateTokens(linked);
+          return { userAndTokens };
+        }
+
         const newUser = await this.usersRepository.save({
           email: normalizedEmail,
           googleId,

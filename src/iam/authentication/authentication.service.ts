@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Inject,
   Injectable,
@@ -13,6 +14,7 @@ import { Repository } from 'typeorm';
 import { Users } from '@users/entities/users.entity';
 
 import { AuthAllowlistService } from '@iam/authentication/auth-allowlist.service';
+import { isDisposableEmail } from '@iam/authentication/disposable-email.util';
 import { RefreshTokenDto } from '@iam/authentication/dto/refresh-token.dto';
 import { SignInDto } from '@iam/authentication/dto/sign-in.dto';
 import { SignUpDto } from '@iam/authentication/dto/sign-up.dto';
@@ -45,6 +47,16 @@ export class AuthenticationService {
 
   async signUp(signUpDto: SignUpDto) {
     const email = this.allowlistService.normalizeEmail(signUpDto.email);
+
+    // Only meaningful once sign-up is open; harmless while the allowlist is
+    // closed. A speed bump rather than a control — email verification is the
+    // real answer. See disposable-email.util.ts.
+    if (isDisposableEmail(email)) {
+      throw new BadRequestException(
+        'Please sign up with a permanent email address.',
+      );
+    }
+
     await this.allowlistService.assertCanAuthenticate(email);
     try {
       const user = new Users();

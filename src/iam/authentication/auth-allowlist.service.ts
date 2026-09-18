@@ -43,15 +43,28 @@ export class AuthAllowlistService implements OnModuleInit {
   }
 
   /**
-   * Fail closed: email must be on the allowlist and the user (if provided)
-   * must not be locked. Uses a generic 401 to avoid email enumeration.
+   * Gate for sign-up, sign-in and refresh.
+   *
+   * With `AUTH_OPEN_SIGNUP` off this fails closed on the allowlist — the
+   * original invite-only posture. With it on the allowlist becomes a no-op
+   * and anyone may authenticate.
+   *
+   * The `is_locked` check applies either way, so an individual account can
+   * always be shut off without closing sign-up for everybody.
+   *
+   * Generic 401 in both cases, to avoid leaking which addresses exist.
    */
   async assertCanAuthenticate(
     email: string,
     user?: Users | null,
   ): Promise<void> {
-    const allowed = await this.isEmailAllowed(email);
-    if (!allowed || user?.isLocked) {
+    if (user?.isLocked) {
+      throw new UnauthorizedException();
+    }
+    if (this.authConfiguration.openSignup) {
+      return;
+    }
+    if (!(await this.isEmailAllowed(email))) {
       throw new UnauthorizedException();
     }
   }
