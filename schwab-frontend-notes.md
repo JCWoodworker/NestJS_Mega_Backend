@@ -11,6 +11,31 @@ package/schema between the two repos, so **both sides keep this file in sync man
 copy-pasting sections back and forth as the contract evolves. Check the Changelog at the bottom
 whenever a new copy comes in.
 
+> ## ⚠️ Multi-tenant (2026-09-17, branch `feat/multi-tenant-schwab`)
+>
+> This backend now serves **one Schwab connection per app user** rather than one shared
+> personal account. The changes that break prior assumptions in this document:
+>
+> - `schwab_tokens` is one row per user, keyed off the JWT `sub`. `/auth/connect` and
+>   `/auth/status` require the bearer token and act on the caller's connection. Only
+>   `/auth/callback` is public, and it recovers the user from the encrypted `state`.
+> - **Socket payloads are room-scoped, not broadcast.** Every client used to receive
+>   every user's `account-snapshot`, `order-update` and `bot-*` frames.
+> - **Streamer sessions are per user and lazy** — started on a user's first socket,
+>   stopped on their last, capped by `SCHWAB_MAX_STREAMER_SESSIONS` (default 10).
+>   Overflow surfaces as `stream-status { connected: false, reason }`.
+>   `subscribe-underlying` no longer affects other clients.
+> - **`SCHWAB_ACCOUNT_HASH` is no longer read anywhere.** It is one deployment-wide
+>   value, so under multi-tenant it would have pointed every user's orders at the
+>   owner's brokerage account.
+> - Bot state, settings and events are per user; `GET /bot/events` filters by user.
+> - `SCHWAB_OWNER_USER_ID` identifies the single account the bot improvement loop trains
+>   on. `ADMIN_BOOTSTRAP_EMAIL` promotes the one admin at boot, capped to one row by a
+>   partial unique index.
+>
+> Sections below that still describe shared or broadcast behaviour are historical;
+> section 4a in the frontend copy (`nestjs-notes.md`) has the current socket model.
+
 Status: **Fully live end-to-end on preprod and prod as of 2026-09-02, including real-time
 streaming.** A real Schwab account is connected on preprod; sign-in, CORS,
 orders/accounts/positions endpoints, and the `/options` socket (`option-ticks`,
@@ -212,7 +237,10 @@ VITE_SOCKET_NAMESPACE=/options
 VITE_UNDERLYING_SYMBOL=SPY
 ```
 
-## 2. Schwab OAuth connect flow (public endpoints, server-driven)
+## 2. Schwab OAuth connect flow (per-user, server-driven)
+
+> Heading corrected: `/auth/connect` and `/auth/status` are bearer-gated and per user.
+> Only `/auth/callback` is public. See the multi-tenant banner at the top.
 
 - `GET /auth/status` → `{ connected: boolean, expiresAt: string | null, accountHash: string | null }`.
   `accountHash` now resolves the same way `GET /orders/accounts` does (dynamic lookup, cached) —
