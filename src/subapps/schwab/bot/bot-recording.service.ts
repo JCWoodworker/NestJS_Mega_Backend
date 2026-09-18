@@ -162,11 +162,25 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
    * land in the per-user P&L tables that feed the history page. P&L tables
    * are user-facing trade history; these tables are the owner's research
    * corpus.
+   *
+   * Returns the owning user id rather than a boolean so a write cannot be
+   * approved without also being attributed. The first version returned
+   * `true`/`false`, and the three callers then inserted without a `user_id` —
+   * which the NOT NULL columns rejected, and the defensive try/catch on each
+   * writer swallowed. The corpus silently recorded nothing for a full session
+   * while the bot traded normally. Coupling permission to attribution makes
+   * that combination unrepresentable.
    */
-  private writesCorpus(lane: BotLane | null): boolean {
-    const userId = currentUserId() ?? this.config.ownerUserId;
-    if (!userId || userId !== this.config.ownerUserId) return false;
-    return lane != null && this.config.improvementLanes.includes(lane);
+  private corpusUserId(lane: BotLane | null): string | null {
+    const ownerUserId = this.config.ownerUserId;
+    if (!ownerUserId) return null;
+
+    const userId = currentUserId() ?? ownerUserId;
+    if (userId !== ownerUserId) return null;
+    if (lane == null || !this.config.improvementLanes.includes(lane)) {
+      return null;
+    }
+    return ownerUserId;
   }
 
   // --- Trade tape -----------------------------------------------------------
@@ -187,9 +201,11 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
     optionAsk: number | null;
     spot: number | null;
   }): Promise<void> {
-    if (!this.writesCorpus(params.lane)) return;
+    const userId = this.corpusUserId(params.lane);
+    if (!userId) return;
     try {
       await this.tapeRepository.insert({
+        userId,
         tradeKey: tradeKeyFor(params.symbol, params.openedAt),
         at: String(params.at),
         symbol: params.symbol,
@@ -233,11 +249,15 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
     exitReason: string | null;
     configVersion: string | null;
   }): Promise<void> {
-    if (!this.writesCorpus(params.lane)) return;
+    const userId = this.corpusUserId(params.lane);
+    if (!userId) return;
     const tradeKey = tradeKeyFor(params.symbol, params.openedAt);
     try {
+      // Scoped by user as well as trade key: the key is only unique per
+      // account, so an unscoped read could mix another account's samples into
+      // this trade's excursion maths.
       const rows = await this.tapeRepository.find({
-        where: { tradeKey },
+        where: { userId, tradeKey },
         order: { at: 'ASC' },
       });
       const samples = rows.map((r) => ({
@@ -260,6 +280,7 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
 
       await this.tradeRepository.upsert(
         {
+          userId,
           tradeKey,
           etDateKey: etDateKey(new Date(params.closedAt)),
           lane: params.lane,
@@ -292,7 +313,11 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
           configVersion: params.configVersion,
           regime: null,
         },
-        ['tradeKey'],
+        // Must match the unique index exactly. It became
+        // (user_id, trade_key) when the bot went multi-tenant — a trade key
+        // is only unique within an account — and an ON CONFLICT target with
+        // no matching constraint is a hard Postgres error, not a fallback.
+        ['userId', 'tradeKey'],
       );
 
       this.logger.log(
@@ -320,10 +345,12 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
     balanceBefore: number;
     balanceAfter: number;
   }): Promise<void> {
-    if (!this.writesCorpus(params.lane)) return;
+    const userId = this.corpusUserId(params.lane);
+    if (!userId) return;
     try {
       const at = new Date();
       await this.capitalEventRepository.insert({
+        userId,
         at,
         etDateKey: etDateKey(at),
         lane: params.lane,

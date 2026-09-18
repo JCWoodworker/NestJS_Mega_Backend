@@ -35,7 +35,7 @@ export interface CorpusTableHealth {
  * next-morning one.
  *
  * Owner-scoped: these tables only ever contain the owner's rows by design
- * (see `BotRecordingService.writesCorpus`), and the queries filter on that
+ * (see `BotRecordingService.corpusUserId`), and the queries filter on that
  * anyway so a gate regression shows up as a count that does not match.
  */
 @Injectable()

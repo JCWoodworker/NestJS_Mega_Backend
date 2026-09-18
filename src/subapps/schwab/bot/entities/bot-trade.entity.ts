@@ -35,7 +35,7 @@ export class BotTrade {
 
   /**
    * Only the improvement-loop owner writes here (see
-   * `BotRecordingService.writesCorpus`), so this is defense in depth rather
+   * `BotRecordingService.corpusUserId`), so this is defense in depth rather
    * than a routing key: it makes a gate regression detectable and the
    * offending rows removable, instead of indistinguishable from the owner's
    * own data once they have polluted the training set.
