@@ -107,24 +107,26 @@ export const MIN_TRADES_INDICATIVE = 30;
 export const MIN_TRADES_TRUSTWORTHY = 100;
 
 export function assessReadiness(trades: number): Readiness {
+  const count = `${trades} ${trades === 1 ? 'trade' : 'trades'}`;
+
   if (trades < MIN_TRADES_INDICATIVE) {
     return {
       trades,
       level: 'insufficient',
-      note: `${trades} trades — under ${MIN_TRADES_INDICATIVE}, so no tuning conclusion is valid. Diagnose why the bot is not trading before reading anything else.`,
+      note: `${count} — under ${MIN_TRADES_INDICATIVE}, so no tuning conclusion is valid. Diagnose why the bot is not trading before reading anything else.`,
     };
   }
   if (trades < MIN_TRADES_TRUSTWORTHY) {
     return {
       trades,
       level: 'indicative',
-      note: `${trades} trades — enough to look at, not enough to act on. Treat differences under a few percent as noise.`,
+      note: `${count} — enough to look at, not enough to act on. Treat differences under a few percent as noise.`,
     };
   }
   return {
     trades,
     level: 'trustworthy',
-    note: `${trades} trades — a policy that wins consistently here is worth proposing.`,
+    note: `${count} — a policy that wins consistently here is worth proposing.`,
   };
 }
 

@@ -58,6 +58,12 @@ describe('assessReadiness', () => {
     expect(assessReadiness(0).note).toMatch(/no tuning conclusion is valid/i);
   });
 
+  it('pluralises the trade count in a report a human reads daily', () => {
+    expect(assessReadiness(1).note).toMatch(/^1 trade —/);
+    expect(assessReadiness(2).note).toMatch(/^2 trades —/);
+    expect(assessReadiness(0).note).toMatch(/^0 trades —/);
+  });
+
   it('treats the middle band as indicative only', () => {
     expect(assessReadiness(MIN_TRADES_INDICATIVE).level).toBe('indicative');
     expect(assessReadiness(MIN_TRADES_TRUSTWORTHY - 1).level).toBe(
