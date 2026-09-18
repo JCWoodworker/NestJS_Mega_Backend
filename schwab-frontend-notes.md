@@ -1,9 +1,17 @@
-# Schwab Swift — Frontend Sync Notes
+# Strikedesk — Frontend Sync Notes
 
-Product display name for users: **Schwab Swift** (options trading desk). Keep technical “0DTE”
-references in this contract as-is; rename only user-visible UI chrome in the React app
-(document title / meta, nav / header / login splash, any “0DTE SPY Option Scalper” marketing copy).
-Netlify host `schwab-0dte-spy-trader.netlify.app` stays unchanged for now.
+Product display name for users: **Strikedesk** (options trading desk). Keep technical “0DTE”
+references in this contract as-is; the rename only covers user-visible UI chrome in the React app
+(document title / meta, nav / header / login splash, marketing copy), which lives behind
+`src/lib/branding.ts`.
+
+The earlier working name "Schwab Swift" was dropped deliberately: putting a broker's trademark
+in a third-party product name is a legal problem and the sort of thing a commercial API reviewer
+rejects on sight.
+
+Netlify host: `strikedesk.netlify.app`. Note there is **no `www.` variant** — Netlify subdomains
+do not serve one, so `www.strikedesk.netlify.app` does not resolve and must not go in
+`ALLOWED_ORIGINS`.
 
 This file is the shared contract between this backend repo (`nestjs_mega_backend`) and the
 separate frontend project (`schwab-0dte-spy-trader` — TanStack Start, **web**). There's no shared
@@ -114,7 +122,7 @@ transfers on the intended ET day. Note: Schwab `/transactions` sync still return
 
 No deep links — OAuth success uses `?returnTo=<url>` (section 2), landing on the frontend's own
 `/schwab-connected` page. Env vars use Vite's `VITE_*` convention. Dev server port `3000`.
-Production: `https://schwab-0dte-spy-trader.netlify.app`. Both origins are CORS-cleared on
+Production: `https://strikedesk.netlify.app`. Both origins are CORS-cleared on
 preprod (and the Netlify origin on prod too) — see section 2b.
 
 ## 0. Backend's own JWT auth — CONFIRMED, live-tested
@@ -267,8 +275,8 @@ Keyed off **this backend's own `ENVIRONMENT` var**, not the calling origin's sha
 frontend always hits the deployed apps, only `ALLOWED_ORIGINS` matters here.
 
 **Live-verified on both:**
-- Preprod `ALLOWED_ORIGINS`: `http://localhost:3000` + `https://schwab-0dte-spy-trader.netlify.app`.
-- Prod `ALLOWED_ORIGINS`: `https://schwab-0dte-spy-trader.netlify.app`.
+- Preprod `ALLOWED_ORIGINS`: `http://localhost:3000` + `https://strikedesk.netlify.app`.
+- Prod `ALLOWED_ORIGINS`: `https://strikedesk.netlify.app`.
 
 ## 3. Order execution + account endpoints (REST)
 
@@ -1879,7 +1887,7 @@ Current state:
   Fixed CORS: `http://localhost:3000` and the Netlify origin added to preprod's `ALLOWED_ORIGINS`
   (not `_DEVELOPMENT` — clarified why), Netlify origin also added to prod's.
 - **2026-09-02 (Netlify)**: Frontend deployed production to Netlify
-  (`https://schwab-0dte-spy-trader.netlify.app`).
+  (`https://strikedesk.netlify.app`).
 - **2026-09-02**: Major backend update — section 0 (JWT auth required for orders + socket), real
   deployed preprod/prod URLs, `returnTo` param for web OAuth redirect, `GET /orders/accounts` +
   `GET /orders/positions` + `account-snapshot.positions`, confirmed error shape, confirmed rate
