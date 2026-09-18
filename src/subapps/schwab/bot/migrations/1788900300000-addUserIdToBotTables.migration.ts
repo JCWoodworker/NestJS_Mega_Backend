@@ -76,19 +76,41 @@ export class AddUserIdToBotTables1788900300000 implements MigrationInterface {
 
     // trade_key is only unique within an account: two users can open the
     // same contract in the same millisecond.
+    //
+    // The old uniqueness may exist either as a standalone index or as a
+    // UNIQUE *constraint* — TypeORM creates it as a constraint. Postgres
+    // refuses DROP INDEX on a constraint-backed index with 2BP01 ("you can
+    // drop constraint ... instead"), which failed this migration on the first
+    // deploy. Check pg_constraint first, and only fall back to DROP INDEX for
+    // a genuinely standalone index.
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_bot_trades_trade_key"`);
     await queryRunner.query(
       `DO $$
-       DECLARE idx_name text;
+       DECLARE obj_name text;
        BEGIN
-         SELECT indexname INTO idx_name
+         SELECT conname INTO obj_name
+         FROM pg_constraint
+         WHERE conrelid = 'bot_trades'::regclass
+           AND contype = 'u'
+           AND pg_get_constraintdef(oid) LIKE '%trade_key%'
+           AND pg_get_constraintdef(oid) NOT LIKE '%user_id%';
+
+         IF obj_name IS NOT NULL THEN
+           EXECUTE format(
+             'ALTER TABLE "bot_trades" DROP CONSTRAINT %I', obj_name
+           );
+           RETURN;
+         END IF;
+
+         SELECT indexname INTO obj_name
          FROM pg_indexes
          WHERE tablename = 'bot_trades'
            AND indexdef LIKE '%UNIQUE%'
            AND indexdef LIKE '%trade_key%'
            AND indexdef NOT LIKE '%user_id%';
-         IF idx_name IS NOT NULL THEN
-           EXECUTE format('DROP INDEX %I', idx_name);
+
+         IF obj_name IS NOT NULL THEN
+           EXECUTE format('DROP INDEX %I', obj_name);
          END IF;
        END $$`,
     );
