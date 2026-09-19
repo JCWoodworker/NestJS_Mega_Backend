@@ -1,6 +1,8 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { SchwabToken } from '@schwab/auth/entities/schwab-token.entity';
 import schwabConfig from '@schwab/config/schwab.config';
 import { OrdersModule } from '@schwab/orders/orders.module';
 
@@ -18,6 +20,7 @@ import { SchwabOwnerGuard } from './schwab-owner.guard';
   imports: [
     ConfigModule.forFeature(schwabConfig),
     forwardRef(() => OrdersModule),
+    TypeOrmModule.forFeature([SchwabToken]),
   ],
   providers: [SchwabAccountResolver, SchwabOwnerGuard],
   exports: [SchwabAccountResolver, SchwabOwnerGuard],

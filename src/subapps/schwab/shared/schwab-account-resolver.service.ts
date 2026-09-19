@@ -1,5 +1,8 @@
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 
+import { SchwabToken } from '@schwab/auth/entities/schwab-token.entity';
 import { OrdersService } from '@schwab/orders/orders.service';
 
 import { currentUserId, requireUserId } from './schwab-user-context';
@@ -26,6 +29,8 @@ export class SchwabAccountResolver {
   constructor(
     @Inject(forwardRef(() => OrdersService))
     private readonly ordersService: OrdersService,
+    @InjectRepository(SchwabToken)
+    private readonly tokenRepository: Repository<SchwabToken>,
   ) {}
 
   /** Throws when the user has linked no accounts. */
@@ -40,8 +45,24 @@ export class SchwabAccountResolver {
       throw new Error('No Schwab accounts linked to this app yet');
     }
 
-    this.cache.set(userId, accounts[0].hashValue);
-    return accounts[0].hashValue;
+    const hash = accounts[0].hashValue;
+    this.cache.set(userId, hash);
+
+    // Persisted alongside the in-memory cache so cross-user reporting (admin
+    // per-user P&L) reads a column instead of needing this same live call
+    // for every user on every page load. Best-effort: a write failure here
+    // must not turn a successful resolve into a thrown error.
+    this.tokenRepository
+      .update({ userId }, { accountHash: hash })
+      .catch((err) =>
+        this.logger.warn(
+          `failed to persist account_hash for user ${userId}: ${
+            (err as Error).message
+          }`,
+        ),
+      );
+
+    return hash;
   }
 
   /** Best-effort variant for status endpoints and pollers, where a missing

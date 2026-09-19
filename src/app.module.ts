@@ -26,6 +26,7 @@ import { MycuttingboardModule } from '@subapps/mycuttingboard/mycuttingboard.mod
 import { MywoodappModule } from '@subapps/mywoodapp/mywoodapp.module';
 import { OnlyBizlinksModule } from '@subapps/onlybizlinks/onlybizlinks.module';
 import { RilwModule } from '@subapps/rilw/rilw.module';
+import { AdminUsersModule } from '@subapps/schwab/admin/admin-users.module';
 import { SchwabAuthModule } from '@subapps/schwab/auth/schwab-auth.module';
 import { BotModule } from '@subapps/schwab/bot/bot.module';
 import { MarketDataModule } from '@subapps/schwab/market-data/market-data.module';
@@ -139,6 +140,10 @@ import { AppService } from './app.service';
           {
             path: 'schwab',
             module: BotModule,
+          },
+          {
+            path: 'schwab',
+            module: AdminUsersModule,
           },
         ],
       },

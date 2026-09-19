@@ -77,6 +77,13 @@ export class PnlController {
     return this.pnlService.getOrders(query);
   }
 
+  /** Win rate, expectancy-shaped stats, and a by-source breakdown over an
+   * arbitrary range — feeds the History page's "deep insight" panel. */
+  @Get('insight')
+  async getInsight(@Query() query: PnlTradesQueryDto) {
+    return this.pnlService.getInsight(query);
+  }
+
   @Post('sync')
   @HttpCode(HttpStatus.OK)
   async triggerSync() {

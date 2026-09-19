@@ -37,6 +37,17 @@ export class SchwabToken {
   @Column({ type: 'timestamptz', name: 'refresh_token_expires_at' })
   refreshTokenExpiresAt: Date;
 
+  /**
+   * Cached from `SchwabAccountResolver.resolve()`, not authoritative — the
+   * live Schwab `/accounts` call is still the source of truth and can
+   * change it. Persisted so reporting (admin per-user P&L) is a plain
+   * column read instead of a live call per user, and so it survives past a
+   * refresh-token expiry that would otherwise make a live resolve
+   * impossible for a disconnected account.
+   */
+  @Column({ type: 'varchar', length: 64, name: 'account_hash', nullable: true })
+  accountHash: string | null;
+
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

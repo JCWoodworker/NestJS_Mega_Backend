@@ -41,6 +41,7 @@ import {
   parseEtCalendarDate,
   transferEtDateKey,
 } from './et-date.util';
+import { aggregateRealizedTrades } from './pnl-insight.util';
 import { transferSignedAmount } from './transaction-classify.util';
 import { TransactionSyncService } from './transaction-sync.service';
 
@@ -265,6 +266,41 @@ export class PnlService {
       holdingMs: row.closedAt.getTime() - row.openedAt.getTime(),
       source: row.source,
     }));
+  }
+
+  /**
+   * Win rate, expectancy-shaped stats, and a by-source breakdown over an
+   * arbitrary range — the "deep insight" view, and the same computation the
+   * admin per-user overview calls once per user.
+   *
+   * Unlike `getTrades`/`getOrders`, this has no `take` cap: an aggregate
+   * that silently drops rows past 500 would just be a wrong number with no
+   * way to tell, which defeats the entire purpose of the endpoint.
+   */
+  async getInsight(query: PnlTradesQueryDto) {
+    const accountHash = await this.resolveAccountHash(query.accountHash);
+    const where: FindOptionsWhere<SchwabRealizedTrade> = { accountHash };
+    if (query.symbol) where.symbol = query.symbol;
+    if (query.source?.length) where.source = In(query.source) as any;
+    if (query.from || query.to) {
+      where.closedAt = this.dateRange(query.from, query.to) as any;
+    }
+
+    const rows = await this.realizedRepository.find({ where });
+
+    return aggregateRealizedTrades(
+      rows.map((row) => ({
+        symbol: row.symbol,
+        direction: row.direction,
+        quantity: Number(row.quantity),
+        openPrice: Number(row.openPrice),
+        closePrice: Number(row.closePrice),
+        openedAt: row.openedAt.getTime(),
+        closedAt: row.closedAt.getTime(),
+        realizedPnl: Number(row.realizedPnl),
+        source: row.source,
+      })),
+    );
   }
 
   async getOrders(query: PnlOrdersQueryDto) {

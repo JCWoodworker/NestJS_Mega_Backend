@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
+import { AdminUsersModule } from './admin/admin-users.module';
 import { SchwabAuthModule } from './auth/schwab-auth.module';
 import { BotModule } from './bot/bot.module';
 import schwabConfig from './config/schwab.config';
@@ -18,6 +19,7 @@ import { SchwabStreamingModule } from './streaming/schwab-streaming.module';
     MarketDataModule,
     PnlModule,
     BotModule,
+    AdminUsersModule,
   ],
 })
 export class SchwabModule {}
