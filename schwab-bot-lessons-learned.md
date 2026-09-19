@@ -1,6 +1,6 @@
-# Schwab Swift — Bot Lessons Learned
+# Strikedesk — Bot Lessons Learned
 
-Living post-mortem / context for the Nest bot + Schwab Swift React desk.  
+Living post-mortem / context for the Nest bot + Strikedesk React desk.  
 Append new entries at the top. Pair with [`schwab-bot-audit-and-suggested-settings.md`](./schwab-bot-audit-and-suggested-settings.md) for wire contracts.
 
 ---

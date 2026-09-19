@@ -1,9 +1,15 @@
 # Strikedesk — Frontend Sync Notes
 
-Product display name for users: **Strikedesk** (options trading desk). Keep technical “0DTE”
-references in this contract as-is; the rename only covers user-visible UI chrome in the React app
-(document title / meta, nav / header / login splash, marketing copy), which lives behind
-`src/lib/branding.ts`.
+Product display name for users: **Strikedesk** (options trading desk). User-visible UI chrome
+(document title / meta, nav / header / login splash, marketing copy) lives behind
+`src/lib/branding.ts`. As of 2026-09-18 the rename also covers internal/technical identifiers
+that used to read `schwab-0dte-*` — FE `package.json` name, `.cta.json` projectName, and every
+zustand persist / localStorage key (`strikedesk-auth`, `strikedesk-settings`, `strikedesk-chart`,
+`strikedesk-paper`, `strikedesk-live-markers`, plus a few UI-state keys). Renaming a persist key
+resets that slice of state on next load — expected, one-time, and disclosed rather than silently
+absorbed. The one thing deliberately **not** renamed yet is the actual GitHub repo/local folder
+(still `schwab-0dte-spy-trader` — see the note two paragraphs down); that is a separate decision
+with real redirect/remote consequences, held pending explicit confirmation.
 
 The earlier working name "Schwab Swift" was dropped deliberately: putting a broker's trademark
 in a third-party product name is a legal problem and the sort of thing a commercial API reviewer
@@ -14,10 +20,11 @@ do not serve one, so `www.strikedesk.netlify.app` does not resolve and must not 
 `ALLOWED_ORIGINS`.
 
 This file is the shared contract between this backend repo (`nestjs_mega_backend`) and the
-separate frontend project (`schwab-0dte-spy-trader` — TanStack Start, **web**). There's no shared
-package/schema between the two repos, so **both sides keep this file in sync manually** by
-copy-pasting sections back and forth as the contract evolves. Check the Changelog at the bottom
-whenever a new copy comes in.
+separate frontend project — product name **Strikedesk**, still hosted under the technical/repo
+name `schwab-0dte-spy-trader` (TanStack Start, **web**) pending the repo-rename decision above.
+There's no shared package/schema between the two repos, so **both sides keep this file in sync
+manually** by copy-pasting sections back and forth as the contract evolves. Check the Changelog
+at the bottom whenever a new copy comes in.
 
 > ## ⚠️ Multi-tenant (2026-09-17, branch `feat/multi-tenant-schwab`)
 >
