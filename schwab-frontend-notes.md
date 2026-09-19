@@ -1577,6 +1577,12 @@ comparison never mixes denominators.
 
 ## Changelog
 
+- **2026-09-18 (tenant isolation)**: `/pnl/*` reads authorize from the caller's
+  `schwab_tokens` row. No token → empty history (never another user's ledger).
+  A leftover `accountHash` query param is ignored unless it is that user's
+  persisted hash or their live Schwab `listAccounts` set. FE History/positions/
+  working-orders/bot query keys are scoped by Nest user id and only fetch when
+  the selected hash belongs to that user.
 - **2026-09-18**: Added section 15 — `/bot/admin/*` owner-only control plane, and the
   nightly analyzer. Analyzer ships before the corpus exists: it runs from day one and
   reports `readinessLevel: insufficient` (skipping the counterfactual grid) until the

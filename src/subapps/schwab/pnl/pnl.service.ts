@@ -1,10 +1,9 @@
 import {
   BadRequestException,
-  Inject,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigType } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   Between,
@@ -15,9 +14,10 @@ import {
   Repository,
 } from 'typeorm';
 
-import schwabConfig from '@schwab/config/schwab.config';
+import { SchwabToken } from '@schwab/auth/entities/schwab-token.entity';
 import { OrdersService } from '@schwab/orders/orders.service';
 import { SchwabAccountResolver } from '@schwab/shared/schwab-account-resolver.service';
+import { requireUserId } from '@schwab/shared/schwab-user-context';
 
 import { DailyPnlService } from './daily-pnl.service';
 import {
@@ -42,6 +42,7 @@ import {
   transferEtDateKey,
 } from './et-date.util';
 import { aggregateRealizedTrades } from './pnl-insight.util';
+import { decideOwnedAccountHash } from './pnl-ownership.util';
 import { transferSignedAmount } from './transaction-classify.util';
 import { TransactionSyncService } from './transaction-sync.service';
 
@@ -60,12 +61,13 @@ export class PnlService {
     private readonly realizedRepository: Repository<SchwabRealizedTrade>,
     @InjectRepository(SchwabOrderHistory)
     private readonly orderHistoryRepository: Repository<SchwabOrderHistory>,
-    @Inject(schwabConfig.KEY)
-    private readonly config: ConfigType<typeof schwabConfig>,
+    @InjectRepository(SchwabToken)
+    private readonly tokenRepository: Repository<SchwabToken>,
   ) {}
 
   async getDaily(query: PnlDateRangeQueryDto) {
-    const accountHash = await this.resolveAccountHash(query.accountHash);
+    const accountHash = await this.resolveOwnedAccountHash(query.accountHash);
+    if (!accountHash) return [];
     const where: FindOptionsWhere<SchwabDailyPnl> = { accountHash };
     if (query.from && query.to) {
       where.date = Between(
@@ -94,8 +96,19 @@ export class PnlService {
   }
 
   async getSummary(accountHashParam?: string) {
-    const accountHash = await this.resolveAccountHash(accountHashParam);
     const today = etDateKey();
+    const accountHash = await this.resolveOwnedAccountHash(accountHashParam);
+    if (!accountHash) {
+      return {
+        currentEquity: 0,
+        totalTransfersIn: 0,
+        totalTransfersOut: 0,
+        netDeposits: 0,
+        allTimeTradingPnl: 0,
+        todayPnl: 0,
+        asOfDate: today,
+      };
+    }
 
     const transfers = await this.transactionRepository.find({
       where: [
@@ -137,7 +150,8 @@ export class PnlService {
   }
 
   async getTransactions(query: PnlTransactionsQueryDto) {
-    const accountHash = await this.resolveAccountHash(query.accountHash);
+    const accountHash = await this.resolveOwnedAccountHash(query.accountHash);
+    if (!accountHash) return [];
     const where: FindOptionsWhere<SchwabTransaction> = { accountHash };
     if (query.category) where.category = query.category;
     if (query.from || query.to) {
@@ -164,7 +178,7 @@ export class PnlService {
   }
 
   async createManualTransaction(dto: CreateManualTransactionDto) {
-    const accountHash = await this.resolveAccountHash(dto.accountHash);
+    const accountHash = await this.requireOwnedAccountHash(dto.accountHash);
     const transactionDate = parseEtCalendarDate(dto.date);
     const row = await this.transactionRepository.save({
       accountHash,
@@ -239,7 +253,8 @@ export class PnlService {
   }
 
   async getTrades(query: PnlTradesQueryDto) {
-    const accountHash = await this.resolveAccountHash(query.accountHash);
+    const accountHash = await this.resolveOwnedAccountHash(query.accountHash);
+    if (!accountHash) return [];
     const where: FindOptionsWhere<SchwabRealizedTrade> = { accountHash };
     if (query.symbol) where.symbol = query.symbol;
     if (query.source?.length) where.source = In(query.source) as any;
@@ -278,7 +293,8 @@ export class PnlService {
    * way to tell, which defeats the entire purpose of the endpoint.
    */
   async getInsight(query: PnlTradesQueryDto) {
-    const accountHash = await this.resolveAccountHash(query.accountHash);
+    const accountHash = await this.resolveOwnedAccountHash(query.accountHash);
+    if (!accountHash) return aggregateRealizedTrades([]);
     const where: FindOptionsWhere<SchwabRealizedTrade> = { accountHash };
     if (query.symbol) where.symbol = query.symbol;
     if (query.source?.length) where.source = In(query.source) as any;
@@ -304,7 +320,8 @@ export class PnlService {
   }
 
   async getOrders(query: PnlOrdersQueryDto) {
-    const accountHash = await this.resolveAccountHash(query.accountHash);
+    const accountHash = await this.resolveOwnedAccountHash(query.accountHash);
+    if (!accountHash) return [];
     const where: FindOptionsWhere<SchwabOrderHistory> = { accountHash };
     if (query.symbol) where.symbol = query.symbol;
     if (query.status) where.status = query.status;
@@ -388,19 +405,52 @@ export class PnlService {
    * answers "can this caller's Schwab token reach that account".
    */
   private async assertOwnsTransaction(accountHash: string): Promise<void> {
-    await this.ordersService.assertAccountHashAllowed(accountHash);
+    const owned = await this.resolveOwnedAccountHash(accountHash);
+    if (!owned) {
+      throw new ForbiddenException(
+        'accountHash is not authorized for this Schwab session',
+      );
+    }
   }
 
-  private async resolveAccountHash(override?: string): Promise<string> {
-    if (override) {
-      await this.ordersService.assertAccountHashAllowed(override);
-      return override;
+  private async requireOwnedAccountHash(override?: string): Promise<string> {
+    const hash = await this.resolveOwnedAccountHash(override);
+    if (!hash) {
+      throw new ForbiddenException(
+        'Schwab account is not connected yet. Visit /auth/connect first.',
+      );
+    }
+    return hash;
+  }
+
+  /**
+   * P&L rows live in our DB keyed by account hash. Authorization is the
+   * caller's `schwab_tokens` row — not a leftover hash from another browser
+   * session, and not `SCHWAB_ACCOUNT_HASH`.
+   *
+   * No token → empty reads (null). A guessed override that is not this
+   * user's persisted hash must still pass a live `listAccounts` check, which
+   * uses *their* Schwab token and cannot see another tenant's accounts.
+   */
+  private async resolveOwnedAccountHash(
+    override?: string,
+  ): Promise<string | null> {
+    const userId = requireUserId();
+    const token = await this.tokenRepository.findOneBy({ userId });
+    const decision = decideOwnedAccountHash(token, override);
+
+    if (decision.status === 'none') return null;
+    if (decision.status === 'use') return decision.hash;
+
+    if (decision.status === 'live-check') {
+      try {
+        await this.ordersService.assertAccountHashAllowed(decision.hash);
+        return decision.hash;
+      } catch {
+        return null;
+      }
     }
 
-    try {
-      return await this.accountResolver.resolve();
-    } catch (err) {
-      throw new BadRequestException((err as Error).message);
-    }
+    return this.accountResolver.resolveOrNull();
   }
 }
