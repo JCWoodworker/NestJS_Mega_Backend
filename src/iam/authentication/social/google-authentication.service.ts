@@ -98,7 +98,12 @@ export class GoogleAuthenticationService implements OnModuleInit {
           existingByEmail.first_name ??= userNameAndImage.firstName;
           existingByEmail.last_name ??= userNameAndImage.lastName;
           existingByEmail.image_url ??= userNameAndImage.imageUrl;
+          // Google just proved ownership of this address, which covers a
+          // previously-unverified password account too — no reason to make
+          // them click an email link now that Google already did the work.
+          existingByEmail.isEmailVerified = true;
           const linked = await this.usersRepository.save(existingByEmail);
+          await this.authService.touchLastLogin(linked.id);
           const userAndTokens = await this.authService.generateTokens(linked);
           return { userAndTokens };
         }
@@ -110,11 +115,16 @@ export class GoogleAuthenticationService implements OnModuleInit {
           last_name: userNameAndImage.lastName,
           image_url: userNameAndImage.imageUrl,
           role: Role.Basic,
+          // Google has already verified this address — the whole problem
+          // email verification exists to solve.
+          isEmailVerified: true,
         });
+        await this.authService.touchLastLogin(newUser.id);
         const userAndTokens = await this.authService.generateTokens(newUser);
         return { userAndTokens };
       }
       await this.allowlistService.assertCanAuthenticate(user.email, user);
+      await this.authService.touchLastLogin(user.id);
       const userAndTokens = await this.authService.generateTokens(user);
       return { userAndTokens };
     } catch (err) {

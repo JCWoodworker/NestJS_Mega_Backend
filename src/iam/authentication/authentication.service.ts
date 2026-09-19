@@ -21,12 +21,21 @@ import { SignUpDto } from '@iam/authentication/dto/sign-up.dto';
 import { InvalidateRefreshTokenError } from '@iam/authentication/refresh-token-storage/invalidate-refresh-token-error';
 import { RefreshTokensService } from '@iam/authentication/refresh-token-storage/refresh-token-storage.service';
 import jwtConfig from '@iam/config/jwt.config';
+import { EmailService } from '@iam/email/email.service';
 import { ActiveUserData } from '@iam/interfaces/active-user-data.interface';
 
 import { OblBusinesses } from '@onlybizlinks/entities/oblBusinesses.entity';
 import { OblUsersAndBusinesses } from '@onlybizlinks/entities/oblUsersAndBusinesses.entity';
 
 import { HashingService } from '../hashing/hashing.service';
+
+/** 24h — long enough that "check your email tomorrow" still works, short
+ * enough that a leaked link in a forwarded email doesn't stay live for months. */
+const EMAIL_VERIFY_TOKEN_TTL_SECONDS = 24 * 60 * 60;
+/** Distinguishes a verification token from an access/refresh token signed
+ * with the same secret — checked on verify so one token type can never be
+ * replayed as the other. */
+const EMAIL_VERIFY_PURPOSE = 'email-verify';
 
 @Injectable()
 export class AuthenticationService {
@@ -41,6 +50,7 @@ export class AuthenticationService {
     private readonly hashingService: HashingService,
     private readonly jwtService: JwtService,
     private readonly allowlistService: AuthAllowlistService,
+    private readonly emailService: EmailService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
   ) {}
@@ -63,6 +73,21 @@ export class AuthenticationService {
       user.email = email;
       user.password = await this.hashingService.hash(signUpDto.password);
       const newUser = await this.usersRepository.save(user);
+
+      // Best-effort: a Resend outage must not fail account creation. The
+      // resend-verification endpoint is the recovery path if this silently
+      // doesn't land.
+      try {
+        const token = await this.signToken(
+          newUser.id,
+          EMAIL_VERIFY_TOKEN_TTL_SECONDS,
+          { purpose: EMAIL_VERIFY_PURPOSE },
+        );
+        await this.emailService.sendVerificationEmail(newUser.email, token);
+      } catch {
+        // Swallowed intentionally — see comment above.
+      }
+
       return { message: `User ${newUser.email} created successfully` };
     } catch (err) {
       const pgUniqueViolationErrorCode = '23505';
@@ -98,6 +123,7 @@ export class AuthenticationService {
     if (!isEqual) {
       throw new UnauthorizedException('Password does not match');
     }
+    await this.touchLastLogin(user.id);
     const authData = await this.generateTokens(user);
 
     // Here we are checking if the user is connected with any businesses in OnlyBizLinks
@@ -122,7 +148,11 @@ export class AuthenticationService {
       this.signToken<Partial<ActiveUserData>>(
         user.id,
         this.jwtConfiguration.accessTokenTtl,
-        { email: user.email, role: user.role },
+        {
+          email: user.email,
+          role: user.role,
+          emailVerified: user.isEmailVerified,
+        },
       ),
       this.signToken<Partial<ActiveUserData>>(
         user.id,
@@ -144,12 +174,66 @@ export class AuthenticationService {
         lastName: user.last_name,
         imageUrl: user.image_url,
         role: user.role,
+        emailVerified: user.isEmailVerified,
       },
       tokens: {
         accessToken,
         refreshToken,
       },
     };
+  }
+
+  /** Not called on refresh — only an actual sign-in counts, so this reflects
+   * when someone last opened the app, not how long their session has been
+   * silently kept alive by token rotation. */
+  async touchLastLogin(userId: string): Promise<void> {
+    await this.usersRepository.update(userId, { lastLoginAt: new Date() });
+  }
+
+  /**
+   * Verifies a signed email-verification link and flips the flag.
+   *
+   * Idempotent by design — no consume-once tracking, so clicking an old link
+   * twice (or a link already acted on) just no-ops instead of erroring, which
+   * is the friendlier failure mode for an email client that prefetches links.
+   */
+  async verifyEmail(token: string): Promise<{ email: string }> {
+    let payload: { sub: string; purpose?: string };
+    try {
+      payload = await this.jwtService.verifyAsync(token, {
+        secret: this.jwtConfiguration.secret,
+        issuer: this.jwtConfiguration.issuer,
+        audience: this.jwtConfiguration.audience,
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid or expired verification link');
+    }
+    if (payload.purpose !== EMAIL_VERIFY_PURPOSE) {
+      throw new UnauthorizedException('Invalid or expired verification link');
+    }
+    const user = await this.usersRepository.findOneBy({ id: payload.sub });
+    if (!user) {
+      throw new UnauthorizedException('Invalid or expired verification link');
+    }
+    if (!user.isEmailVerified) {
+      await this.usersRepository.update(user.id, { isEmailVerified: true });
+    }
+    return { email: user.email };
+  }
+
+  /** Bearer-authenticated rather than taking an email param, since under the
+   * soft gate the caller is already signed in — this avoids account
+   * enumeration entirely rather than just rate-limiting it. */
+  async resendVerificationEmail(userId: string): Promise<{ message: string }> {
+    const user = await this.usersRepository.findOneByOrFail({ id: userId });
+    if (user.isEmailVerified) {
+      return { message: 'Email already verified' };
+    }
+    const token = await this.signToken(userId, EMAIL_VERIFY_TOKEN_TTL_SECONDS, {
+      purpose: EMAIL_VERIFY_PURPOSE,
+    });
+    await this.emailService.sendVerificationEmail(user.email, token);
+    return { message: 'Verification email sent' };
   }
 
   private async signToken<T>(userId: string, expiresIn: number, payload?: T) {

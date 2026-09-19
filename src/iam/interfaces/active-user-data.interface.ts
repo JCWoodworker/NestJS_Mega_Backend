@@ -5,5 +5,6 @@ export interface ActiveUserData {
   email: string;
   exp: number;
   role: Role;
+  emailVerified?: boolean;
   refreshTokenId?: string;
 }

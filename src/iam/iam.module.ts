@@ -24,6 +24,8 @@ import { RefreshTokensService } from './authentication/refresh-token-storage/ref
 import { GoogleAuthenticationController } from './authentication/social/google-authentication.controller';
 import { GoogleAuthenticationService } from './authentication/social/google-authentication.service';
 import jwtConfig from './config/jwt.config';
+import emailConfig from './email/email.config';
+import { EmailService } from './email/email.service';
 import { AuthAllowedEmail } from './entities/auth-allowed-email.entity';
 import { BcryptService } from './hashing/bcrypt.service';
 import { HashingService } from './hashing/hashing.service';
@@ -41,6 +43,7 @@ import { HashingService } from './hashing/hashing.service';
     RefreshTokensService,
     GoogleAuthenticationService,
     SubappsService,
+    EmailService,
   ],
   imports: [
     TypeOrmModule.forFeature([
@@ -53,6 +56,7 @@ import { HashingService } from './hashing/hashing.service';
     JwtModule.registerAsync(jwtConfig.asProvider()),
     ConfigModule.forFeature(jwtConfig),
     ConfigModule.forFeature(authConfig),
+    ConfigModule.forFeature(emailConfig),
     RefreshTokensModule,
   ],
   exports: [AuthAllowlistService],

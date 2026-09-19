@@ -76,6 +76,10 @@ describe('sign-up cannot assign a role', () => {
       assertCanAuthenticate: jest.fn().mockResolvedValue(undefined),
     };
     const hashingService = { hash: jest.fn().mockResolvedValue('hashed') };
+    const jwtService = {
+      signAsync: jest.fn().mockResolvedValue('signed-token'),
+    };
+    const emailService = { sendVerificationEmail: jest.fn() };
 
     const service = new AuthenticationService(
       usersRepository as any,
@@ -83,9 +87,10 @@ describe('sign-up cannot assign a role', () => {
       {} as any,
       {} as any,
       hashingService as any,
-      {} as any,
+      jwtService as any,
       allowlistService as any,
-      {} as any,
+      emailService as any,
+      { secret: 'test-secret' } as any,
     );
 
     await service.signUp({

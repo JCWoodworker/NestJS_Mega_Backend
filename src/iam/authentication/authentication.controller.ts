@@ -1,12 +1,21 @@
 // TODO: Use HTTP ONLY COOKIES for refresh tokens
 
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 
 import { AuthenticationService } from '@iam/authentication/authentication.service';
 import { RefreshTokenDto } from '@iam/authentication/dto/refresh-token.dto';
 import { SignInDto } from '@iam/authentication/dto/sign-in.dto';
 import { SignUpDto } from '@iam/authentication/dto/sign-up.dto';
+import { ActiveUser } from '@iam/decorators/active-user.decorator';
 import { Auth } from '@iam/decorators/auth.decorator';
 import { AuthType } from '@iam/enums/auth-type.enum';
 
@@ -58,6 +67,30 @@ export class AuthenticationController {
   @Post('refresh-tokens')
   async refreshTokens(@Body() refreshTokenDto: RefreshTokenDto) {
     return this.authService.refreshTokens(refreshTokenDto);
+  }
+
+  /**
+   * Public — the token in the query string, not a session, is the proof of
+   * identity here. Idempotent: an already-verified account or a link clicked
+   * twice both just return success rather than erroring.
+   */
+  @Get('verify-email')
+  async verifyEmail(@Query('token') token: string) {
+    return this.authService.verifyEmail(token);
+  }
+
+  /**
+   * Bearer, not public — overrides the class-level `AuthType.None`. Under
+   * the soft gate the caller is already signed in, so this reads the user
+   * off their own token instead of taking an email param, which would
+   * otherwise let anyone re-trigger mail to an address they don't own.
+   */
+  @Auth(AuthType.Bearer)
+  @Throttle({ default: { limit: 3, ttl: 300_000 } })
+  @HttpCode(HttpStatus.OK)
+  @Post('resend-verification')
+  async resendVerification(@ActiveUser('sub') userId: string) {
+    return this.authService.resendVerificationEmail(userId);
   }
 
   // This code can be used for http only cookies
