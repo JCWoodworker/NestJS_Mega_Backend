@@ -1577,6 +1577,12 @@ comparison never mixes denominators.
 
 ## Changelog
 
+- **2026-09-19 (signup sources)**: Shared `users.signup_sources text[]` tags which
+  product(s) an account belongs to. Strikedesk FE stamps `strikedesk` on
+  sign-up / sign-in / Google. `GET /admin/users` filters to
+  `'strikedesk' = ANY(signup_sources)` so cuttingboard (and other) accounts no
+  longer appear in the Strikedesk admin panel. Google audience allowlist also
+  accepts `GOOGLE_CLIENT_ID_STRIKEDESK`.
 - **2026-09-18 (tenant isolation)**: `/pnl/*` reads authorize from the caller's
   `schwab_tokens` row. No token → empty history (never another user's ledger).
   A leftover `accountHash` query param is ignored unless it is that user's

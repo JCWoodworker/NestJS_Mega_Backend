@@ -11,6 +11,7 @@ function user(overrides: Record<string, unknown> = {}) {
     isEmailVerified: true,
     created_at: new Date('2026-01-01'),
     lastLoginAt: null,
+    signupSources: ['strikedesk'],
     ...overrides,
   };
 }
@@ -60,6 +61,20 @@ function build(options: {
 }
 
 describe('AdminUsersService', () => {
+  it('queries only users whose signup_sources include strikedesk', async () => {
+    const { service, usersRepository } = build({ users: [user()] });
+
+    await service.getOverview({});
+
+    expect(usersRepository.find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          signupSources: expect.anything(),
+        }),
+      }),
+    );
+  });
+
   it('marks a user without a schwab_tokens row as not connected', async () => {
     const { service } = build({ users: [user()], tokens: [] });
 

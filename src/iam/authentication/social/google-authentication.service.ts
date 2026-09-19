@@ -14,6 +14,11 @@ import { Role } from '@users/enums/role.enum';
 
 import { AuthAllowlistService } from '@iam/authentication/auth-allowlist.service';
 import { AuthenticationService } from '@iam/authentication/authentication.service';
+import {
+  isSignupSource,
+  withSignupSource,
+  type SignupSource,
+} from '@iam/authentication/signup-source.util';
 
 @Injectable()
 export class GoogleAuthenticationService implements OnModuleInit {
@@ -41,10 +46,15 @@ export class GoogleAuthenticationService implements OnModuleInit {
     this.allowedAudiences = [
       this.configService.get<string>('GOOGLE_CLIENT_ID'),
       this.configService.get<string>('GOOGLE_CLIENT_ID_CBC'),
+      this.configService.get<string>('GOOGLE_CLIENT_ID_STRIKEDESK'),
     ].filter((id): id is string => !!id?.trim());
   }
 
-  async authenticate(token: string) {
+  async authenticate(token: string, signupSource?: string) {
+    const source: SignupSource | null = isSignupSource(signupSource)
+      ? signupSource
+      : null;
+
     try {
       // `audience` is mandatory here, not optional hardening. Without it
       // google-auth-library verifies only the signature and issuer — so an ID
@@ -102,6 +112,10 @@ export class GoogleAuthenticationService implements OnModuleInit {
           // previously-unverified password account too — no reason to make
           // them click an email link now that Google already did the work.
           existingByEmail.isEmailVerified = true;
+          existingByEmail.signupSources = withSignupSource(
+            existingByEmail.signupSources,
+            source,
+          );
           const linked = await this.usersRepository.save(existingByEmail);
           await this.authService.touchLastLogin(linked.id);
           const userAndTokens = await this.authService.generateTokens(linked);
@@ -118,6 +132,7 @@ export class GoogleAuthenticationService implements OnModuleInit {
           // Google has already verified this address — the whole problem
           // email verification exists to solve.
           isEmailVerified: true,
+          signupSources: withSignupSource([], source),
         });
         await this.authService.touchLastLogin(newUser.id);
         const userAndTokens = await this.authService.generateTokens(newUser);
@@ -125,6 +140,7 @@ export class GoogleAuthenticationService implements OnModuleInit {
       }
       await this.allowlistService.assertCanAuthenticate(user.email, user);
       await this.authService.touchLastLogin(user.id);
+      await this.authService.appendSignupSource(user, source);
       const userAndTokens = await this.authService.generateTokens(user);
       return { userAndTokens };
     } catch (err) {

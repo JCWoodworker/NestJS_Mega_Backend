@@ -18,6 +18,9 @@ export class GoogleAuthenticationController {
   @Throttle({ default: { limit: 10, ttl: 3_600_000 } })
   @Post()
   async authenticate(@Body() tokenDto: GoogleTokenDto) {
-    return this.googleAuthService.authenticate(tokenDto.token);
+    return this.googleAuthService.authenticate(
+      tokenDto.token,
+      tokenDto.signupSource,
+    );
   }
 }

@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
+import {
+  ArrayContains,
+  Between,
+  LessThanOrEqual,
+  MoreThanOrEqual,
+  Repository,
+} from 'typeorm';
 
 import { Users } from '@users/entities/users.entity';
 
@@ -21,6 +27,7 @@ export interface AdminUserOverviewRow {
   isEmailVerified: boolean;
   createdAt: Date;
   lastLoginAt: Date | null;
+  signupSources: string[];
   schwabConnected: boolean;
   /** True once `SchwabAccountResolver` has resolved and persisted a hash for
    * this user — until then a connected account has no trade data to show,
@@ -42,6 +49,9 @@ export interface AdminUserOverviewRow {
  * reading the persisted `account_hash` column directly is what avoids a
  * live Schwab call — and its associated failure mode for anyone whose token
  * has lapsed — for every single user on every page load.
+ *
+ * Scoped to Strikedesk membership via `signup_sources`, not every row in the
+ * shared platform `users` table.
  */
 @Injectable()
 export class AdminUsersService {
@@ -61,7 +71,10 @@ export class AdminUsersService {
     to?: string;
   }): Promise<AdminUserOverviewRow[]> {
     const [users, tokens, botStates] = await Promise.all([
-      this.usersRepository.find({ order: { created_at: 'DESC' } }),
+      this.usersRepository.find({
+        where: { signupSources: ArrayContains(['strikedesk']) },
+        order: { created_at: 'DESC' },
+      }),
       this.tokenRepository.find(),
       this.botStateRepository.find(),
     ]);
@@ -84,6 +97,7 @@ export class AdminUsersService {
           isEmailVerified: user.isEmailVerified,
           createdAt: user.created_at,
           lastLoginAt: user.lastLoginAt,
+          signupSources: user.signupSources ?? [],
           schwabConnected: Boolean(token),
           accountHashResolved: Boolean(token?.accountHash),
           usesBot:

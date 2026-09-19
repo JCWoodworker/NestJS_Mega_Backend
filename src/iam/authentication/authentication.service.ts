@@ -20,6 +20,11 @@ import { SignInDto } from '@iam/authentication/dto/sign-in.dto';
 import { SignUpDto } from '@iam/authentication/dto/sign-up.dto';
 import { InvalidateRefreshTokenError } from '@iam/authentication/refresh-token-storage/invalidate-refresh-token-error';
 import { RefreshTokensService } from '@iam/authentication/refresh-token-storage/refresh-token-storage.service';
+import {
+  isSignupSource,
+  withSignupSource,
+  type SignupSource,
+} from '@iam/authentication/signup-source.util';
 import jwtConfig from '@iam/config/jwt.config';
 import { EmailService } from '@iam/email/email.service';
 import { ActiveUserData } from '@iam/interfaces/active-user-data.interface';
@@ -72,6 +77,10 @@ export class AuthenticationService {
       const user = new Users();
       user.email = email;
       user.password = await this.hashingService.hash(signUpDto.password);
+      const source = isSignupSource(signUpDto.signupSource)
+        ? signUpDto.signupSource
+        : null;
+      user.signupSources = withSignupSource([], source);
       const newUser = await this.usersRepository.save(user);
 
       // Best-effort: a Resend outage must not fail account creation. The
@@ -124,6 +133,10 @@ export class AuthenticationService {
       throw new UnauthorizedException('Password does not match');
     }
     await this.touchLastLogin(user.id);
+    await this.appendSignupSource(
+      user,
+      isSignupSource(signInDto.signupSource) ? signInDto.signupSource : null,
+    );
     const authData = await this.generateTokens(user);
 
     // Here we are checking if the user is connected with any businesses in OnlyBizLinks
@@ -188,6 +201,23 @@ export class AuthenticationService {
    * silently kept alive by token rotation. */
   async touchLastLogin(userId: string): Promise<void> {
     await this.usersRepository.update(userId, { lastLoginAt: new Date() });
+  }
+
+  /**
+   * Adds a product slug to `signup_sources` when an existing account signs
+   * in from another frontend. No-op when the source is missing or already
+   * present. Mutates `user.signupSources` in memory so callers that reuse
+   * the entity see the updated list.
+   */
+  async appendSignupSource(
+    user: Users,
+    source: SignupSource | null,
+  ): Promise<void> {
+    if (!source) return;
+    const next = withSignupSource(user.signupSources, source);
+    if (next.length === (user.signupSources?.length ?? 0)) return;
+    user.signupSources = next;
+    await this.usersRepository.update(user.id, { signupSources: next });
   }
 
   /**

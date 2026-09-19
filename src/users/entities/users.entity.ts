@@ -39,6 +39,19 @@ export class Users {
   @Column({ name: 'last_login_at', type: 'timestamptz', nullable: true })
   lastLoginAt: Date | null;
 
+  /**
+   * Product / subapp slugs this account has signed up or signed in through
+   * (e.g. `strikedesk`, `mycuttingboard`). Empty until an app stamps one.
+   * Strikedesk admin Users filters to rows containing `strikedesk`.
+   */
+  @Column({
+    name: 'signup_sources',
+    type: 'text',
+    array: true,
+    default: '{}',
+  })
+  signupSources: string[];
+
   @Column({ nullable: true })
   googleId: string;
 
