@@ -1577,6 +1577,30 @@ comparison never mixes denominators.
 
 ## Changelog
 
+- **2026-09-21 (hardening)**: No contract break for orders, quotes, or the
+  socket. New `POST /authentication/sign-out` (Bearer, no body, returns
+  `{ message }`) revokes the caller's refresh row; refresh tokens are one row per
+  user, so it ends every session for that account, and access tokens stay valid
+  until expiry. Bearer tokens that are not access tokens are rejected on REST
+  **and** the `/options` handshake: `isNonAccessTokenPayload` keys on
+  `refreshTokenId` (refresh) or a non-`access` `purpose` (email-verify), so
+  tokens issued before the new `purpose: 'access'` claim keep working and no live
+  session dropped. `UserThrottlerGuard` keys rate limits on the caller rather
+  than `req.ip` — every request reaches these dynos from one Heroku router
+  address, so the stock tracker let any client consume the 120/min order budget;
+  thresholds unchanged, and the guard moved from `ScrapersModule` to
+  `AppModule`. `RolesGuard` re-reads role and `isLocked` via `UsersService`,
+  which only runs on `@Roles` routes, leaving trading and market-data queries
+  untouched; `UsersService.setLocked` now also invalidates the refresh row.
+  Deleted the unauthenticated `RefreshTokensController`. `returnTo` validation
+  and CORS share `getAllowedOrigins()`, which no longer merges the development
+  list into deployed environments. Devtools HTTP is now development-only (the
+  flag was inverted). `X-Content-Type-Options: nosniff` added; no Helmet CSP,
+  since it would apply to the Handlebars `index` view. Joi now requires
+  `JWT_SECRET`, `JWT_TOKEN_AUDIENCE`, `JWT_TOKEN_ISSUER`,
+  `SCHWAB_TOKEN_ENCRYPTION_KEY` in preprod/prod — all four are already set on
+  both dynos, and audience/issuer were deliberately not *changed*, since new
+  values would invalidate every token in circulation.
 - **2026-09-19 (signup sources)**: Shared `users.signup_sources text[]` tags which
   product(s) an account belongs to. Strikedesk FE stamps `strikedesk` on
   sign-up / sign-in / Google. `GET /admin/users` filters to

@@ -5,6 +5,8 @@ import { Repository } from 'typeorm';
 import { Users } from '@users/entities/users.entity';
 import { Role } from '@users/enums/role.enum';
 
+import { RefreshTokensService } from '@iam/authentication/refresh-token-storage/refresh-token-storage.service';
+
 import { UsersService } from './users.service';
 
 describe('UsersService', () => {
@@ -52,6 +54,10 @@ describe('UsersService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UsersService,
+        {
+          provide: RefreshTokensService,
+          useValue: { invalidateRefreshToken: jest.fn() },
+        },
         {
           provide: getRepositoryToken(Users),
           useValue: {

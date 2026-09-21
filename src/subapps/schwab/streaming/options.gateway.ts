@@ -13,6 +13,7 @@ import {
 import { EventEmitter } from 'events';
 import { Server, Socket } from 'socket.io';
 
+import { isNonAccessTokenPayload } from '@iam/authentication/access-token-payload.util';
 import jwtConfig from '@iam/config/jwt.config';
 import type { ActiveUserData } from '@iam/interfaces/active-user-data.interface';
 
@@ -203,6 +204,11 @@ export class OptionsGateway
       );
       if (!payload?.sub) {
         throw new Error('token carries no subject');
+      }
+      // A refresh or email-verification token verifies against the same
+      // secret; neither should open an account-data stream.
+      if (isNonAccessTokenPayload(payload)) {
+        throw new Error('token is not an access token');
       }
       userId = payload.sub;
     } catch {

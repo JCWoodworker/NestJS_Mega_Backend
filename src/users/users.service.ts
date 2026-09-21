@@ -4,11 +4,14 @@ import { Repository } from 'typeorm';
 
 import { Users } from '@users/entities/users.entity';
 
+import { RefreshTokensService } from '@iam/authentication/refresh-token-storage/refresh-token-storage.service';
+
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(Users)
     private readonly usersRepository: Repository<Users>,
+    private readonly refreshTokensService: RefreshTokensService,
   ) {}
 
   async findAll(): Promise<any> {
@@ -45,6 +48,17 @@ export class UsersService {
     }
     user.isLocked = locked;
     await this.usersRepository.save(user);
+
+    /**
+     * Sign-in and refresh both reject a locked account, but an already-issued
+     * access token keeps working until it expires. Dropping the stored refresh
+     * token closes the renewal path, so the lock takes full effect within one
+     * access-token lifetime instead of being extendable indefinitely.
+     */
+    if (locked) {
+      await this.refreshTokensService.invalidateRefreshToken(id);
+    }
+
     return {
       id: user.id,
       email: user.email,

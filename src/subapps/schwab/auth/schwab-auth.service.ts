@@ -17,6 +17,8 @@ import schwabConfig from '@schwab/config/schwab.config';
 import { OrdersService } from '@schwab/orders/orders.service';
 import { runAsUser } from '@schwab/shared/schwab-user-context';
 
+import { getAllowedOrigins } from '@utils/allowed-origins';
+
 import { SchwabToken } from './entities/schwab-token.entity';
 import { decryptToken, encryptToken } from './token-encryption.util';
 
@@ -169,12 +171,7 @@ export class SchwabAuthService {
         return true;
       }
 
-      const allowedOrigins = [
-        ...(process.env.ALLOWED_ORIGINS?.split(',') ?? []),
-        ...(process.env.ALLOWED_ORIGINS_DEVELOPMENT?.split(',') ?? []),
-      ].map((origin) => origin.trim());
-
-      return allowedOrigins.includes(parsed.origin);
+      return getAllowedOrigins().includes(parsed.origin);
     } catch {
       return false;
     }

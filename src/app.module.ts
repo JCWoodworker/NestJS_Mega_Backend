@@ -38,21 +38,52 @@ import { WoodpricingModule } from '@subapps/woodpricing/woodpricing.module';
 
 import { ScrapersModule } from '@scrapers/scrapers.module';
 
+import { UserThrottlerGuard } from '@utils/user-throttler.guard';
+
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
 @Module({
   imports: [
     DevtoolsModule.register({
-      http: process.env.ENVIRONMENT !== 'development',
+      // Development only. This serves a graph of every module, route and
+      // provider on the process, which is not something preprod or prod
+      // should expose.
+      http: process.env.ENVIRONMENT === 'development',
     }),
     ConfigModule.forRoot({
       isGlobal: true,
       load: [appConfig, authConfig],
+      /**
+       * Deployed environments must fail to boot rather than start with auth
+       * secrets missing: `jsonwebtoken` silently omits an undefined audience or
+       * issuer on both sign and verify, so a dropped env var would downgrade
+       * token checks instead of erroring. All of these are already set on the
+       * preprod and prod dynos, so this only catches a future regression.
+       *
+       * Deliberately not required in development, where contributors to the
+       * other subapps on this process run without Schwab credentials.
+       */
       validationSchema: Joi.object({
         ENVIRONMENT: Joi.string().required(),
         DATABASE_URL: Joi.string().required(),
-      }),
+        JWT_SECRET: Joi.string().when('ENVIRONMENT', {
+          is: Joi.valid('preprod', 'prod'),
+          then: Joi.required(),
+        }),
+        JWT_TOKEN_AUDIENCE: Joi.string().when('ENVIRONMENT', {
+          is: Joi.valid('preprod', 'prod'),
+          then: Joi.required(),
+        }),
+        JWT_TOKEN_ISSUER: Joi.string().when('ENVIRONMENT', {
+          is: Joi.valid('preprod', 'prod'),
+          then: Joi.required(),
+        }),
+        SCHWAB_TOKEN_ENCRYPTION_KEY: Joi.string().when('ENVIRONMENT', {
+          is: Joi.valid('preprod', 'prod'),
+          then: Joi.required(),
+        }),
+      }).unknown(true),
     }),
     ConfigModule.forFeature(jwtConfig),
     TypeOrmModule.forRootAsync({
@@ -167,6 +198,11 @@ import { AppService } from './app.service';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    {
+      // After the auth guards so the tracker can key on the resolved user.
+      provide: APP_GUARD,
+      useClass: UserThrottlerGuard,
     },
     {
       // Must come after the guards so `request.user` is populated. Global

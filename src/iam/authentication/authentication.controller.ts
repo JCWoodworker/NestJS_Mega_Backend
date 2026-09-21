@@ -93,6 +93,22 @@ export class AuthenticationController {
     return this.authService.resendVerificationEmail(userId);
   }
 
+  /**
+   * Revokes the caller's refresh token so signing out ends the session
+   * server-side rather than only clearing browser storage.
+   *
+   * Note that refresh tokens are stored one row per user, so this ends every
+   * session for that account, not just the calling device. Their access tokens
+   * stay valid until they expire — this stops the session from being renewed,
+   * it is not an immediate kill switch.
+   */
+  @Auth(AuthType.Bearer)
+  @HttpCode(HttpStatus.OK)
+  @Post('sign-out')
+  async signOut(@ActiveUser('sub') userId: string) {
+    return this.authService.signOut(userId);
+  }
+
   // This code can be used for http only cookies
   // @HttpCode(HttpStatus.OK)
   // @Post('sign-in')

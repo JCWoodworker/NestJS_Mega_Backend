@@ -13,6 +13,7 @@ import { Repository } from 'typeorm';
 
 import { Users } from '@users/entities/users.entity';
 
+import { ACCESS_TOKEN_PURPOSE } from '@iam/authentication/access-token-payload.util';
 import { AuthAllowlistService } from '@iam/authentication/auth-allowlist.service';
 import { isDisposableEmail } from '@iam/authentication/disposable-email.util';
 import { RefreshTokenDto } from '@iam/authentication/dto/refresh-token.dto';
@@ -158,13 +159,18 @@ export class AuthenticationService {
   async generateTokens(user: Users) {
     const refreshTokenId = randomUUID();
     const [accessToken, refreshToken] = await Promise.all([
-      this.signToken<Partial<ActiveUserData>>(
+      this.signToken<Partial<ActiveUserData> & { purpose: string }>(
         user.id,
         this.jwtConfiguration.accessTokenTtl,
         {
           email: user.email,
           role: user.role,
           emailVerified: user.isEmailVerified,
+          // Marks the token class explicitly. Guards currently reject only
+          // tokens that positively identify as something else, so tokens
+          // issued before this claim existed keep working; once they have all
+          // expired this marker can become mandatory.
+          purpose: ACCESS_TOKEN_PURPOSE,
         },
       ),
       this.signToken<Partial<ActiveUserData>>(
@@ -194,6 +200,19 @@ export class AuthenticationService {
         refreshToken,
       },
     };
+  }
+
+  /**
+   * Drops the caller's stored refresh token, so the session cannot be renewed
+   * once the current access token expires.
+   *
+   * Idempotent — a second call, or one from a session whose row was already
+   * rotated away, succeeds rather than erroring, since the caller's intent is
+   * satisfied either way and the frontend clears local state regardless.
+   */
+  async signOut(userId: string): Promise<{ message: string }> {
+    await this.refreshTokenStorageService.invalidateRefreshToken(userId);
+    return { message: 'Signed out' };
   }
 
   /** Not called on refresh — only an actual sign-in counts, so this reflects

@@ -3,6 +3,8 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import * as cookieParser from 'cookie-parser';
 
+import { getAllowedOrigins } from '@utils/allowed-origins';
+
 import { AppModule } from './app.module';
 
 // I'm just here so I don't get fined - Marshawn Lynch
@@ -15,15 +17,7 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api/v1');
 
-  const allowedOrigins =
-    process.env.ENVIRONMENT === 'development'
-      ? process.env.ALLOWED_ORIGINS_DEVELOPMENT.split(',').map((origin) =>
-          origin.trim(),
-        )
-      : process.env.ENVIRONMENT === 'preprod' ||
-          process.env.ENVIRONMENT === 'prod'
-        ? process.env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim())
-        : [];
+  const allowedOrigins = getAllowedOrigins();
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -37,6 +31,16 @@ async function bootstrap() {
   );
 
   app.use(cookieParser());
+
+  /**
+   * Only header hardening that is safe for a JSON API also serving Handlebars
+   * views: a default Helmet CSP would apply to those rendered pages. Frame and
+   * referrer policies belong on the frontend's own responses, not here.
+   */
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    next();
+  });
 
   // Set views engine with handlebars
   app.useStaticAssets('src/public');
