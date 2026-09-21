@@ -129,6 +129,11 @@ export function decideSoftExit(
  * `disconnectedForMs: null` means "no session at all", which is worse than a
  * disconnect (there's nothing that could reconnect on its own) — treated as
  * an immediate flatten regardless of the grace period.
+ *
+ * While the bot is armed, `BotEngineService.reconcileStreamerHolds` holds a
+ * session open independent of any browser tab, so `null` here should now
+ * only mean the pool was at capacity or the session hasn't been reconciled
+ * yet — not "nobody has a tab open" (2026-09-21 incident).
  */
 export function shouldForceFlattenForSocketLoss(params: {
   hasOpenPosition: boolean;

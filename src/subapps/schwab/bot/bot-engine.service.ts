@@ -33,6 +33,7 @@ import { BotMarketDataService } from './bot-market-data.service';
 import { BotRecordingService, configVersionOf } from './bot-recording.service';
 import { BotSettingsService } from './bot-settings.service';
 import { BotStateService } from './bot-state.service';
+import { diffStreamerHolds } from './bot-streamer-hold.util';
 import {
   combineSignals,
   computeAtr,
@@ -84,6 +85,12 @@ const SOCKET_LOSS_GRACE_MS = 15_000;
 export class BotEngineService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BotEngineService.name);
   private heartbeatTimer: NodeJS.Timeout | null = null;
+
+  /**
+   * Users this engine currently holds a background streamer session for,
+   * independent of any browser tab — see `reconcileStreamerHolds`.
+   */
+  private readonly botHeldUserIds = new Set<string>();
 
   /**
    * Per-user engine state.
@@ -147,10 +154,14 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
   /**
    * The streamer session whose market data drives this user's bot.
    *
-   * Returns null when the user has no live session, which the staleness
-   * gates below treat as "no fresh data" and therefore refuse to trade on —
-   * the correct default, since an unattended bot must not act on quotes it
-   * cannot confirm are current.
+   * Still a passive `peek()` — this getter never starts a session itself.
+   * While the bot is armed, `reconcileStreamerHolds` keeps one open via its
+   * own `'bot'` hold, so this resolves regardless of whether a browser tab
+   * is connected. Returns null when truly no session exists (arming hasn't
+   * reconciled yet, the pool was at capacity, or a real Schwab outage), which
+   * the staleness gates below treat as "no fresh data" and refuse to trade
+   * on — the correct default, since an unattended bot must not act on quotes
+   * it cannot confirm are current.
    */
   private get streamerSession(): SchwabStreamerSession | null {
     return this.streamerPool.peek(requireUserId());
@@ -186,6 +197,10 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     this.optionsGateway.off('underlying-price', this.handleUnderlyingPrice);
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     this.botMarketDataService.stopListening();
+    for (const userId of this.botHeldUserIds) {
+      this.streamerPool.releaseBackgroundWork(userId);
+    }
+    this.botHeldUserIds.clear();
   }
 
   /** Called by BotStateService after any control-plane mutation. */
@@ -924,10 +939,54 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    this.reconcileStreamerHolds(rows.map((row) => row.userId));
+
     for (const { userId } of rows) {
       await runAsUser(userId, () => this.heartbeat()).catch((err) =>
         this.logger.warn(`heartbeat failed for user ${userId}: ${err.message}`),
       );
+    }
+  }
+
+  /**
+   * Keeps a background streamer session open for exactly the users whose bot
+   * is armed (`mode === BOT`, from `listActiveBotUsers`), independent of any
+   * browser tab.
+   *
+   * Before this, the engine only ever `peek()`ed at a session someone else —
+   * a browser socket — had acquired. A closed tab tore the feed down mid-
+   * position (2026-09-21: an armed paper position was force-flattened under
+   * `SOCKET_LOSS` eight seconds after entry, with no actual Schwab outage),
+   * and an unattended arm (the daily paper supervisor) never got live data
+   * at all.
+   *
+   * Runs every heartbeat tick, so it also self-heals: after a dyno restart
+   * `botHeldUserIds` starts empty, and the very next tick re-acquires a hold
+   * for every currently-armed user from the database, not from in-memory
+   * socket state.
+   */
+  private reconcileStreamerHolds(armedUserIds: readonly string[]): void {
+    const { toAcquire, toRelease } = diffStreamerHolds(
+      armedUserIds,
+      this.botHeldUserIds,
+    );
+
+    for (const userId of toAcquire) {
+      try {
+        this.streamerPool.acquireForBackgroundWork(userId);
+        this.botHeldUserIds.add(userId);
+      } catch (err) {
+        // Pool at capacity. This user's risk checks will see `peek()` return
+        // null and treat it the same as any other unrecoverable outage.
+        this.logger.warn(
+          `Could not hold a background streamer for user ${userId}: ${err.message}`,
+        );
+      }
+    }
+
+    for (const userId of toRelease) {
+      this.streamerPool.releaseBackgroundWork(userId);
+      this.botHeldUserIds.delete(userId);
     }
   }
 

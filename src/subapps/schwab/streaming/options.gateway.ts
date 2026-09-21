@@ -256,7 +256,9 @@ export class OptionsGateway
     sockets?.delete(client.id);
     if (sockets?.size) return;
 
-    // Last tab closed: stop paying for a Schwab streamer nobody is watching.
+    // Last tab closed. Drops this gateway's ('socket') hold on the streamer
+    // — the pool only actually stops it once no other holder (the bot,
+    // while armed) needs it either.
     this.userSockets.delete(userId);
     this.streamerPool.release(userId);
     this.logger.log(`Last client for user ${userId} disconnected`);

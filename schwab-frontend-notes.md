@@ -1577,6 +1577,21 @@ comparison never mixes denominators.
 
 ## Changelog
 
+- **2026-09-21 (bot streamer holds — reliability fix, no contract change)**:
+  Root cause of a live incident: `SchwabStreamerPool` sessions were only ever
+  acquired by `OptionsGateway` on browser tab connect; `BotEngineService` only
+  `peek()`ed. An unattended armed bot (daily paper supervisor) had no data
+  unless a tab happened to be open, and closing the last tab tore the feed
+  down mid-position — the socket-loss check saw `disconnectedForMs: null`
+  (worse than a disconnect) and force-flattened immediately. Confirmed in
+  `bot_events`: entry at 14:01:51 ET, `SOCKET_LOSS` flatten at 14:01:59 ET, no
+  actual Schwab outage. `acquire`/`release` now take an optional
+  `holder: 'socket' | 'bot'` (default `'socket'`, gateway call sites
+  unchanged) and refcount — a session survives until every holder releases.
+  `BotEngineService.reconcileStreamerHolds` holds a `'bot'` session for every
+  `mode === BOT` user every heartbeat tick, self-healing after a restart.
+  `bot-streamer-hold.util.ts` has the pure acquire/release diff, tested in
+  isolation. No REST/socket shape changed.
 - **2026-09-21 (hardening)**: No contract break for orders, quotes, or the
   socket. New `POST /authentication/sign-out` (Bearer, no body, returns
   `{ message }`) revokes the caller's refresh row; refresh tokens are one row per

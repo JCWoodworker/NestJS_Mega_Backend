@@ -94,4 +94,64 @@ describe('SchwabStreamerPool', () => {
     const pool = build();
     expect(() => pool.release('nobody')).not.toThrow();
   });
+
+  /**
+   * 2026-09-21 prod incident: the bot only ever `peek()`ed at a session a
+   * browser tab had acquired, so closing the tab tore the feed down mid-
+   * position and force-flattened it under SOCKET_LOSS. Holders fix that:
+   * the session survives as long as anyone — a tab or the bot — needs it.
+   */
+  describe('holder refcounting', () => {
+    it('keeps the session alive for the bot after the last browser tab closes', () => {
+      const pool = build();
+
+      const session = pool.acquire('user-a', 'socket');
+      pool.acquireForBackgroundWork('user-a');
+      pool.release('user-a', 'socket');
+
+      expect(session.stop).not.toHaveBeenCalled();
+      expect(pool.peek('user-a')).toBe(session);
+    });
+
+    it('keeps the session alive for a browser tab after the bot disarms', () => {
+      const pool = build();
+
+      const session = pool.acquireForBackgroundWork('user-a');
+      pool.acquire('user-a', 'socket');
+      pool.releaseBackgroundWork('user-a');
+
+      expect(session.stop).not.toHaveBeenCalled();
+      expect(pool.peek('user-a')).toBe(session);
+    });
+
+    it('stops the session once every holder has released', () => {
+      const pool = build();
+
+      const session = pool.acquire('user-a', 'socket');
+      pool.acquireForBackgroundWork('user-a');
+      pool.release('user-a', 'socket');
+      pool.releaseBackgroundWork('user-a');
+
+      expect(session.stop).toHaveBeenCalledTimes(1);
+      expect(pool.peek('user-a')).toBeNull();
+    });
+
+    it('does not double-count the same holder acquiring twice', () => {
+      const pool = build();
+
+      const session = pool.acquireForBackgroundWork('user-a');
+      pool.acquireForBackgroundWork('user-a');
+      pool.releaseBackgroundWork('user-a');
+
+      expect(session.stop).toHaveBeenCalledTimes(1);
+    });
+
+    it('reuses an existing session for a second holder even at capacity', () => {
+      const pool = build(1);
+
+      const session = pool.acquire('user-a', 'socket');
+      expect(() => pool.acquireForBackgroundWork('user-a')).not.toThrow();
+      expect(pool.acquireForBackgroundWork('user-a')).toBe(session);
+    });
+  });
 });
