@@ -68,4 +68,47 @@ export class EmailService {
       );
     }
   }
+
+  /**
+   * Account data export for admin purge / export-on-request. Throws when
+   * Resend is unset or the provider rejects the send — callers that email
+   * before deleting must fail closed rather than wipe without delivery.
+   */
+  async sendAccountExportEmail(
+    to: string,
+    attachments: { filename: string; content: Buffer }[],
+  ): Promise<void> {
+    if (!this.client) {
+      throw new Error(
+        'RESEND_API_KEY not set — cannot email account export',
+      );
+    }
+
+    const { error } = await this.client.emails.send({
+      from: this.config.fromEmail,
+      to,
+      subject: 'Your Strikedesk account data export',
+      html: `
+        <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto;">
+          <h2 style="margin-bottom: 8px;">Your account data</h2>
+          <p style="color: #555; line-height: 1.5;">
+            Attached are CSV files with the Strikedesk data we hold for this
+            account. You can open them in Excel or Numbers.
+          </p>
+          <p style="color: #999; font-size: 12px; margin-top: 24px;">
+            If you did not request this, contact support.
+          </p>
+        </div>
+      `,
+      attachments: attachments.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+      })),
+    });
+
+    if (error) {
+      throw new Error(`Failed to send account export email: ${error.message}`);
+    }
+  }
+
 }

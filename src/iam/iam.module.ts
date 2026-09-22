@@ -59,7 +59,7 @@ import { HashingService } from './hashing/hashing.service';
     ConfigModule.forFeature(emailConfig),
     RefreshTokensModule,
   ],
-  exports: [AuthAllowlistService],
+  exports: [AuthAllowlistService, EmailService, AuthenticationService],
   controllers: [
     AuthenticationController,
     GoogleAuthenticationController,

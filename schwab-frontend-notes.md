@@ -1653,7 +1653,27 @@ assuming the favourable one is how a backtest flatters itself. Trades with no
 usable tape are excluded from both the policy total and `deltaVsActual`, so the
 comparison never mixes denominators.
 
+### 16d. Admin user support + safe purge
+
+All `@Roles(Role.Admin)`. Prefixed `/api/v1/subapps/schwab`.
+
+| Method | Path | Body | Effect |
+|--------|------|------|--------|
+| GET | `/admin/users/:userId/purge-preview` | — | Counts + `canPurge` / `blockReason` (refuses non-strikedesk / CBC/OBL rows) |
+| POST | `/admin/users/:userId/export` | — | Email CSV attachments via Resend (profile + bot + PnL). No deletes. |
+| PATCH | `/admin/users/:userId/lock` | `{ locked: boolean }` | Toggle `users.is_locked` |
+| POST | `/admin/users/:userId/sign-out` | — | Delete `refresh_tokens` for that user |
+| POST | `/admin/users/:userId/disconnect-schwab` | — | Delete `schwab_tokens` only (PnL by account hash kept) |
+| POST | `/admin/users/:userId/resend-verification` | — | Resend verify email (no-op message if already verified) |
+| DELETE | `/admin/users/:userId` | `{ confirmEmail, emailExport? }` | Optional CSV email first (abort if send fails); then PnL-by-hash + refresh tokens + `users` (cascades bot + schwab_tokens) |
+
+CSV: UTF-8 with BOM, one file per table, Excel/Numbers friendly. Never emails passwords or OAuth secrets.
+
+**Follow-up (not built):** basic-user self-serve deletion request queue.
+
 ## Changelog
+
+- **2026-09-22 (admin user support + safe purge)**: Admin Users gained export (Resend CSV), lock/unlock, force sign-out, disconnect Schwab, resend verification, purge-preview, and hard-delete with optional pre-purge email. See §16d. No proactive account wipes.
 
 - **2026-09-21 (trailing profit ratchet — new settings + event type, off by default)**:
   A fill-time stop never moves, so a trade 65% of the way to target was still exposed back to
