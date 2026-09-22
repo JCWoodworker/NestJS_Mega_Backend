@@ -839,7 +839,7 @@ GET /api/v1/subapps/schwab/market-data/chain?symbol=SPY&expiration=YYYY-MM-DD&st
 - **Bot (§14) stays 0DTE-only** — multi-exp is manual arm/submit only.
 - Symbols: `SPY` \| `QQQ` \| `IWM` \| `SPX` \| `SPXW` (`SPX` → Schwab `SPXW` option root).
 
-Full paste-ready prompt (frontend repo): `MULTI_EXP_CHAIN_BACKEND_PROMPT.md`.
+Full paste-ready prompt (frontend repo, archived): `.cursor/archive/handoffs/MULTI_EXP_CHAIN_BACKEND_PROMPT.md`.
 
 ## 12. ✅ Implemented: `dayStartEquity` on `account-snapshot`
 
