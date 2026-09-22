@@ -226,6 +226,46 @@ export class BotSettings {
   })
   premiumTargetPct: number;
 
+  /** Off by default: the trail changes exit behaviour on live capital, so it
+   * is opted into per account rather than switched on by a deploy. */
+  @Column({ type: 'boolean', name: 'use_trail_stop', default: false })
+  useTrailStop: boolean;
+
+  /** Gain that arms the trail — bid >= entry × (1 + pct/100). */
+  @Column({
+    type: 'decimal',
+    precision: 8,
+    scale: 4,
+    name: 'trail_arm_pct',
+    default: 20,
+  })
+  trailArmPct: number;
+
+  /** Give-back from the peak bid once armed. Keep below `premiumStopPct` or
+   * arming barely tightens anything. */
+  @Column({
+    type: 'decimal',
+    precision: 8,
+    scale: 4,
+    name: 'trail_pct',
+    default: 15,
+  })
+  trailPct: number;
+
+  /**
+   * Minimum premium gain banked at arm — stop floor includes
+   * entry × (1 + pct/100). 0 means breakeven-only. Must stay strictly below
+   * `trailArmPct` or arming would place the stop above the market.
+   */
+  @Column({
+    type: 'decimal',
+    precision: 8,
+    scale: 4,
+    name: 'trail_min_lock_pct',
+    default: 5,
+  })
+  trailMinLockPct: number;
+
   @Column({
     type: 'decimal',
     precision: 8,

@@ -28,6 +28,10 @@ import {
 } from './bot-equity-thresholds.const';
 import { BotEventService } from './bot-event.service';
 import { computePhase } from './bot-phase.util';
+import {
+  computeOpenPositionValue,
+  OpenPositionValue,
+} from './bot-position-value.util';
 import { BotRecordingService } from './bot-recording.service';
 import { BotSettingsService } from './bot-settings.service';
 import { etNowHhMm, isWithinWindow } from './bot-strategy.util';
@@ -61,6 +65,12 @@ export interface BotStatusView {
   /** Dollar floor used for `minEquityOk` ($5,000 for paper and live). */
   minEquityThreshold: number;
   openPosition: BotOpenPosition | null;
+  /**
+   * Derived capital picture for the open position — cost basis, mark value,
+   * net open P&L, equity marked to market. Null when flat. Never persisted;
+   * `paperEquity` stays realized-only so risk gates are unchanged.
+   */
+  openPositionValue: OpenPositionValue | null;
   lastSignal: BotLastSignal | null;
   lastError: string | null;
   todayBotPnl: number;
@@ -274,6 +284,21 @@ export class BotStateService {
       (lastPremiumBidAt != null &&
         now - lastPremiumBidAt <= PREMIUM_WATCH_STALE_MS);
 
+    let openPositionValue: OpenPositionValue | null = null;
+    if (row.openPosition) {
+      const mark = this.botEngine.getOpenPositionMark(
+        row.openPosition.symbol,
+        row.userId,
+      );
+      openPositionValue = computeOpenPositionValue({
+        entryPrice: row.openPosition.entryPrice,
+        quantity: row.openPosition.quantity,
+        settledCash,
+        markBid: mark?.bid ?? null,
+        markAt: mark?.at ?? null,
+      });
+    }
+
     return {
       mode: row.mode,
       lane: row.lane,
@@ -291,6 +316,7 @@ export class BotStateService {
       minEquityOk: equity >= minEquityThreshold,
       minEquityThreshold,
       openPosition: row.openPosition,
+      openPositionValue,
       lastSignal: row.lastSignal,
       lastError: row.lastError,
       todayBotPnl,

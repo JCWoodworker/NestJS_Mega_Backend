@@ -190,6 +190,7 @@ describe('replayExitPolicy', () => {
         stopPct: null,
         timeStopMs: null,
         trailPct: null,
+        trailArmPct: null,
       },
       fees: 1.3,
     });
@@ -208,6 +209,7 @@ describe('replayExitPolicy', () => {
         stopPct: 0.3,
         timeStopMs: null,
         trailPct: null,
+        trailArmPct: null,
       },
       fees: 1.3,
     });
@@ -228,6 +230,7 @@ describe('replayExitPolicy', () => {
         stopPct: 0.1,
         timeStopMs: null,
         trailPct: null,
+        trailArmPct: null,
       },
       fees: 1.3,
     });
@@ -243,6 +246,7 @@ describe('replayExitPolicy', () => {
         stopPct: null,
         timeStopMs: 2 * 60_000,
         trailPct: null,
+        trailArmPct: null,
       },
       fees: 1.3,
     });
@@ -259,6 +263,7 @@ describe('replayExitPolicy', () => {
         stopPct: null,
         timeStopMs: null,
         trailPct: 0.2,
+        trailArmPct: null,
       },
       fees: 1.3,
     });
@@ -276,6 +281,65 @@ describe('replayExitPolicy', () => {
         stopPct: null,
         timeStopMs: null,
         trailPct: 0.2,
+        trailArmPct: null,
+      },
+      fees: 1.3,
+    });
+    expect(result?.reason).toBe('HELD_TO_CLOSE');
+  });
+
+  /**
+   * The engine gates its trail on a gain threshold, so a replay that trails
+   * from the first tick above entry scores a policy production never runs —
+   * and the grid's verdict could not be used to pick the live setting.
+   */
+  it('does not trail before the arm threshold is cleared', () => {
+    const result = replayExitPolicy({
+      trade: trade(),
+      // Peak 1.1 is +10%, short of the +25% arm; 0.85 would trip a 20% trail
+      // off that peak if the trail were live.
+      samples: tape([1.0, 1.1, 0.85]),
+      policy: {
+        targetPct: null,
+        stopPct: null,
+        timeStopMs: null,
+        trailPct: 0.2,
+        trailArmPct: 0.25,
+      },
+      fees: 1.3,
+    });
+    expect(result?.reason).toBe('HELD_TO_CLOSE');
+  });
+
+  it('trails once the arm threshold is cleared', () => {
+    const result = replayExitPolicy({
+      trade: trade(),
+      samples: tape([1.0, 1.3, 1.0]),
+      policy: {
+        targetPct: null,
+        stopPct: null,
+        timeStopMs: null,
+        trailPct: 0.2,
+        trailArmPct: 0.25,
+      },
+      fees: 1.3,
+    });
+    // 1.3 clears +25% and sets the peak; 1.3 x 0.8 = 1.04, so 1.0 trips it.
+    expect(result?.reason).toBe('TRAIL_STOP');
+    expect(result?.exitPrice).toBe(1.0);
+  });
+
+  it('cannot arm and fire on the same sample', () => {
+    const result = replayExitPolicy({
+      trade: trade(),
+      // The arming sample is itself the peak, so the trail sits below it.
+      samples: tape([1.0, 1.25]),
+      policy: {
+        targetPct: null,
+        stopPct: null,
+        timeStopMs: null,
+        trailPct: 0.2,
+        trailArmPct: 0.25,
       },
       fees: 1.3,
     });
@@ -286,7 +350,13 @@ describe('replayExitPolicy', () => {
     const result = replayExitPolicy({
       trade: trade(),
       samples: tape([1.0, 1.1]),
-      policy: { targetPct: 5, stopPct: 0.99, timeStopMs: null, trailPct: null },
+      policy: {
+        targetPct: 5,
+        stopPct: 0.99,
+        timeStopMs: null,
+        trailPct: null,
+        trailArmPct: null,
+      },
       fees: 1.3,
     });
     expect(result?.reason).toBe('HELD_TO_CLOSE');
@@ -307,6 +377,7 @@ describe('replayExitPolicy', () => {
           stopPct: 0.3,
           timeStopMs: null,
           trailPct: null,
+          trailArmPct: null,
         },
         fees: 1.3,
       }),
@@ -321,6 +392,7 @@ describe('replayExitPolicy', () => {
           stopPct: 0.3,
           timeStopMs: null,
           trailPct: null,
+          trailArmPct: null,
         },
         fees: 1.3,
       }),
@@ -336,6 +408,7 @@ describe('replayExitPolicy', () => {
         stopPct: null,
         timeStopMs: null,
         trailPct: null,
+        trailArmPct: null,
       },
       fees: 3.9,
     });
@@ -353,8 +426,20 @@ describe('scorePolicies', () => {
       trades: [t],
       tapeByTradeKey: new Map([[t.tradeKey, tape([1.0, 1.6, 1.1])]]),
       policies: [
-        { targetPct: 0.5, stopPct: null, timeStopMs: null, trailPct: null },
-        { targetPct: 5, stopPct: 0.99, timeStopMs: null, trailPct: null },
+        {
+          targetPct: 0.5,
+          stopPct: null,
+          timeStopMs: null,
+          trailPct: null,
+          trailArmPct: null,
+        },
+        {
+          targetPct: 5,
+          stopPct: 0.99,
+          timeStopMs: null,
+          trailPct: null,
+          trailArmPct: null,
+        },
       ],
     });
 
@@ -374,7 +459,13 @@ describe('scorePolicies', () => {
       trades: [withTape, withoutTape],
       tapeByTradeKey: new Map([[withTape.tradeKey, tape([1.0, 1.6])]]),
       policies: [
-        { targetPct: 0.5, stopPct: null, timeStopMs: null, trailPct: null },
+        {
+          targetPct: 0.5,
+          stopPct: null,
+          timeStopMs: null,
+          trailPct: null,
+          trailArmPct: null,
+        },
       ],
     });
 

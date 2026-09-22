@@ -1195,6 +1195,11 @@ frontend already has `/options` open.
     symbol: string; quantity: number; entryPrice: number
     stopUnderlying: number | null; targetUnderlying: number | null
     stopPremium?: number | null; targetPremium?: number | null
+                                    // stopPremium is the LIVE stop — the trail raises it
+    initialStopPremium?: number | null  // fill-time stop, retained after a ratchet
+    peakBid?: number | null         // highest bid seen this trade (trail reference)
+    trailArmed?: boolean            // true once the trail owns stopPremium
+    stopPremiumSource?: 'INITIAL' | 'TRAIL'
     openedAt?: number               // epoch ms of the entry fill
     entryUnderlying?: number | null // SPY spot at entry
     direction?: 'CALL' | 'PUT'      // side the soft-exit logic evaluates
@@ -1354,6 +1359,79 @@ Trade post-mortems / bot context: [`schwab-bot-lessons-learned.md`](./schwab-bot
 - `cooldownMins` (5) — minimum gap between bot entries
 - `atrPeriod` (14)
 - `paperSlippageCents` (1) — paper fills are `ask + slippage` on entry, `bid - slippage` on exit
+- Soft exits: `usePremiumStop`/`premiumStopPct` (25), `usePremiumTarget`/`premiumTargetPct` (40),
+  `stopAtrMult` (1.5), `targetAtrMult` (2.5)
+- **Trailing stop:** `useTrailStop` (**false**), `trailArmPct` (20, min 5), `trailPct` (15),
+  `trailMinLockPct` (5) — see below
+
+### Trailing profit ratchet (`useTrailStop`, default off)
+
+A stop stamped at fill time never moves, so a trade well on its way to target is still exposed
+all the way back to `entry × (1 − premiumStopPct/100)`. Observed live 2026-09-21: SPY 769 CALL
+×7 filled 0.92, bid 1.16 (65% of the way to a 40% target), stop still 0.69 — risking $329 of
+open profit to capture the remaining $90.
+
+Once the bid reaches `entry × (1 + trailArmPct/100)` the trail arms and `stopPremium` becomes:
+
+```
+max(current stop, peak bid × (1 − trailPct/100), breakeven bid, minLockBid)
+```
+
+and never decreases. `breakeven bid` is `entry + $1.30/100` (commission on both legs);
+`minLockBid` is `entry × (1 + trailMinLockPct/100)` (0 = term is a no-op). Together they bank
+at least a small profit at arm rather than merely breaking even. `premiumTargetPct` still
+hard-exits — the trail protects the downside only.
+
+**Guards:** `trailArmPct` `@Min(5)`; `updateSettings` rejects `trailMinLockPct >= trailArmPct`
+against the merged row. Internal backstop caps the stop one cent below the peak.
+
+- Exit reason is **`TRAIL_STOP`**, not `PREMIUM_STOP`, so the nightly exit-reason breakdown
+  separates "gave back part of a winner" from "stopped out at the fill-time level".
+- Each raise emits `BotEvent { type: 'STOP_RAISED' }` with
+  `payload: { from, to, peakBid, entryPremium, breakevenBid, minLockBid, trailArmPct, trailPct, lockedPerContract }`.
+- **Where it runs:** `checkSoftStopAndTargets` is called both from the ~7s heartbeat *and* from
+  `handleUnderlyingPrice`, which the streamer dispatches off its 50ms flush timer. The ratchet
+  is therefore pure in-memory arithmetic over a bid that was already fetched, held in the
+  engine's per-user state map; only the heartbeat writes `bot_state` and records `STOP_RAISED`.
+  Putting a Postgres write on the tick path was the thing to avoid. Consequence: `peakBid` in
+  `GET /status` can lag the live bid by up to a heartbeat, and a restart rebuilds the trail from
+  the last persisted peak — which loosens the stop, never tightens it.
+- The trail config is captured at entry rather than re-read per tick, matching how
+  `stopPremium` / `targetPremium` are stamped at fill time. Editing settings mid-position does
+  not re-plan the open trade.
+- `bot-suggested-settings` proposes `trailArmPct` / `trailPct` / `trailMinLockPct: 5` per tier
+  but deliberately leaves `useTrailStop` at its current value, so applying suggestions never
+  silently arms it.
+- Offline analyzer `ExitPolicy` models the peak trail without breakeven/min-lock — slightly
+  pessimistic vs live (intentional).
+
+### Open position capital picture (`openPositionValue`)
+
+`GET /bot/status` includes a derived sibling of `openPosition` (never persisted):
+
+```ts
+openPositionValue: null | {
+  costBasis, commissionPaid, commissionRoundTrip, capitalBeforeTrade,
+  markBid, markAt, markValue, openPnlGross, openPnlNet, equityMarkToMarket
+}
+```
+
+Mark comes from the in-memory last streamed bid; `markAt` lets the desk apply its own
+`QUOTE_STALE_MS`. `paperEquity` stays realized-only so risk gates are unchanged —
+`equityMarkToMarket` is display-only. `openPnlNet` subtracts the full round trip, matching
+`recordTradeClose`.
+
+### Held-contract subscription pin
+
+The `LEVELONE_OPTIONS` ladder window re-centers on **spot** while an open position's strike
+stays put, so a move of roughly half the window used to unsubscribe the bot's own contract —
+dropping the premium and trailing stops onto the 3-second REST fallback in exactly the large
+favourable move where they matter most. `SchwabStreamerSession` now takes
+`pinOptionSymbol` / `unpinOptionSymbol`, the engine reconciles the pin against `openPosition`
+every heartbeat (so it self-heals after a restart), and pins survive both a reconnect (re-added
+after login) and `switchUnderlying`. The diff lives in
+`resolveLadderSubscriptions` (`ladder-recenter.util.ts`), pure and unit-tested. The
+`ladder-recentered` socket payload still carries only the window — no contract change.
 
 ### Strategy loop (server-internal, no frontend action needed)
 
@@ -1576,6 +1654,29 @@ usable tape are excluded from both the policy total and `deltaVsActual`, so the
 comparison never mixes denominators.
 
 ## Changelog
+
+- **2026-09-21 (trailing profit ratchet — new settings + event type, off by default)**:
+  A fill-time stop never moves, so a trade 65% of the way to target was still exposed back to
+  `entry × (1 − premiumStopPct/100)`. Live case: SPY 769 CALL ×7 at 0.92, bid 1.16, stop 0.69 —
+  $329 of open profit at risk for the remaining $90.
+  **Settings:** `useTrailStop` (default **false**), `trailArmPct` (20, `@Min(5)`), `trailPct` (15),
+  `trailMinLockPct` (5). Floor is `max(peak trail, breakeven, minLock)`; stop capped one cent
+  below peak. `updateSettings` rejects `trailMinLockPct >= trailArmPct`.
+  **`openPosition`:** adds `peakBid`, `trailArmed`, `initialStopPremium`, `stopPremiumSource`.
+  `stopPremium` is now the *live* level and rises once armed; `initialStopPremium` preserves the
+  fill-time plan.
+  **`openPositionValue`:** derived capital picture (cost/commissions/mark/net P&L/MTM equity);
+  never persisted; `paperEquity` stays realized-only.
+  **New exit reason** `TRAIL_STOP`; **new event type** `STOP_RAISED`
+  (migration `1789000100000`, `ALTER TYPE bot_events_type_enum ADD VALUE`). Settings columns in
+  `1789000000000-addBotTrailStopSettings` (includes `trail_min_lock_pct`).
+  The ratchet runs on the streamer tick path but persists only on the heartbeat, deliberately
+  keeping Postgres off the 50ms flush — see the trailing-stop section above for the consequences.
+  Analyzer models peak trail without floors (slightly pessimistic). Also pins the bot's open
+  contract into the option subscription so an ~8-strike move can no longer unsubscribe the very
+  quote the soft-exit loop reads.
+  **Frontend note:** a ratcheted `stopPremium` sits *above* `entryPrice`, which inverts progress
+  math written for a stop below entry — measure from `peakBid` when `trailArmed`.
 
 - **2026-09-21 (bot streamer holds — reliability fix, no contract change)**:
   Root cause of a live incident: `SchwabStreamerPool` sessions were only ever

@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
+import { StopPremiumSource } from '../bot-exit.util';
 import { BotLane } from '../enums/bot-lane.enum';
 import { BotMode } from '../enums/bot-mode.enum';
 import { BotDirection, BotStrategy } from '../enums/strategy.enum';
@@ -28,6 +29,17 @@ export interface BotOpenPosition {
   direction?: BotDirection;
   /** ATR that produced `stopUnderlying` / `targetUnderlying`. */
   atrUsed?: number | null;
+  /** Highest option bid seen this trade — the trail's reference. Advances on
+   * the streamer's tick path and is flushed here once per heartbeat, so a
+   * restart costs at most one heartbeat of peak. */
+  peakBid?: number | null;
+  /** True once the bid cleared `trailArmPct` and the trail took over. */
+  trailArmed?: boolean;
+  /** Fill-time stop, retained after the trail raises `stopPremium` so the
+   * original plan stays readable on the desk and in the closed-trade row. */
+  initialStopPremium?: number | null;
+  /** Whether `stopPremium` is still the fill-time level or the trail's. */
+  stopPremiumSource?: StopPremiumSource;
   source: BotLane;
 }
 

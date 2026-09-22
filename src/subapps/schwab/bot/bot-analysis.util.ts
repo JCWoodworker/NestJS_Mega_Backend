@@ -74,6 +74,15 @@ export interface ExitPolicy {
   timeStopMs: number | null;
   /** Exit when bid falls this far from its peak. Null disables. */
   trailPct: number | null;
+  /**
+   * Gain that arms the trail — it stays dormant until bid >= entry × (1 + this).
+   * Null trails from the first tick above entry.
+   *
+   * Mirrors the engine's `trailArmPct`. Without it the replay scores a
+   * strictly different policy from the one production runs, which makes the
+   * grid's verdict unusable for choosing the live setting.
+   */
+  trailArmPct: number | null;
 }
 
 export interface PolicyResult {
@@ -241,11 +250,20 @@ export function replayExitPolicy(params: {
   const stop =
     policy.stopPct != null ? trade.entryPrice * (1 - policy.stopPct) : null;
 
+  const armAt =
+    policy.trailArmPct != null
+      ? trade.entryPrice * (1 + policy.trailArmPct)
+      : null;
+
   let peak = trade.entryPrice;
+  let trailArmed = false;
 
   for (const sample of samples) {
     const bid = sample.optionBid as number;
     peak = Math.max(peak, bid);
+    // Armed on the same sample that clears the threshold, but the peak is
+    // advanced first — so arming can never immediately trigger its own trail.
+    if (armAt == null || bid >= armAt) trailArmed = true;
 
     const elapsed = sample.at - trade.openedAt;
     let hit: string | null = null;
@@ -256,6 +274,7 @@ export function replayExitPolicy(params: {
     else if (target != null && bid >= target) hit = 'PREMIUM_TARGET';
     else if (
       policy.trailPct != null &&
+      trailArmed &&
       bid <= peak * (1 - policy.trailPct) &&
       peak > trade.entryPrice
     ) {
@@ -341,7 +360,13 @@ export function defaultPolicyGrid(): ExitPolicy[] {
   const policies: ExitPolicy[] = [];
   for (const stopPct of [0.2, 0.3, 0.4]) {
     for (const targetPct of [0.3, 0.5, 0.8]) {
-      policies.push({ stopPct, targetPct, timeStopMs: null, trailPct: null });
+      policies.push({
+        stopPct,
+        targetPct,
+        timeStopMs: null,
+        trailPct: null,
+        trailArmPct: null,
+      });
     }
   }
   for (const timeStopMs of [4 * 60_000, 8 * 60_000, 15 * 60_000]) {
@@ -350,6 +375,7 @@ export function defaultPolicyGrid(): ExitPolicy[] {
       targetPct: null,
       timeStopMs,
       trailPct: null,
+      trailArmPct: null,
     });
   }
   for (const trailPct of [0.15, 0.25]) {
@@ -358,7 +384,23 @@ export function defaultPolicyGrid(): ExitPolicy[] {
       targetPct: null,
       timeStopMs: null,
       trailPct,
+      trailArmPct: null,
     });
+  }
+  // Armed trails, holding stop and target at what production actually runs
+  // (25% / 40%) so the only variable is the trail. These are the cells that
+  // answer "what should trailArmPct/trailPct be", and they are only
+  // comparable to the live config if the other two legs match it.
+  for (const trailArmPct of [0.15, 0.25]) {
+    for (const trailPct of [0.1, 0.15, 0.25]) {
+      policies.push({
+        stopPct: 0.25,
+        targetPct: 0.4,
+        timeStopMs: null,
+        trailPct,
+        trailArmPct,
+      });
+    }
   }
   return policies;
 }

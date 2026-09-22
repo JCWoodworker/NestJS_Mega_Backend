@@ -56,6 +56,10 @@ export function buildSuggestedSettings(
   suggested.usePremiumTarget = true;
   suggested.stopAtrMult = 1.5;
   suggested.targetAtrMult = 2.5;
+  // Deliberately not switched on here. The trail changes how winners are
+  // closed, so it should be enabled once the nightly policy grid has scored
+  // it on this account's own tape — not by an operator applying suggestions.
+  suggested.useTrailStop = current.useTrailStop;
 
   const directions: BotDirection[] = [];
   if (current.canBuyCalls) directions.push(BotDirection.CALL);
@@ -85,6 +89,12 @@ export function buildSuggestedSettings(
     suggested.profitPctCurrent = null;
     suggested.premiumStopPct = 20;
     suggested.premiumTargetPct = 35;
+    // Tighter than the larger tiers: on a 1-contract micro trade commission is
+    // a big share of the move, so giving back 15% of a peak costs proportionally
+    // more than it does on size.
+    suggested.trailArmPct = 15;
+    suggested.trailPct = 12;
+    suggested.trailMinLockPct = 5;
     rationale.push(
       'MICRO (<$500): ANY combine — either VWAP or ORB can enter; expect more trades and fee drag.',
     );
@@ -117,6 +127,9 @@ export function buildSuggestedSettings(
     suggested.profitPctCurrent = null;
     suggested.premiumStopPct = 25;
     suggested.premiumTargetPct = 40;
+    suggested.trailArmPct = 20;
+    suggested.trailPct = 15;
+    suggested.trailMinLockPct = 5;
     rationale.push(
       'SMALL ($500–$2k): dual strategies under ANY (OR); modest riskPct and fee-aware premium band.',
     );
@@ -137,6 +150,9 @@ export function buildSuggestedSettings(
     suggested.profitPctCurrent = null;
     suggested.premiumStopPct = 25;
     suggested.premiumTargetPct = 40;
+    suggested.trailArmPct = 20;
+    suggested.trailPct = 15;
+    suggested.trailMinLockPct = 5;
     rationale.push(
       'STANDARD ($2k–$5k): higher minPremium so commission is a smaller % of each trade; ANY combine for more entries.',
     );
@@ -157,10 +173,21 @@ export function buildSuggestedSettings(
     suggested.profitPctCurrent = null;
     suggested.premiumStopPct = 25;
     suggested.premiumTargetPct = 40;
+    suggested.trailArmPct = 20;
+    suggested.trailPct = 15;
+    suggested.trailMinLockPct = 5;
     rationale.push(
       'COMFORTABLE (≥$5k): both strategies, ANY combine, short cooldown — trade often on calls and puts.',
     );
   }
+
+  rationale.push(
+    `Trail ${suggested.trailPct}% off the peak once a trade is +${suggested.trailArmPct}% (floor max(breakeven, +${suggested.trailMinLockPct}% locked in)). ${
+      current.useTrailStop
+        ? 'Armed.'
+        : 'Off — enable it after the nightly policy grid scores it on your own tape.'
+    }`,
+  );
 
   if (!liveEligible) {
     warnings.push(

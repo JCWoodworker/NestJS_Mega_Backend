@@ -3,8 +3,63 @@ import {
   computeNearestStrike,
   OPTIONS_SUBSCRIBE_CHUNK_SIZE,
   RECENTER_BUFFER_STRIKES,
+  resolveLadderSubscriptions,
   shouldRecenterLadder,
 } from './ladder-recenter.util';
+
+/**
+ * The ladder follows spot; a held strike does not. Without pinning, a big
+ * favourable move unsubscribes the bot's own contract and blinds the premium
+ * and trailing stops exactly when they matter.
+ */
+describe('resolveLadderSubscriptions', () => {
+  const held = 'SPY   260921C00769000';
+
+  it('keeps a pinned symbol subscribed after the window moves off it', () => {
+    const { toSub, toUnsub } = resolveLadderSubscriptions({
+      newWindowSymbols: new Set(['a', 'b']),
+      currentWindowSymbols: new Set([held, 'a']),
+      pinnedSymbols: new Set([held]),
+    });
+
+    expect(toUnsub).not.toContain(held);
+    expect(toUnsub).toEqual([]);
+    expect(toSub).toEqual(['b']);
+  });
+
+  it('unsubscribes an unpinned symbol that left the window', () => {
+    const { toUnsub } = resolveLadderSubscriptions({
+      newWindowSymbols: new Set(['a']),
+      currentWindowSymbols: new Set([held, 'a']),
+      pinnedSymbols: new Set(),
+    });
+
+    expect(toUnsub).toEqual([held]);
+  });
+
+  it('does not re-ADD a pinned symbol the window has drifted back over', () => {
+    // Pinning already subscribed it, so a second ADD on every recenter would
+    // be churn against the service that silently drops long key lists.
+    const { toSub } = resolveLadderSubscriptions({
+      newWindowSymbols: new Set([held, 'a']),
+      currentWindowSymbols: new Set(['a']),
+      pinnedSymbols: new Set([held]),
+    });
+
+    expect(toSub).toEqual([]);
+  });
+
+  it('is a plain diff when nothing is pinned', () => {
+    const { toSub, toUnsub } = resolveLadderSubscriptions({
+      newWindowSymbols: new Set(['b', 'c']),
+      currentWindowSymbols: new Set(['a', 'b']),
+      pinnedSymbols: new Set(),
+    });
+
+    expect(toUnsub).toEqual(['a']);
+    expect(toSub).toEqual(['c']);
+  });
+});
 
 describe('computeNearestStrike', () => {
   it('rounds to the nearest whole-dollar strike for a $1 increment', () => {

@@ -46,6 +46,10 @@ function buildService() {
     premiumStopPct: 25,
     usePremiumTarget: true,
     premiumTargetPct: 40,
+    useTrailStop: false,
+    trailArmPct: 20,
+    trailPct: 15,
+    trailMinLockPct: 5,
     stopAtrMult: 1.5,
     targetAtrMult: 2.5,
     paperSlippageCents: 1,
@@ -305,5 +309,35 @@ describe('BotSettingsService — profitTarget* aliases', () => {
     const { service, getRowSnapshot } = buildService();
     await service.updateSettings({ profitUsd: 25 });
     expect(getRowSnapshot().profitUsd).toBe(25);
+  });
+});
+
+describe('BotSettingsService — trailMinLockPct / trailArmPct guards', () => {
+  it('rejects trailMinLockPct equal to the stored trailArmPct', async () => {
+    const { service } = buildService();
+    await expect(
+      service.updateSettings({ trailMinLockPct: 20 }),
+    ).rejects.toThrow(/trailMinLockPct.*trailArmPct/);
+  });
+
+  it('rejects trailMinLockPct above the stored trailArmPct when arm is absent from the patch', async () => {
+    const { service } = buildService();
+    await expect(
+      service.updateSettings({ trailMinLockPct: 25 }),
+    ).rejects.toThrow(/trailMinLockPct.*trailArmPct/);
+  });
+
+  it('rejects lowering trailArmPct below the stored trailMinLockPct', async () => {
+    const { service } = buildService();
+    await expect(
+      service.updateSettings({ trailArmPct: 5 }),
+    ).rejects.toThrow(/trailMinLockPct.*trailArmPct/);
+  });
+
+  it('accepts a valid trailMinLockPct below trailArmPct', async () => {
+    const { service, getRowSnapshot } = buildService();
+    const view = await service.updateSettings({ trailMinLockPct: 8 });
+    expect(getRowSnapshot().trailMinLockPct).toBe(8);
+    expect(view.trailMinLockPct).toBe(8);
   });
 });

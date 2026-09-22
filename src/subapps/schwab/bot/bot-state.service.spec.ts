@@ -64,6 +64,7 @@ function buildService() {
     onControlPlaneChange: jest.fn(),
     getTransientPhase: jest.fn().mockReturnValue(null),
     getLastPremiumBidAt: jest.fn().mockReturnValue(null),
+    getOpenPositionMark: jest.fn().mockReturnValue(null),
   };
   const botRecordingService = {
     recordCapitalEvent: jest.fn().mockResolvedValue(undefined),

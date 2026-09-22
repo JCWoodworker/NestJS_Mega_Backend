@@ -202,6 +202,28 @@ export class UpdateBotSettingsDto {
   premiumTargetPct?: number;
 
   @IsOptional()
+  @IsBoolean()
+  useTrailStop?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(5)
+  @Max(200)
+  trailArmPct?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(90)
+  trailPct?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  trailMinLockPct?: number;
+
+  @IsOptional()
   @IsNumber()
   @Min(0.1)
   @Max(20)

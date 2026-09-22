@@ -24,16 +24,21 @@ import { SchwabStreamerSession } from '@schwab/streaming/schwab-streamer-session
 import { BotEventService } from './bot-event.service';
 import { BotExecutionService } from './bot-execution.service';
 import {
+  breakevenBidFor,
   computeExitLevels,
   decideSoftExit,
+  minLockBidFor,
+  ratchetPremiumStop,
   shouldForceFlattenForSocketLoss,
+  StopPremiumSource,
 } from './bot-exit.util';
-import { commissionForLeg } from './bot-fees.const';
+import { commissionForLeg, commissionForRoundTrip } from './bot-fees.const';
 import { BotMarketDataService } from './bot-market-data.service';
 import { BotRecordingService, configVersionOf } from './bot-recording.service';
 import { BotSettingsService } from './bot-settings.service';
 import { BotStateService } from './bot-state.service';
 import { diffStreamerHolds } from './bot-streamer-hold.util';
+import { BotOpenPosition } from './entities/bot-state.entity';
 import {
   combineSignals,
   computeAtr,
@@ -81,6 +86,39 @@ const PREMIUM_REST_FALLBACK_MIN_MS = 3_000;
  */
 const SOCKET_LOSS_GRACE_MS = 15_000;
 
+/**
+ * Live trailing-stop state for one open position.
+ *
+ * Held in memory rather than written through to `bot_state` on every update
+ * because `checkSoftStopAndTargets` also runs from `handleUnderlyingPrice`,
+ * which the streamer dispatches off its 50ms flush timer — persisting there
+ * would put a Postgres write on the tick path. The heartbeat flushes it
+ * instead, so a dyno restart costs at most one heartbeat of peak advance,
+ * which loosens the stop rather than tightening it.
+ *
+ * The trail's configuration is captured here at entry instead of re-read per
+ * tick, for the same reason `stopPremium` / `targetPremium` are stamped at
+ * fill time: an exit plan that silently re-plans itself mid-trade when an
+ * operator edits settings is not a plan. It also keeps the tick path free of
+ * a settings query.
+ *
+ * `symbol` guards against a new position inheriting the previous one's peak.
+ */
+interface TrailState {
+  symbol: string;
+  entryPremium: number;
+  breakevenBid: number;
+  minLockBid: number;
+  trailArmPct: number;
+  trailPct: number;
+  peakBid: number;
+  trailArmed: boolean;
+  stopPremium: number | null;
+  source: StopPremiumSource;
+  /** The stop moved since the last flush — the heartbeat's cue to persist. */
+  dirty: boolean;
+}
+
 @Injectable()
 export class BotEngineService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BotEngineService.name);
@@ -116,6 +154,12 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
        * the premium stop/target is armed but not being evaluated. */
       lastPremiumBidAt: number | null;
       softExitChecking: boolean;
+      /** Live trail for the open position — see `TrailState`. */
+      trail: TrailState | null;
+      /** Option symbol this engine has pinned into the streamer's
+       * subscription, so `reconcileOptionPin` can release it no matter which
+       * code path cleared the position. */
+      pinnedOptionSymbol: string | null;
     }
   >();
 
@@ -130,9 +174,34 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       lastPremiumQuoteAt: 0,
       lastPremiumBidAt: null,
       softExitChecking: false,
+      trail: null,
+      pinnedOptionSymbol: null,
     };
     this.state.set(userId, fresh);
     return fresh;
+  }
+
+  /**
+   * Keeps the streamer's option pin matching the open position.
+   *
+   * State-driven rather than called from each exit path: the position is
+   * cleared by soft exits, `HARD_FLATTEN_EOD`, `RECON_MISMATCH`,
+   * `OPERATOR_FLAT` and the kill switch, and a pin left behind by any one of
+   * them would keep a dead contract subscribed for the rest of the session.
+   */
+  private reconcileOptionPin(symbol: string | null): void {
+    const st = this.stateFor();
+    if (st.pinnedOptionSymbol === symbol) {
+      // Re-assert anyway: a reconnect or a restart can hand back a session
+      // that never saw the original pin.
+      if (symbol) this.streamerSession?.pinOptionSymbol(symbol);
+      return;
+    }
+    if (st.pinnedOptionSymbol) {
+      this.streamerSession?.unpinOptionSymbol(st.pinnedOptionSymbol);
+    }
+    if (symbol) this.streamerSession?.pinOptionSymbol(symbol);
+    st.pinnedOptionSymbol = symbol;
   }
 
   constructor(
@@ -179,6 +248,26 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     return this.stateFor(userId).lastPremiumBidAt;
   }
 
+  /**
+   * Last streamed option bid for the open position — used by `getStatus` to
+   * derive the capital picture without a second REST quote.
+   *
+   * Returns null when there is no session or the symbol has never ticked.
+   * The desk applies its own staleness rule to `at`.
+   */
+  getOpenPositionMark(
+    symbol: string,
+    userId?: string,
+  ): { bid: number; at: number } | null {
+    const uid = userId ?? requireUserId();
+    const session = this.streamerPool.peek(uid);
+    const quote = session?.getLastOptionQuote(symbol);
+    if (quote?.bid == null || !Number.isFinite(quote.bid) || quote.bid <= 0) {
+      return null;
+    }
+    return { bid: quote.bid, at: quote.at };
+  }
+
   onModuleInit(): void {
     this.botMarketDataService.startListening();
     this.optionsGateway.on('chart-candle', this.handleChartCandleClose);
@@ -198,6 +287,8 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     this.botMarketDataService.stopListening();
     for (const userId of this.botHeldUserIds) {
+      const pinned = this.state.get(userId)?.pinnedOptionSymbol;
+      if (pinned) this.streamerPool.peek(userId)?.unpinOptionSymbol(pinned);
       this.streamerPool.releaseBackgroundWork(userId);
     }
     this.botHeldUserIds.clear();
@@ -618,9 +709,17 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       targetUnderlying: spot != null ? levels.targetUnderlying : null,
       stopPremium: levels.stopPremium,
       targetPremium: levels.targetPremium,
+      initialStopPremium: levels.stopPremium,
+      peakBid: result.fillPrice,
+      trailArmed: false,
+      stopPremiumSource: 'INITIAL',
       source: row.lane,
     };
     this.stateFor().lastPremiumBidAt = null;
+    // Build the trail now rather than waiting for the next heartbeat, so a
+    // position that runs immediately after the fill is already being tracked.
+    this.ensureTrailState(row.openPosition, settings);
+    this.reconcileOptionPin(contract.symbol);
     row.lastSignal = {
       at: signal.at,
       strategies: signal.strategies as BotStrategy[],
@@ -662,6 +761,11 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
           : null,
         stopAtrMult: settings.stopAtrMult,
         targetAtrMult: settings.targetAtrMult,
+        trailArmPct: settings.useTrailStop ? settings.trailArmPct : null,
+        trailPct: settings.useTrailStop ? settings.trailPct : null,
+        trailMinLockPct: settings.useTrailStop
+          ? settings.trailMinLockPct
+          : null,
       },
     });
     await this.emitStatus(true);
@@ -679,7 +783,14 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
 
       let optionBid: number | null = null;
       const now = Date.now();
-      const needsPremium = pos.stopPremium != null || pos.targetPremium != null;
+      const trail =
+        this.stateFor().trail?.symbol === pos.symbol
+          ? this.stateFor().trail
+          : null;
+      // An armed trail needs bids even when both fill-time premium legs are
+      // disarmed, or it can never arm and the feature silently does nothing.
+      const needsPremium =
+        pos.stopPremium != null || pos.targetPremium != null || trail != null;
       if (needsPremium) {
         const streamed = this.streamerSession?.getLastOptionQuote(pos.symbol);
         if (
@@ -723,23 +834,149 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         });
       }
 
+      // Ratchet before deciding, so a bid that has already given back the
+      // trail exits on this same tick. The peak is advanced with this bid
+      // first, which is what stops a new high from triggering its own trail.
+      if (trail && optionBid != null) {
+        const ratcheted = ratchetPremiumStop({
+          entryPremium: trail.entryPremium,
+          optionBid,
+          peakBid: trail.peakBid,
+          stopPremium: trail.stopPremium,
+          trailArmed: trail.trailArmed,
+          trailArmPct: trail.trailArmPct,
+          trailPct: trail.trailPct,
+          breakevenBid: trail.breakevenBid,
+          minLockBid: trail.minLockBid,
+        });
+        trail.peakBid = ratcheted.peakBid;
+        trail.trailArmed = ratcheted.trailArmed;
+        trail.stopPremium = ratcheted.stopPremium;
+        trail.source = ratcheted.source;
+        if (ratcheted.raised) trail.dirty = true;
+      }
+
       const reason = decideSoftExit({
         direction,
         spot,
         optionBid,
-        stopPremium: pos.stopPremium ?? null,
+        stopPremium: trail ? trail.stopPremium : pos.stopPremium ?? null,
         targetPremium: pos.targetPremium ?? null,
         stopUnderlying: pos.stopUnderlying,
         targetUnderlying: pos.targetUnderlying,
+        stopPremiumSource: trail?.source ?? pos.stopPremiumSource,
       });
       if (!reason) return;
 
+      // Persist the raised stop before the exit so the closed-trade row shows
+      // the level that actually fired rather than the fill-time one.
+      await this.flushTrailState();
       await this.closeOpenPosition(reason);
     } catch (err) {
       this.logger.warn(`checkSoftStopAndTargets failed: ${err.message}`);
     } finally {
       this.stateFor().softExitChecking = false;
     }
+  }
+
+  /**
+   * Builds or rehydrates the in-memory trail for the open position.
+   *
+   * Driven from state rather than from the entry event so it self-heals: after
+   * a dyno restart the map is empty, and the next heartbeat rebuilds the trail
+   * from the persisted `openPosition` — recovering the last flushed peak
+   * instead of restarting the trail from the fill price.
+   *
+   * Returns null (and clears any stale trail) when the operator has not armed
+   * the feature, which is what keeps `useTrailStop: false` byte-for-byte the
+   * old behaviour.
+   */
+  private ensureTrailState(
+    position: BotOpenPosition,
+    settings: Awaited<ReturnType<BotSettingsService['getSettings']>>,
+  ): TrailState | null {
+    const st = this.stateFor();
+    if (!settings.useTrailStop) {
+      st.trail = null;
+      return null;
+    }
+    if (st.trail?.symbol === position.symbol) return st.trail;
+
+    st.trail = {
+      symbol: position.symbol,
+      entryPremium: position.entryPrice,
+      // Per-contract round trip: commission scales with size, so the premium
+      // a single contract must recover does not depend on quantity.
+      breakevenBid: breakevenBidFor(
+        position.entryPrice,
+        commissionForRoundTrip(1),
+      ),
+      minLockBid: minLockBidFor(position.entryPrice, settings.trailMinLockPct),
+      trailArmPct: settings.trailArmPct,
+      trailPct: settings.trailPct,
+      peakBid: position.peakBid ?? position.entryPrice,
+      trailArmed: position.trailArmed ?? false,
+      stopPremium: position.stopPremium ?? null,
+      source: position.stopPremiumSource ?? 'INITIAL',
+      dirty: false,
+    };
+    return st.trail;
+  }
+
+  /**
+   * Writes a raised stop into `bot_state` and records `STOP_RAISED`.
+   *
+   * Called from the heartbeat (and once more immediately before an exit), not
+   * from the tick path — see `TrailState`. Also the throttle on the activity
+   * feed: a trending move raises the stop many times between heartbeats, and
+   * one event per heartbeat is what keeps the feed readable.
+   */
+  private async flushTrailState(): Promise<void> {
+    const st = this.stateFor();
+    const trail = st.trail;
+    if (!trail || !trail.dirty) return;
+
+    const row = await this.botStateService.getRow();
+    if (!row.openPosition || row.openPosition.symbol !== trail.symbol) {
+      // Position already closed. Nothing left to stamp, and the exit event
+      // carries the level that fired.
+      st.trail = null;
+      return;
+    }
+
+    const from = row.openPosition.stopPremium ?? null;
+    if (row.openPosition.initialStopPremium == null) {
+      row.openPosition.initialStopPremium = from;
+    }
+    row.openPosition.peakBid = trail.peakBid;
+    row.openPosition.trailArmed = trail.trailArmed;
+    row.openPosition.stopPremium = trail.stopPremium;
+    row.openPosition.stopPremiumSource = trail.source;
+    await this.botStateService.save(row);
+    trail.dirty = false;
+
+    await this.botEventService.record({
+      lane: row.lane,
+      type: BotEventType.STOP_RAISED,
+      direction: row.openPosition.direction,
+      symbol: trail.symbol,
+      quantity: row.openPosition.quantity,
+      reason: trail.source === 'TRAIL' ? 'TRAIL_RATCHET' : 'STOP_RAISED',
+      payload: {
+        from,
+        to: trail.stopPremium,
+        peakBid: trail.peakBid,
+        entryPremium: trail.entryPremium,
+        breakevenBid: trail.breakevenBid,
+        minLockBid: trail.minLockBid,
+        trailArmPct: trail.trailArmPct,
+        trailPct: trail.trailPct,
+        lockedPerContract:
+          trail.stopPremium != null
+            ? Number((trail.stopPremium - trail.entryPremium).toFixed(4))
+            : null,
+      },
+    });
   }
 
   private async closeOpenPosition(reasonTag: string): Promise<void> {
@@ -829,6 +1066,10 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     const closedPosition = row.openPosition;
     row.openPosition = null;
     this.stateFor().lastPremiumBidAt = null;
+    this.stateFor().trail = null;
+    // Flat now, so stop paying for a contract nothing is watching. The ladder
+    // keeps it if the window still covers that strike.
+    this.reconcileOptionPin(null);
     await this.botStateService.save(row);
     await this.botEventService.record({
       lane: row.lane,
@@ -841,6 +1082,12 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       underlyingPrice: spot ?? undefined,
       orderId: result.orderId ?? undefined,
       reason: reasonTag,
+      payload: {
+        stopPremium: closedPosition.stopPremium ?? null,
+        initialStopPremium: closedPosition.initialStopPremium ?? null,
+        peakBid: closedPosition.peakBid ?? null,
+        trailArmed: closedPosition.trailArmed ?? false,
+      },
     });
 
     if (closedPosition.openedAt != null) {
@@ -1033,11 +1280,22 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
+      // Reconciled every tick rather than only on fills, so it self-heals
+      // after a dyno restart or a reconnect that replaced the session this
+      // engine last pinned on.
+      this.reconcileOptionPin(row.openPosition?.symbol ?? null);
+
       if (row.openPosition) {
+        this.ensureTrailState(row.openPosition, settings);
         const spot = this.streamerSession?.getLastKnownSpotPrice() ?? null;
         if (spot != null) {
           await this.checkSoftStopAndTargets(spot);
         }
+        // The tick path advances the trail in memory; this is where it lands
+        // in Postgres and on the activity feed.
+        await this.flushTrailState();
+      } else {
+        this.stateFor().trail = null;
       }
 
       await this.emitStatus(false);

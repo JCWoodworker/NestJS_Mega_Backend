@@ -47,6 +47,42 @@ export function shouldRecenterLadder(params: {
 }
 
 /**
+ * Diffs the current option subscription against the newly centered window,
+ * treating pinned symbols as never-unsubscribe.
+ *
+ * The window re-centers on **spot** while an open position's strike stays
+ * where it was, so a move of roughly half the window carries the held
+ * contract out of range and the plain diff unsubscribes it. That silently
+ * blinds the bot's soft-exit loop — the premium stop and the trailing stop
+ * both read the streamed bid — in exactly the situation where a large move
+ * makes those exits matter most. Pinning keeps the contract subscribed for
+ * as long as the position is open.
+ *
+ * Pure so the decision is testable without a live streamer, matching
+ * `bot-streamer-hold.util.ts`.
+ */
+export function resolveLadderSubscriptions(params: {
+  newWindowSymbols: ReadonlySet<string>;
+  currentWindowSymbols: ReadonlySet<string>;
+  pinnedSymbols: ReadonlySet<string>;
+}): { toSub: string[]; toUnsub: string[] } {
+  const { newWindowSymbols, currentWindowSymbols, pinnedSymbols } = params;
+
+  return {
+    toUnsub: [...currentWindowSymbols].filter(
+      (symbol) => !newWindowSymbols.has(symbol) && !pinnedSymbols.has(symbol),
+    ),
+    // A pinned symbol that has drifted out of the window is already
+    // subscribed and absent from `currentWindowSymbols`, so re-adding it here
+    // would send a redundant ADD on every re-center.
+    toSub: [...newWindowSymbols].filter(
+      (symbol) =>
+        !currentWindowSymbols.has(symbol) && !pinnedSymbols.has(symbol),
+    ),
+  };
+}
+
+/**
  * Max symbols per `LEVELONE_OPTIONS` subscription request. Frontend
  * reproduced 3/3 that, of a 32-symbol ladder built via a single request
  * listing all 32 keys, only the trailing 6 (a contiguous slice) ever

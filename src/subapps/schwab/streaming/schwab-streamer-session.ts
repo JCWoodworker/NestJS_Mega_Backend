@@ -20,6 +20,7 @@ import {
   chunkArray,
   computeNearestStrike,
   OPTIONS_SUBSCRIBE_CHUNK_SIZE,
+  resolveLadderSubscriptions,
   shouldRecenterLadder,
 } from './ladder-recenter.util';
 import {
@@ -130,6 +131,17 @@ export class SchwabStreamerSession {
    * to yesterday's dead, already-expired symbols indefinitely. */
   private currentExpirationDateKey: string | null = null;
   private currentWindowSymbols = new Set<string>();
+  /**
+   * Option symbols kept subscribed regardless of where the ladder window has
+   * drifted — currently the bot's open contract.
+   *
+   * The window follows spot while a held strike does not, so without this the
+   * re-center unsubscribes the very contract whose bid the soft-exit loop
+   * needs, and does it precisely when a large favourable move makes the stop
+   * matter. Pinned symbols also survive `switchUnderlying`, because the bot's
+   * position is independent of whichever chain the operator is looking at.
+   */
+  private pinnedOptionSymbols = new Set<string>();
   private pendingOptionTicks: OptionTick[] = [];
   private pendingUnderlyingPrice: number | null = null;
   /** Last merged LEVELONE bid/ask per OSI — bot soft-exits read this instead of REST. */
@@ -193,6 +205,29 @@ export class SchwabStreamerSession {
     symbol: string,
   ): { bid?: number; ask?: number; at: number } | null {
     return this.lastOptionQuotes.get(symbol) ?? null;
+  }
+
+  /**
+   * Keeps `symbol` subscribed to `LEVELONE_OPTIONS` until it is unpinned,
+   * even once the ladder window has re-centered away from it.
+   *
+   * Idempotent, so the bot can re-assert its open position's symbol on every
+   * heartbeat without churning the subscription.
+   */
+  pinOptionSymbol(symbol: string): void {
+    if (!symbol || this.pinnedOptionSymbols.has(symbol)) return;
+    this.pinnedOptionSymbols.add(symbol);
+    // Already streaming as part of the current window — the pin only has to
+    // prevent a future UNSUBS, not start anything.
+    if (this.currentWindowSymbols.has(symbol)) return;
+    if (this.loggedIn) this.addOptionSubscriptions([symbol]);
+  }
+
+  /** Drops the pin, unsubscribing only if the ladder does not want `symbol`. */
+  unpinOptionSymbol(symbol: string): void {
+    if (!this.pinnedOptionSymbols.delete(symbol)) return;
+    if (this.currentWindowSymbols.has(symbol)) return;
+    if (this.loggedIn) this.unsubscribeOptions([symbol]);
   }
 
   isStreamConnected(): boolean {
@@ -425,6 +460,18 @@ export class SchwabStreamerSession {
       });
     }
 
+    // Schwab subscriptions don't survive a reconnect, and a pin is the bot's
+    // only guarantee of bids for a contract the ladder has drifted away from.
+    // Without re-adding here the soft-exit loop would go quiet after a blip
+    // with nothing to indicate it, so this is unconditional like the equity
+    // re-subscribes above. `recenterLadder` below re-adds the window itself.
+    const pinnedOutsideWindow = [...this.pinnedOptionSymbols].filter(
+      (symbol) => !this.currentWindowSymbols.has(symbol),
+    );
+    if (pinnedOutsideWindow.length) {
+      this.addOptionSubscriptions(pinnedOutsideWindow);
+    }
+
     try {
       const initialPrice = await this.fetchInitialUnderlyingPrice();
       this.recenterLadder(initialPrice);
@@ -490,7 +537,14 @@ export class SchwabStreamerSession {
       requestid: this.nextRequestId(),
       parameters: { keys: this.underlyingSymbol },
     });
-    this.unsubscribeOptions([...this.currentWindowSymbols]);
+    // Pinned symbols outlive the switch: the operator changing which chain
+    // they are watching says nothing about the bot's open position, and
+    // dropping its quotes here would blind the soft-exit loop.
+    this.unsubscribeOptions(
+      [...this.currentWindowSymbols].filter(
+        (s) => !this.pinnedOptionSymbols.has(s),
+      ),
+    );
 
     this.underlyingSymbol = symbol;
     this.optionRoot = OPTION_ROOT_OVERRIDES[symbol] ?? symbol;
@@ -682,12 +736,11 @@ export class SchwabStreamerSession {
       );
     }
 
-    const toUnsub = [...this.currentWindowSymbols].filter(
-      (s) => !newSymbols.has(s),
-    );
-    const toSub = [...newSymbols].filter(
-      (s) => !this.currentWindowSymbols.has(s),
-    );
+    const { toSub, toUnsub } = resolveLadderSubscriptions({
+      newWindowSymbols: newSymbols,
+      currentWindowSymbols: this.currentWindowSymbols,
+      pinnedSymbols: this.pinnedOptionSymbols,
+    });
 
     this.unsubscribeOptions(toUnsub);
     this.addOptionSubscriptions(toSub);

@@ -19,6 +19,14 @@ export enum BotEventType {
   OPERATOR_LANE = 'OPERATOR_LANE',
   OPERATOR_LIVE = 'OPERATOR_LIVE',
   ERROR = 'ERROR',
+  /**
+   * The trail raised the premium stop on an open position.
+   *
+   * Recorded so a `TRAIL_STOP` exit can be read back against the path that
+   * produced it — without it, a trade that locked in profit and one that was
+   * stopped at its fill-time level are indistinguishable in the feed.
+   */
+  STOP_RAISED = 'STOP_RAISED',
   /** Unattended supervisor armed the paper bot for the session. */
   SUPERVISOR_ARM = 'SUPERVISOR_ARM',
   /**

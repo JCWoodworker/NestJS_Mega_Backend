@@ -4,8 +4,20 @@ import { BotDirection } from './enums/strategy.enum';
 export type SoftExitReason =
   | 'PREMIUM_STOP'
   | 'PREMIUM_TARGET'
+  | 'TRAIL_STOP'
   | 'UNDERLYING_STOP'
   | 'UNDERLYING_TARGET';
+
+/**
+ * Whether the live `stopPremium` is still the level stamped at fill time or
+ * one the trail has since raised.
+ *
+ * Kept separate from the level itself so an exit can be attributed: a trade
+ * stopped out at entry × 0.75 and one stopped out after giving back 15% of a
+ * peak are different outcomes, and the nightly exit-reason breakdown is only
+ * useful if it can tell them apart.
+ */
+export type StopPremiumSource = 'INITIAL' | 'TRAIL';
 
 export interface ExitLevelInputs {
   entryPremium: number;
@@ -62,6 +74,124 @@ export function computeExitLevels(input: ExitLevelInputs): ExitLevels {
   };
 }
 
+export interface RatchetStopInput {
+  /** Fill price — reference for both the arm threshold and the peak floor. */
+  entryPremium: number;
+  /** Current option bid. */
+  optionBid: number;
+  /** Highest bid seen this trade, or null before the first sample. */
+  peakBid: number | null;
+  /** Stop currently in force; null when no premium stop is armed yet. */
+  stopPremium: number | null;
+  trailArmed: boolean;
+  /** Arm once bid >= entry × (1 + pct/100). */
+  trailArmPct: number;
+  /** Once armed, stop >= peak × (1 − pct/100). */
+  trailPct: number;
+  /** Bid at which a round trip nets zero, commission included. */
+  breakevenBid: number;
+  /**
+   * Bid that banks at least `trailMinLockPct` of premium once armed.
+   * `entry × (1 + trailMinLockPct/100)`. Equal to entry when the setting is 0
+   * (breakeven-only — the peak trail and commission clamp still apply).
+   */
+  minLockBid: number;
+}
+
+export interface RatchetStopResult {
+  peakBid: number;
+  trailArmed: boolean;
+  stopPremium: number | null;
+  source: StopPremiumSource;
+  /** True when this call moved the stop up — the engine's cue to persist. */
+  raised: boolean;
+}
+
+/**
+ * Raises the premium stop to protect profit once the trade is far enough in
+ * the green, and never lowers it.
+ *
+ * A stop fixed at fill time keeps risking the same dollars no matter how far
+ * the position has run, so a trade 65% of the way to target is still exposed
+ * all the way back to entry × (1 − premiumStopPct) — risking realized gains
+ * to capture a shrinking remainder. Trailing the peak instead converts a
+ * winner into a bounded one.
+ *
+ * Arming is deliberately gated on a gain threshold rather than trailing from
+ * the first tick: 0DTE premium is noisy enough that a trail active at entry
+ * would stop out inside the spread on trades that go on to work.
+ *
+ * Pure, and takes the bid the caller already fetched, so it can run on the
+ * streamer's tick path without adding I/O.
+ */
+export function ratchetPremiumStop(input: RatchetStopInput): RatchetStopResult {
+  const peakBid = Math.max(input.peakBid ?? input.entryPremium, input.optionBid);
+  const armAt = input.entryPremium * (1 + input.trailArmPct / 100);
+  const trailArmed = input.trailArmed || input.optionBid >= armAt;
+
+  if (!trailArmed) {
+    return {
+      peakBid,
+      trailArmed: false,
+      stopPremium: input.stopPremium,
+      source: 'INITIAL',
+      raised: false,
+    };
+  }
+
+  // Three-way floor: peak trail, commission breakeven, and the operator's
+  // minimum locked-in profit. `trailPct` greater than `trailArmPct` would
+  // otherwise put the raw trail below entry at arming, locking in a loss.
+  const desired = Math.max(
+    peakBid * (1 - input.trailPct / 100),
+    input.breakevenBid,
+    input.minLockBid,
+  );
+  // A stop at or above the peak fires on the tick that set it, turning the
+  // ratchet into an instant exit. With the settings guards in place this
+  // should be unreachable; it stays because settings are also editable out
+  // of band (direct DB edit, future default change). One cent is the next
+  // real SPY 0DTE tick down.
+  const capped = Math.min(desired, peakBid - 0.01);
+  const stopPremium =
+    input.stopPremium == null ? capped : Math.max(input.stopPremium, capped);
+
+  return {
+    peakBid,
+    trailArmed: true,
+    stopPremium,
+    // Once armed the floor is at least breakeven, which is always above a
+    // fill-time stop, so an armed trail owns the level unconditionally.
+    source: 'TRAIL',
+    raised: input.stopPremium == null || stopPremium > input.stopPremium,
+  };
+}
+
+/**
+ * Bid at which selling recovers the entry cost plus commission on both legs.
+ *
+ * Commission is per contract per leg, so it converts to premium terms
+ * independently of size — but it is charged on dollars while premium is
+ * quoted per share, hence the 100 multiplier.
+ */
+export function breakevenBidFor(
+  entryPremium: number,
+  commissionPerContractRoundTrip: number,
+): number {
+  return entryPremium + commissionPerContractRoundTrip / 100;
+}
+
+/**
+ * Bid that banks `trailMinLockPct` of premium once the trail arms.
+ *
+ * `pct === 0` returns the entry itself so the min-lock term is a no-op and
+ * the floor falls through to the peak trail and the commission breakeven.
+ */
+export function minLockBidFor(entryPremium: number, trailMinLockPct: number): number {
+  if (trailMinLockPct <= 0) return entryPremium;
+  return entryPremium * (1 + trailMinLockPct / 100);
+}
+
 export interface SoftExitCheckInput {
   direction: BotDirection | 'CALL' | 'PUT' | null | undefined;
   spot: number;
@@ -71,6 +201,8 @@ export interface SoftExitCheckInput {
   targetPremium: number | null | undefined;
   stopUnderlying: number | null | undefined;
   targetUnderlying: number | null | undefined;
+  /** Attributes a premium-stop hit to the trail. Defaults to `'INITIAL'`. */
+  stopPremiumSource?: StopPremiumSource;
 }
 
 /**
@@ -90,7 +222,7 @@ export function decideSoftExit(
     input.stopPremium != null &&
     input.optionBid <= input.stopPremium
   ) {
-    return 'PREMIUM_STOP';
+    return input.stopPremiumSource === 'TRAIL' ? 'TRAIL_STOP' : 'PREMIUM_STOP';
   }
 
   if (input.stopUnderlying != null) {

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -51,6 +51,10 @@ export interface BotSettingsView {
   premiumStopPct: number;
   usePremiumTarget: boolean;
   premiumTargetPct: number;
+  useTrailStop: boolean;
+  trailArmPct: number;
+  trailPct: number;
+  trailMinLockPct: number;
   stopAtrMult: number;
   targetAtrMult: number;
   paperSlippageCents: number;
@@ -132,6 +136,20 @@ export class BotSettingsService {
     if (profitTargetPctCurrent !== undefined) {
       row.profitPctCurrent = profitTargetPctCurrent;
     }
+
+    // Cross-field: a min-lock at or above the arm threshold asks to bank more
+    // profit than the trade has made, which would place the stop above the
+    // market and fire on the arming tick. Checked against the merged row
+    // because PUT accepts partial patches — a body with only trailMinLockPct
+    // never presents trailArmPct for a DTO-level comparison.
+    const arm = Number(row.trailArmPct);
+    const minLock = Number(row.trailMinLockPct);
+    if (Number.isFinite(arm) && Number.isFinite(minLock) && minLock >= arm) {
+      throw new BadRequestException(
+        `trailMinLockPct (${minLock}) must be strictly less than trailArmPct (${arm}) — otherwise the trail arms into a stop above the market and exits immediately`,
+      );
+    }
+
     const saved = await this.settingsRepository.save(row);
     const after = this.toView(saved);
     await this.botEventService.record({
@@ -191,6 +209,10 @@ export class BotSettingsService {
       premiumStopPct: Number(row.premiumStopPct),
       usePremiumTarget: row.usePremiumTarget,
       premiumTargetPct: Number(row.premiumTargetPct),
+      useTrailStop: row.useTrailStop,
+      trailArmPct: Number(row.trailArmPct),
+      trailPct: Number(row.trailPct),
+      trailMinLockPct: Number(row.trailMinLockPct),
       stopAtrMult: Number(row.stopAtrMult),
       targetAtrMult: Number(row.targetAtrMult),
       paperSlippageCents: row.paperSlippageCents,
