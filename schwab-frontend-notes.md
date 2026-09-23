@@ -1669,9 +1669,25 @@ All `@Roles(Role.Admin)`. Prefixed `/api/v1/subapps/schwab`.
 
 CSV: UTF-8 with BOM, one file per table, Excel/Numbers friendly. Never emails passwords or OAuth secrets.
 
-**Follow-up (not built):** basic-user self-serve deletion request queue.
+
+### 16e. Self-serve account deletion requests
+
+Basic (and admin) users can request deletion; admins fulfill with the same purge as §16d.
+
+| Method | Path | Who | Body | Effect |
+|--------|------|-----|------|--------|
+| GET | `/account/deletion-request` | signed-in | — | Latest request for caller, or `null` |
+| POST | `/account/deletion-request` | signed-in | `{ reason?, emailExport? }` | Create `pending` (one pending per user) |
+| DELETE | `/account/deletion-request` | signed-in | — | Cancel own `pending` |
+| GET | `/admin/deletion-requests?status=` | admin | — | List requests (optional status filter) |
+| POST | `/admin/deletion-requests/:id/reject` | admin | `{ note? }` | Mark rejected |
+| POST | `/admin/deletion-requests/:id/fulfill` | admin | `{ emailExport? }` | Run §16d purge for that user (confirm email from DB); mark fulfilled |
+
+Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Settings → Delete account; Admin → Deletions tab.
 
 ## Changelog
+
+- **2026-09-22 (self-serve deletion requests)**: Users can request account deletion from Settings; admins list/reject/fulfill via `/admin/deletion-requests` using the §16d purge. See §16e.
 
 - **2026-09-22 (admin user support + safe purge)**: Admin Users gained export (Resend CSV), lock/unlock, force sign-out, disconnect Schwab, resend verification, purge-preview, and hard-delete with optional pre-purge email. See §16d. No proactive account wipes.
 
