@@ -1,23 +1,12 @@
 ---
-description: Schwab subapp pairs with the Strikedesk frontend (repo schwab-0dte-spy-trader); keep contract notes synced
+description: Multi-repo Schwab desk — FE + Nest paths, contract sync, deploy order
 alwaysApply: true
 ---
 
-# Schwab ↔ frontend desk
+# Schwab desk (FE + Nest)
 
-## Pairing
+Mirror of the FE rule. Prefer the multi-root workspace; FE lives at `/Users/jc/schwab-0dte-spy-trader`.
 
-- This Nest repo’s Schwab live code: `src/subapps/schwab/`
-- Frontend desk: `/Users/jc/schwab-0dte-spy-trader` (TanStack Start → Netlify `main`)
-- Prefer the multi-root workspace `schwab-desk.code-workspace` in the FE repo
-
-## Contract
-
-- Nest copy: `schwab-frontend-notes.md`
-- FE copy: `nestjs-notes.md`
-- Sync both when REST/socket contracts change. Do not invent public API shapes without updating notes.
-
-## Scope
-
-- Default: only `src/subapps/schwab/` (+ shared auth/CORS when required for Schwab).
-- Leave unrelated subapps alone unless the user asks.
+- Contract: keep `schwab-frontend-notes.md` in sync with FE `nestjs-notes.md`.
+- Ship (temporary sole-admin): when asked, push `origin` + `herokupp` + `herokuprod`. FE ships via Netlify on FE `main`.
+- Do not invent APIs. Do not touch unrelated subapps unless asked.
