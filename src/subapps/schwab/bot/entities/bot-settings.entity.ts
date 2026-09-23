@@ -226,9 +226,9 @@ export class BotSettings {
   })
   premiumTargetPct: number;
 
-  /** Off by default: the trail changes exit behaviour on live capital, so it
-   * is opted into per account rather than switched on by a deploy. */
-  @Column({ type: 'boolean', name: 'use_trail_stop', default: false })
+  /** On by default: once a trade is clearly green, raise the stop so a winner
+   * cannot fully give back to the fill-time stop (floor includes breakeven). */
+  @Column({ type: 'boolean', name: 'use_trail_stop', default: true })
   useTrailStop: boolean;
 
   /** Gain that arms the trail — bid >= entry × (1 + pct/100). */
@@ -237,7 +237,7 @@ export class BotSettings {
     precision: 8,
     scale: 4,
     name: 'trail_arm_pct',
-    default: 20,
+    default: 10,
   })
   trailArmPct: number;
 

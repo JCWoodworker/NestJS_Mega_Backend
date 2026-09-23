@@ -1361,10 +1361,10 @@ Trade post-mortems / bot context: [`schwab-bot-lessons-learned.md`](./schwab-bot
 - `paperSlippageCents` (1) — paper fills are `ask + slippage` on entry, `bid - slippage` on exit
 - Soft exits: `usePremiumStop`/`premiumStopPct` (25), `usePremiumTarget`/`premiumTargetPct` (40),
   `stopAtrMult` (1.5), `targetAtrMult` (2.5)
-- **Trailing stop:** `useTrailStop` (**false**), `trailArmPct` (20, min 5), `trailPct` (15),
+- **Trailing stop:** `useTrailStop` (**true**), `trailArmPct` (10, min 5), `trailPct` (15),
   `trailMinLockPct` (5) — see below
 
-### Trailing profit ratchet (`useTrailStop`, default off)
+### Trailing profit ratchet (`useTrailStop`, default on)
 
 A stop stamped at fill time never moves, so a trade well on its way to target is still exposed
 all the way back to `entry × (1 − premiumStopPct/100)`. Observed live 2026-09-21: SPY 769 CALL
@@ -1399,9 +1399,9 @@ against the merged row. Internal backstop caps the stop one cent below the peak.
 - The trail config is captured at entry rather than re-read per tick, matching how
   `stopPremium` / `targetPremium` are stamped at fill time. Editing settings mid-position does
   not re-plan the open trade.
-- `bot-suggested-settings` proposes `trailArmPct` / `trailPct` / `trailMinLockPct: 5` per tier
-  but deliberately leaves `useTrailStop` at its current value, so applying suggestions never
-  silently arms it.
+- `bot-suggested-settings` sets `useTrailStop: true`, `trailArmPct: 10`, `trailMinLockPct: 5`
+  on every tier (MICRO keeps a slightly tighter `trailPct: 12`). Applying suggestions arms the
+  trail — intentional, so winners get a breakeven/min-lock floor.
 - Offline analyzer `ExitPolicy` models the peak trail without breakeven/min-lock — slightly
   pessimistic vs live (intentional).
 
@@ -1695,7 +1695,7 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
   A fill-time stop never moves, so a trade 65% of the way to target was still exposed back to
   `entry × (1 − premiumStopPct/100)`. Live case: SPY 769 CALL ×7 at 0.92, bid 1.16, stop 0.69 —
   $329 of open profit at risk for the remaining $90.
-  **Settings:** `useTrailStop` (default **false**), `trailArmPct` (20, `@Min(5)`), `trailPct` (15),
+  **Settings:** `useTrailStop` (default **true**), `trailArmPct` (10, `@Min(5)`), `trailPct` (15),
   `trailMinLockPct` (5). Floor is `max(peak trail, breakeven, minLock)`; stop capped one cent
   below peak. `updateSettings` rejects `trailMinLockPct >= trailArmPct`.
   **`openPosition`:** adds `peakBid`, `trailArmed`, `initialStopPremium`, `stopPremiumSource`.

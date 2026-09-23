@@ -56,10 +56,10 @@ export function buildSuggestedSettings(
   suggested.usePremiumTarget = true;
   suggested.stopAtrMult = 1.5;
   suggested.targetAtrMult = 2.5;
-  // Deliberately not switched on here. The trail changes how winners are
-  // closed, so it should be enabled once the nightly policy grid has scored
-  // it on this account's own tape — not by an operator applying suggestions.
-  suggested.useTrailStop = current.useTrailStop;
+  // Always recommend the trail on: a clear winner must not be able to give
+  // all the way back to the fill-time stop. Arm early enough that ~+$100 on a
+  // typical desk size is already protected (breakeven + min-lock floor).
+  suggested.useTrailStop = true;
 
   const directions: BotDirection[] = [];
   if (current.canBuyCalls) directions.push(BotDirection.CALL);
@@ -89,10 +89,9 @@ export function buildSuggestedSettings(
     suggested.profitPctCurrent = null;
     suggested.premiumStopPct = 20;
     suggested.premiumTargetPct = 35;
-    // Tighter than the larger tiers: on a 1-contract micro trade commission is
-    // a big share of the move, so giving back 15% of a peak costs proportionally
-    // more than it does on size.
-    suggested.trailArmPct = 15;
+    // Same early arm as larger tiers; slightly tighter give-back because
+    // commission is a big share of a 1-contract micro peak.
+    suggested.trailArmPct = 10;
     suggested.trailPct = 12;
     suggested.trailMinLockPct = 5;
     rationale.push(
@@ -127,7 +126,7 @@ export function buildSuggestedSettings(
     suggested.profitPctCurrent = null;
     suggested.premiumStopPct = 25;
     suggested.premiumTargetPct = 40;
-    suggested.trailArmPct = 20;
+    suggested.trailArmPct = 10;
     suggested.trailPct = 15;
     suggested.trailMinLockPct = 5;
     rationale.push(
@@ -150,7 +149,7 @@ export function buildSuggestedSettings(
     suggested.profitPctCurrent = null;
     suggested.premiumStopPct = 25;
     suggested.premiumTargetPct = 40;
-    suggested.trailArmPct = 20;
+    suggested.trailArmPct = 10;
     suggested.trailPct = 15;
     suggested.trailMinLockPct = 5;
     rationale.push(
@@ -173,7 +172,7 @@ export function buildSuggestedSettings(
     suggested.profitPctCurrent = null;
     suggested.premiumStopPct = 25;
     suggested.premiumTargetPct = 40;
-    suggested.trailArmPct = 20;
+    suggested.trailArmPct = 10;
     suggested.trailPct = 15;
     suggested.trailMinLockPct = 5;
     rationale.push(
@@ -182,11 +181,7 @@ export function buildSuggestedSettings(
   }
 
   rationale.push(
-    `Trail ${suggested.trailPct}% off the peak once a trade is +${suggested.trailArmPct}% (floor max(breakeven, +${suggested.trailMinLockPct}% locked in)). ${
-      current.useTrailStop
-        ? 'Armed.'
-        : 'Off — enable it after the nightly policy grid scores it on your own tape.'
-    }`,
+    `Trail on: ${suggested.trailPct}% off the peak once a trade is +${suggested.trailArmPct}% (floor max(breakeven, +${suggested.trailMinLockPct}% locked in)) — winners cannot fully give back to the fill-time stop.`,
   );
 
   if (!liveEligible) {

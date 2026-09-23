@@ -115,4 +115,18 @@ describe('buildSuggestedSettings', () => {
     );
     expect(result.suggested.directionsEnabled).toContain(BotDirection.PUT);
   });
+
+  it('recommends trail armed at +10% with useTrailStop on for every tier', () => {
+    for (const equity of [110, 800, 3000, 6000]) {
+      const result = buildSuggestedSettings(
+        equity,
+        baseSettings({ useTrailStop: false, trailArmPct: 20 }),
+      );
+      expect(result.suggested.useTrailStop).toBe(true);
+      expect(result.suggested.trailArmPct).toBe(10);
+      expect(result.suggested.trailMinLockPct).toBe(5);
+      expect(result.patch.useTrailStop).toBe(true);
+      expect(result.patch.trailArmPct).toBe(10);
+    }
+  });
 });
