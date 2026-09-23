@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Schwab desk (FE + Nest)
 
-Mirror of the FE rule. Prefer the multi-root workspace; FE lives at `/Users/jc/schwab-0dte-spy-trader`.
+Mirror of the FE rule. Prefer the multi-root workspace; FE lives at `/Users/jc/strikedesk` (GitHub `JCWoodworker/strikedesk`).
 
 - Contract: keep `schwab-frontend-notes.md` in sync with FE `nestjs-notes.md`.
 - Ship (temporary sole-admin): when asked, push `origin` + `herokupp` + `herokuprod`. FE ships via Netlify on FE `main`.
