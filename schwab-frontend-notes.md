@@ -7,9 +7,9 @@ that used to read `schwab-0dte-*` — FE `package.json` name, `.cta.json` projec
 zustand persist / localStorage key (`strikedesk-auth`, `strikedesk-settings`, `strikedesk-chart`,
 `strikedesk-paper`, `strikedesk-live-markers`, plus a few UI-state keys). Renaming a persist key
 resets that slice of state on next load — expected, one-time, and disclosed rather than silently
-absorbed. The one thing deliberately **not** renamed yet is the actual GitHub repo/local folder
-(still `schwab-0dte-spy-trader` — see the note two paragraphs down); that is a separate decision
-with real redirect/remote consequences, held pending explicit confirmation.
+absorbed. As of 2026-09-23 the GitHub repo is **`JCWoodworker/strikedesk`** (formerly
+`schwab-0dte-spy-trader`); preferred local Mac path is `/Users/jc/strikedesk` (James must `mv`
+locally and reopen `strikedesk.code-workspace`).
 
 The earlier working name "Schwab Swift" was dropped deliberately: putting a broker's trademark
 in a third-party product name is a legal problem and the sort of thing a commercial API reviewer
@@ -20,11 +20,10 @@ do not serve one, so `www.strikedesk.netlify.app` does not resolve and must not 
 `ALLOWED_ORIGINS`.
 
 This file is the shared contract between this backend repo (`nestjs_mega_backend`) and the
-separate frontend project — product name **Strikedesk**, still hosted under the technical/repo
-name `schwab-0dte-spy-trader` (TanStack Start, **web**) pending the repo-rename decision above.
-There's no shared package/schema between the two repos, so **both sides keep this file in sync
-manually** by copy-pasting sections back and forth as the contract evolves. Check the Changelog
-at the bottom whenever a new copy comes in.
+separate frontend project — product name **Strikedesk**, GitHub repo **`JCWoodworker/strikedesk`**
+(TanStack Start, **web**). There's no shared package/schema between the two repos, so **both
+sides keep this file in sync manually** by copy-pasting sections back and forth as the contract
+evolves. Check the Changelog at the bottom whenever a new copy comes in.
 
 > ## ⚠️ Multi-tenant (2026-09-17, branch `feat/multi-tenant-schwab`)
 >
@@ -1686,6 +1685,8 @@ Basic (and admin) users can request deletion; admins fulfill with the same purge
 Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Settings → Delete account; Admin → Deletions tab.
 
 ## Changelog
+
+- **2026-09-23 (FE repo rename + v0.1.0)**: GitHub FE repo target slug `JCWoodworker/strikedesk` (was `schwab-0dte-spy-trader`); preferred local path `/Users/jc/strikedesk`; FE `package.json` version `0.1.0` + Keep a Changelog. No REST/socket contract change. CORS / `FRONTEND_URL` already `strikedesk.netlify.app`.
 
 - **2026-09-22 (self-serve deletion requests)**: Users can request account deletion from Settings; admins list/reject/fulfill via `/admin/deletion-requests` using the §16d purge. See §16e.
 
