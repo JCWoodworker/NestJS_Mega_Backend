@@ -73,11 +73,21 @@ function buildService() {
     record: jest.fn().mockResolvedValue(undefined),
   };
 
+  const snapshotRepository = {
+    save: jest.fn().mockImplementation(async (row: any) => ({
+      id: 'snap-1',
+      ...row,
+    })),
+    create: jest.fn().mockImplementation((partial: any) => partial),
+    createQueryBuilder: jest.fn(),
+  };
+
   const service = new BotSettingsService(
     settingsRepository as any,
+    snapshotRepository as any,
     botEventService as any,
   );
-  return { service, getRowSnapshot: () => row, botEventService };
+  return { service, getRowSnapshot: () => row, botEventService, snapshotRepository };
 }
 
 describe('BotSettingsService — strategiesEnabled / combineMode (contract §14b)', () => {

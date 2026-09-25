@@ -16,11 +16,13 @@ import { BotSettingsService } from './bot-settings.service';
 import { BotStateService } from './bot-state.service';
 import { KillDto } from './dto/kill.dto';
 import { ListEventsDto } from './dto/list-events.dto';
+import { ListSettingsHistoryDto } from './dto/list-settings-history.dto';
 import { LiveEnableDto } from './dto/live-enable.dto';
 import { ResetPaperDto } from './dto/reset-paper.dto';
 import { SetLaneDto } from './dto/set-lane.dto';
 import { SetModeDto } from './dto/set-mode.dto';
 import { UpdateBotSettingsDto } from './dto/update-bot-settings.dto';
+import { BotSettingsSnapshotSource } from './entities/bot-settings-snapshot.entity';
 import { BotEventType } from './enums/bot-event-type.enum';
 
 @Throttle({ default: { limit: 120, ttl: 60000 } })
@@ -122,6 +124,27 @@ export class BotController {
     return this.botSettingsService.getSuggested(status.equity);
   }
 
+  /**
+   * Apply suggested settings for current equity and record a durable
+   * settings snapshot tagged `source: suggested`. Prefer this over PUT
+   * when the operator taps Apply suggested.
+   */
+  @Post('settings/apply-suggested')
+  @HttpCode(HttpStatus.OK)
+  async applySuggestedSettings() {
+    const status = await this.botStateService.getStatus();
+    return this.botSettingsService.applySuggested(status.equity);
+  }
+
+  /**
+   * Durable settings history (not trimmed with bot_events). Used by weekly
+   * rollups to attribute P&L to the settings in force during each period.
+   */
+  @Get('settings/history')
+  async getSettingsHistory(@Query() query: ListSettingsHistoryDto) {
+    return this.botSettingsService.listHistory(query);
+  }
+
   @Post('mode')
   @HttpCode(HttpStatus.OK)
   async setMode(@Body() dto: SetModeDto) {
@@ -175,6 +198,11 @@ export class BotController {
 
   @Put('settings')
   async updateSettings(@Body() dto: UpdateBotSettingsDto) {
-    return this.botSettingsService.updateSettings(dto);
+    // Default attribution is manual; FE Apply suggested should use
+    // POST /settings/apply-suggested or pass source:'suggested'.
+    return this.botSettingsService.updateSettings({
+      ...dto,
+      source: dto.source ?? BotSettingsSnapshotSource.MANUAL,
+    });
   }
 }

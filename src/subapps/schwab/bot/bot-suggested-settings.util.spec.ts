@@ -116,17 +116,34 @@ describe('buildSuggestedSettings', () => {
     expect(result.suggested.directionsEnabled).toContain(BotDirection.PUT);
   });
 
-  it('recommends trail armed at +10% with useTrailStop on for every tier', () => {
+  it('recommends trail armed at +20% (MICRO +15) with breakeven-only min-lock', () => {
     for (const equity of [110, 800, 3000, 6000]) {
       const result = buildSuggestedSettings(
         equity,
-        baseSettings({ useTrailStop: false, trailArmPct: 20 }),
+        baseSettings({ useTrailStop: false, trailArmPct: 10, trailMinLockPct: 5 }),
       );
       expect(result.suggested.useTrailStop).toBe(true);
-      expect(result.suggested.trailArmPct).toBe(10);
-      expect(result.suggested.trailMinLockPct).toBe(5);
+      expect(result.suggested.trailMinLockPct).toBe(0);
+      expect(result.suggested.cooldownMins).toBe(2);
       expect(result.patch.useTrailStop).toBe(true);
-      expect(result.patch.trailArmPct).toBe(10);
+      if (equity < 500) {
+        expect(result.suggested.trailArmPct).toBe(15);
+        expect(result.suggested.premiumTargetPct).toBe(18);
+      } else {
+        expect(result.suggested.trailArmPct).toBe(20);
+        expect(result.suggested.premiumTargetPct).toBeLessThanOrEqual(22);
+        expect(result.suggested.premiumTargetPct).toBeGreaterThanOrEqual(20);
+      }
     }
+  });
+
+  it('COMFORTABLE fast-scalp profile: target 22, arm 20, cooldown 2', () => {
+    const result = buildSuggestedSettings(6000, baseSettings());
+    expect(result.suggested.premiumTargetPct).toBe(22);
+    expect(result.suggested.premiumStopPct).toBe(25);
+    expect(result.suggested.trailArmPct).toBe(20);
+    expect(result.suggested.trailMinLockPct).toBe(0);
+    expect(result.suggested.cooldownMins).toBe(2);
+    expect(result.suggested.targetAtrMult).toBe(1.8);
   });
 });

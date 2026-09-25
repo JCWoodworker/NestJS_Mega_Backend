@@ -1355,20 +1355,20 @@ Trade post-mortems / bot context: [`schwab-bot-lessons-learned.md`](./schwab-bot
 - Profit gates: `useProfitUsd`/`profitUsd`, `useProfitPctDayStart`/`profitPctDayStart`, `useProfitPctCurrent`/`profitPctCurrent` (all off by default; halts on the *first* gate that hits). **PUT also accepts frontend aliases** `profitTargetUsd` → `profitUsd`, `profitTargetPctDayStart` → `profitPctDayStart`, `profitTargetPctCurrent` → `profitPctCurrent` (alias wins when both are present in the same body). GET still returns the canonical `profit*` names.
 - Strike filters: `minPremium` (0.60), `maxPremium` (2.50), `maxSpreadPct` (5), `deltaMin` (0.40), `deltaMax` (0.60)
 - Windows (ET, `HH:MM`): `tradeWindowStart` (09:30), `tradeWindowEnd` (15:00), `hardFlattenTime` (15:30)
-- `cooldownMins` (5) — minimum gap between bot entries
+- `cooldownMins` (2) — minimum gap between bot entries
 - `atrPeriod` (14)
 - `paperSlippageCents` (1) — paper fills are `ask + slippage` on entry, `bid - slippage` on exit
-- Soft exits: `usePremiumStop`/`premiumStopPct` (25), `usePremiumTarget`/`premiumTargetPct` (40),
-  `stopAtrMult` (1.5), `targetAtrMult` (2.5)
-- **Trailing stop:** `useTrailStop` (**true**), `trailArmPct` (10, min 5), `trailPct` (15),
-  `trailMinLockPct` (5) — see below
+- Soft exits: `usePremiumStop`/`premiumStopPct` (25), `usePremiumTarget`/`premiumTargetPct` (22),
+  `stopAtrMult` (1.5), `targetAtrMult` (1.8)
+- **Trailing stop:** `useTrailStop` (**true**), `trailArmPct` (20, min 5), `trailPct` (15),
+  `trailMinLockPct` (0, breakeven-only) — see below
 
 ### Trailing profit ratchet (`useTrailStop`, default on)
 
 A stop stamped at fill time never moves, so a trade well on its way to target is still exposed
 all the way back to `entry × (1 − premiumStopPct/100)`. Observed live 2026-09-21: SPY 769 CALL
-×7 filled 0.92, bid 1.16 (65% of the way to a 40% target), stop still 0.69 — risking $329 of
-open profit to capture the remaining $90.
+×7 filled 0.92, bid 1.16 (then ~65% of a lofty 40% target; Apply suggested now targets ~22%),
+stop still 0.69 — risking $329 of open profit.
 
 Once the bid reaches `entry × (1 + trailArmPct/100)` the trail arms and `stopPremium` becomes:
 
@@ -1377,9 +1377,8 @@ max(current stop, peak bid × (1 − trailPct/100), breakeven bid, minLockBid)
 ```
 
 and never decreases. `breakeven bid` is `entry + $1.30/100` (commission on both legs);
-`minLockBid` is `entry × (1 + trailMinLockPct/100)` (0 = term is a no-op). Together they bank
-at least a small profit at arm rather than merely breaking even. `premiumTargetPct` still
-hard-exits — the trail protects the downside only.
+`minLockBid` is `entry × (1 + trailMinLockPct/100)` (0 = term is a no-op / breakeven-only).
+`premiumTargetPct` still hard-exits — the trail protects the downside only.
 
 **Guards:** `trailArmPct` `@Min(5)`; `updateSettings` rejects `trailMinLockPct >= trailArmPct`
 against the merged row. Internal backstop caps the stop one cent below the peak.
@@ -1398,11 +1397,28 @@ against the merged row. Internal backstop caps the stop one cent below the peak.
 - The trail config is captured at entry rather than re-read per tick, matching how
   `stopPremium` / `targetPremium` are stamped at fill time. Editing settings mid-position does
   not re-plan the open trade.
-- `bot-suggested-settings` sets `useTrailStop: true`, `trailArmPct: 10`, `trailMinLockPct: 5`
-  on every tier (MICRO keeps a slightly tighter `trailPct: 12`). Applying suggestions arms the
-  trail — intentional, so winners get a breakeven/min-lock floor.
-- Offline analyzer `ExitPolicy` models the peak trail without breakeven/min-lock — slightly
-  pessimistic vs live (intentional).
+- `bot-suggested-settings` (2026-09-25 fast-scalp): `useTrailStop: true`, `trailArmPct: 20`
+  (MICRO 15), `trailMinLockPct: 0`, `premiumTargetPct: 22` (MICRO 18 / SMALL 20),
+  `cooldownMins: 2`, `targetAtrMult: 1.8`. Applying suggestions is the SoT path — James does
+  not hand-tune. Arm 20 restores the original design after the 2026-09-23 arm-10 regression.
+- Offline analyzer `ExitPolicy` grid uses stop 25% / target 22% with arms 20%/25% — aligned to
+  live Apply suggested.
+
+### Settings history (`bot_settings_snapshots`)
+
+Append-only durable snapshots (not subject to the 30-day `bot_events` trim) so weekly rollups
+can attribute P&L to the settings in force during each trading period.
+
+```
+GET  /api/v1/subapps/schwab/bot/settings/history?limit=&beforeAt=&from=&to=&source=
+POST /api/v1/subapps/schwab/bot/settings/apply-suggested
+PUT  /api/v1/subapps/schwab/bot/settings   // optional body.source: 'suggested' | 'manual'
+GET  /api/v1/subapps/schwab/bot/admin/settings-history  // same payload, owner-gated
+```
+
+Snapshot row: `{ id, at, etDateKey, source, settings, patch, equity, tier }` where
+`source` is `suggested` | `manual` | `bootstrap`. Prefer `POST .../apply-suggested` for the
+Apply button (tags `suggested` + equity/tier). Recording / `bot_trades` are untouched.
 
 ### Open position capital picture (`openPositionValue`)
 
@@ -1602,6 +1618,7 @@ POST /bot/admin/supervisor/reconcile    → clears blockers; does NOT arm
 POST /bot/admin/supervisor/arm          → skips the time window, not the safety checks
 POST /bot/admin/supervisor/stand-down   → flatten + halt now
 GET  /bot/admin/corpus-health           → CorpusHealth (recorder row counts)
+GET  /bot/admin/settings-history        → durable settings snapshots (same as GET /bot/settings/history)
 GET  /bot/admin/reports?limit=30        → BotReportSummary[] (newest first, no markdown)
 GET  /bot/admin/reports/:dateKey        → BotReport | null
 POST /bot/admin/reports/:dateKey/rerun  → BotReport (idempotent)
@@ -1685,6 +1702,18 @@ Basic (and admin) users can request deletion; admins fulfill with the same purge
 Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Settings → Delete account; Admin → Deletions tab.
 
 ## Changelog
+
+- **2026-09-25 (fast-scalp Apply suggested + settings history)**: James only taps Apply
+  suggested — retuned `bot-suggested-settings` toward fast small scalps and restored trail
+  aggressiveness toward the original design. **Suggested / entity defaults (COMFORTABLE):**
+  `premiumTargetPct` **22** (was 40), `trailArmPct` **20** (was 10), `trailMinLockPct` **0**
+  (was 5, breakeven-only), `cooldownMins` **2** (was 5), `targetAtrMult` **1.8** (was 2.5);
+  MICRO: arm 15 / target 18 / stop 20. Trail stays **on**. Migration
+  `1789100000000` changes column defaults only (does **not** UPDATE existing rows or touch
+  `bot_trades` / tape / reports) — operator must re-click **Apply suggested** after deploy.
+  **New:** durable `bot_settings_snapshots` + `GET /bot/settings/history`,
+  `POST /bot/settings/apply-suggested`, `GET /bot/admin/settings-history`. PUT may send
+  `source: 'suggested'|'manual'`. Analyzer trail grid uses stop 25% / target 22% / arm 20|25%.
 
 - **2026-09-23 (FE repo rename + v0.1.0)**: GitHub FE repo target slug `JCWoodworker/strikedesk` (was `schwab-0dte-spy-trader`); preferred local path `/Users/jc/strikedesk`; FE `package.json` version `0.1.0` + Keep a Changelog. No REST/socket contract change. CORS / `FRONTEND_URL` already `strikedesk.netlify.app`.
 

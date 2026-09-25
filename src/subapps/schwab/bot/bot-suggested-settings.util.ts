@@ -25,7 +25,21 @@ export function classifySettingsTier(equity: number): BotSettingsTier {
   return 'COMFORTABLE';
 }
 
-/** Build fee/math-aware recommended settings for the given equity + capability. */
+/**
+ * Fee/math-aware recommended settings for the given equity + capability.
+ *
+ * 2026-09-25 fast-scalp bias (Apply suggested is the only operator path):
+ * - Lower premium targets (~18–22%) so small bumps are taken instead of
+ *   waiting on a lofty 40% that rarely prints on VWAP/ORB chop.
+ * - Restore trail arm to the original ~+20% design (MICRO +15) so a brief
+ *   +10% wick cannot lock a permanent floor. Min-lock is breakeven-only (0)
+ *   so arming does not choke small scalps.
+ * - Short cooldown (2m) so a run can be re-entered after a quick scalp.
+ * - Slightly tighter ATR target mult for faster underlying exits.
+ *
+ * James only taps Apply suggested — these values are the live SoT for
+ * sessions once he re-applies after deploy.
+ */
 export function buildSuggestedSettings(
   equity: number,
   current: BotSettingsView,
@@ -55,10 +69,9 @@ export function buildSuggestedSettings(
   suggested.usePremiumStop = true;
   suggested.usePremiumTarget = true;
   suggested.stopAtrMult = 1.5;
-  suggested.targetAtrMult = 2.5;
-  // Always recommend the trail on: a clear winner must not be able to give
-  // all the way back to the fill-time stop. Arm early enough that ~+$100 on a
-  // typical desk size is already protected (breakeven + min-lock floor).
+  suggested.targetAtrMult = 1.8;
+  // Keep trail on, but arm only after a meaningful premium gain so brief
+  // wicks cannot permanently raise the floor (2026-09-23 arm-10 regression).
   suggested.useTrailStop = true;
 
   const directions: BotDirection[] = [];
@@ -81,21 +94,19 @@ export function buildSuggestedSettings(
     suggested.minPremium = 0.4;
     suggested.maxPremium = 1.5;
     suggested.maxSpreadPct = 8;
-    suggested.cooldownMins = 5;
+    suggested.cooldownMins = 2;
     suggested.useMaxLossUsd = true;
     suggested.maxLossUsd = Math.max(20, Math.round(equity * 0.3));
     suggested.profitUsd = Math.round(equity * 0.4);
     suggested.profitPctDayStart = 15;
     suggested.profitPctCurrent = null;
     suggested.premiumStopPct = 20;
-    suggested.premiumTargetPct = 35;
-    // Same early arm as larger tiers; slightly tighter give-back because
-    // commission is a big share of a 1-contract micro peak.
-    suggested.trailArmPct = 10;
+    suggested.premiumTargetPct = 18;
+    suggested.trailArmPct = 15;
     suggested.trailPct = 12;
-    suggested.trailMinLockPct = 5;
+    suggested.trailMinLockPct = 0;
     rationale.push(
-      'MICRO (<$500): ANY combine — either VWAP or ORB can enter; expect more trades and fee drag.',
+      'MICRO (<$500): ANY combine — either VWAP or ORB can enter; fast-scalp targets (~18%) + 2m cooldown.',
     );
     rationale.push(
       `riskPct ${suggested.riskPct}% — avoid all-in on a fee-heavy micro account.`,
@@ -118,19 +129,19 @@ export function buildSuggestedSettings(
     suggested.minPremium = 0.6;
     suggested.maxPremium = 2.0;
     suggested.maxSpreadPct = 6;
-    suggested.cooldownMins = 5;
+    suggested.cooldownMins = 2;
     suggested.useMaxLossUsd = true;
     suggested.maxLossUsd = Math.round(equity * 0.25);
     suggested.profitUsd = Math.round(equity * 0.35);
     suggested.profitPctDayStart = 12;
     suggested.profitPctCurrent = null;
     suggested.premiumStopPct = 25;
-    suggested.premiumTargetPct = 40;
-    suggested.trailArmPct = 10;
+    suggested.premiumTargetPct = 20;
+    suggested.trailArmPct = 20;
     suggested.trailPct = 15;
-    suggested.trailMinLockPct = 5;
+    suggested.trailMinLockPct = 0;
     rationale.push(
-      'SMALL ($500–$2k): dual strategies under ANY (OR); modest riskPct and fee-aware premium band.',
+      'SMALL ($500–$2k): dual strategies under ANY; fast-scalp premium target 20%; 2m cooldown for run re-entry.',
     );
   } else if (tier === 'STANDARD') {
     suggested.strategiesEnabled = [
@@ -141,19 +152,19 @@ export function buildSuggestedSettings(
     suggested.minPremium = 1.0;
     suggested.maxPremium = 2.5;
     suggested.maxSpreadPct = 5;
-    suggested.cooldownMins = 5;
+    suggested.cooldownMins = 2;
     suggested.useMaxLossUsd = true;
     suggested.maxLossUsd = Math.round(equity * 0.2);
     suggested.profitUsd = Math.round(equity * 0.25);
     suggested.profitPctDayStart = 10;
     suggested.profitPctCurrent = null;
     suggested.premiumStopPct = 25;
-    suggested.premiumTargetPct = 40;
-    suggested.trailArmPct = 10;
+    suggested.premiumTargetPct = 22;
+    suggested.trailArmPct = 20;
     suggested.trailPct = 15;
-    suggested.trailMinLockPct = 5;
+    suggested.trailMinLockPct = 0;
     rationale.push(
-      'STANDARD ($2k–$5k): higher minPremium so commission is a smaller % of each trade; ANY combine for more entries.',
+      'STANDARD ($2k–$5k): higher minPremium so commission is a smaller % of each trade; scalp target 22%.',
     );
   } else {
     suggested.strategiesEnabled = [
@@ -164,24 +175,27 @@ export function buildSuggestedSettings(
     suggested.minPremium = 0.6;
     suggested.maxPremium = 2.5;
     suggested.maxSpreadPct = 5;
-    suggested.cooldownMins = 5;
+    suggested.cooldownMins = 2;
     suggested.useMaxLossUsd = true;
     suggested.maxLossUsd = Math.round(equity * 0.15);
     suggested.profitUsd = Math.round(equity * 0.2);
     suggested.profitPctDayStart = 8;
     suggested.profitPctCurrent = null;
     suggested.premiumStopPct = 25;
-    suggested.premiumTargetPct = 40;
-    suggested.trailArmPct = 10;
+    suggested.premiumTargetPct = 22;
+    suggested.trailArmPct = 20;
     suggested.trailPct = 15;
-    suggested.trailMinLockPct = 5;
+    suggested.trailMinLockPct = 0;
     rationale.push(
-      'COMFORTABLE (≥$5k): both strategies, ANY combine, short cooldown — trade often on calls and puts.',
+      'COMFORTABLE (≥$5k): both strategies, ANY combine, 2m cooldown — take small bumps fast (target 22%), trail arms at +20%.',
     );
   }
 
   rationale.push(
-    `Trail on: ${suggested.trailPct}% off the peak once a trade is +${suggested.trailArmPct}% (floor max(breakeven, +${suggested.trailMinLockPct}% locked in)) — winners cannot fully give back to the fill-time stop.`,
+    `Trail on: ${suggested.trailPct}% off peak once +${suggested.trailArmPct}% (breakeven floor only — min-lock 0) so winners cannot fully give back to the fill-time stop without choking small scalps.`,
+  );
+  rationale.push(
+    `Fast-scalp exits: premium target ${suggested.premiumTargetPct}% / stop ${suggested.premiumStopPct}%; ATR target mult ${suggested.targetAtrMult}.`,
   );
 
   if (!liveEligible) {

@@ -18,7 +18,9 @@ import { SchwabOwnerGuard } from '@schwab/shared/schwab-owner.guard';
 
 import { BotAnalyzerService } from './bot-analyzer.service';
 import { BotCorpusHealthService } from './bot-corpus-health.service';
+import { BotSettingsService } from './bot-settings.service';
 import { BotSupervisorService } from './bot-supervisor.service';
+import { ListSettingsHistoryDto } from './dto/list-settings-history.dto';
 
 /**
  * The lab's control plane — operating the bot improvement loop, not trading.
@@ -41,6 +43,7 @@ export class BotAdminController {
     private readonly corpusHealthService: BotCorpusHealthService,
     private readonly supervisorService: BotSupervisorService,
     private readonly analyzerService: BotAnalyzerService,
+    private readonly botSettingsService: BotSettingsService,
   ) {}
 
   /**
@@ -92,6 +95,15 @@ export class BotAdminController {
   @Get('corpus-health')
   async corpusHealth() {
     return this.corpusHealthService.getHealth();
+  }
+
+  /**
+   * Durable bot settings snapshots for weekly rollup attribution
+   * (same payload as GET /bot/settings/history, owner-gated here).
+   */
+  @Get('settings-history')
+  async settingsHistory(@Query() query: ListSettingsHistoryDto) {
+    return this.botSettingsService.listHistory(query);
   }
 
   /** Stored nightly reports, newest first. */

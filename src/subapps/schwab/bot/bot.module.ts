@@ -30,6 +30,7 @@ import { BotChainSnapshot } from './entities/bot-chain-snapshot.entity';
 import { BotDailyReport } from './entities/bot-daily-report.entity';
 import { BotEvent } from './entities/bot-event.entity';
 import { BotMarketDay } from './entities/bot-market-day.entity';
+import { BotSettingsSnapshot } from './entities/bot-settings-snapshot.entity';
 import { BotSettings } from './entities/bot-settings.entity';
 import { BotState } from './entities/bot-state.entity';
 import { BotTradeTape } from './entities/bot-trade-tape.entity';
@@ -40,6 +41,7 @@ import { BotTrade } from './entities/bot-trade.entity';
     ConfigModule.forFeature(schwabConfig),
     TypeOrmModule.forFeature([
       BotSettings,
+      BotSettingsSnapshot,
       BotState,
       BotEvent,
       BotTradeTape,
