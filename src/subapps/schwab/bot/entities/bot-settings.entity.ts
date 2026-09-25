@@ -196,7 +196,7 @@ export class BotSettings {
   })
   hardFlattenTime: string;
 
-  @Column({ type: 'integer', name: 'cooldown_mins', default: 5 })
+  @Column({ type: 'integer', name: 'cooldown_mins', default: 2 })
   cooldownMins: number;
 
   @Column({ type: 'integer', name: 'atr_period', default: 14 })
@@ -222,7 +222,7 @@ export class BotSettings {
     precision: 8,
     scale: 4,
     name: 'premium_target_pct',
-    default: 40,
+    default: 22,
   })
   premiumTargetPct: number;
 
@@ -237,7 +237,7 @@ export class BotSettings {
     precision: 8,
     scale: 4,
     name: 'trail_arm_pct',
-    default: 10,
+    default: 20,
   })
   trailArmPct: number;
 
@@ -256,13 +256,14 @@ export class BotSettings {
    * Minimum premium gain banked at arm — stop floor includes
    * entry × (1 + pct/100). 0 means breakeven-only. Must stay strictly below
    * `trailArmPct` or arming would place the stop above the market.
+   * Default 0 (fast-scalp): arming must not choke small bumps with a +5% lock.
    */
   @Column({
     type: 'decimal',
     precision: 8,
     scale: 4,
     name: 'trail_min_lock_pct',
-    default: 5,
+    default: 0,
   })
   trailMinLockPct: number;
 
@@ -280,7 +281,7 @@ export class BotSettings {
     precision: 8,
     scale: 4,
     name: 'target_atr_mult',
-    default: 2.5,
+    default: 1.8,
   })
   targetAtrMult: number;
 

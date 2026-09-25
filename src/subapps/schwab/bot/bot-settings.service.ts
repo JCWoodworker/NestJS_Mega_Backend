@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
+import { etDateKey } from '@schwab/pnl/et-date.util';
 import { requireUserId } from '@schwab/shared/schwab-user-context';
 
 import { BotEventService } from './bot-event.service';
@@ -10,6 +11,10 @@ import {
   SuggestedSettingsResult,
 } from './bot-suggested-settings.util';
 import { UpdateBotSettingsDto } from './dto/update-bot-settings.dto';
+import {
+  BotSettingsSnapshot,
+  BotSettingsSnapshotSource,
+} from './entities/bot-settings-snapshot.entity';
 import { BotSettings } from './entities/bot-settings.entity';
 import { BotEventType } from './enums/bot-event-type.enum';
 import {
@@ -60,6 +65,25 @@ export interface BotSettingsView {
   paperSlippageCents: number;
 }
 
+export interface BotSettingsSnapshotView {
+  id: string;
+  at: number;
+  etDateKey: string;
+  source: BotSettingsSnapshotSource;
+  settings: BotSettingsView;
+  patch: Partial<BotSettingsView> | null;
+  equity: number | null;
+  tier: string | null;
+}
+
+export interface ListSettingsHistoryQuery {
+  limit?: number;
+  beforeAt?: number;
+  from?: number;
+  to?: number;
+  source?: BotSettingsSnapshotSource;
+}
+
 @Injectable()
 export class BotSettingsService {
   /** Guards the lazy-create-on-first-read below against a boot-time race
@@ -71,6 +95,8 @@ export class BotSettingsService {
   constructor(
     @InjectRepository(BotSettings)
     private readonly settingsRepository: Repository<BotSettings>,
+    @InjectRepository(BotSettingsSnapshot)
+    private readonly snapshotRepository: Repository<BotSettingsSnapshot>,
     private readonly botEventService: BotEventService,
   ) {}
 
@@ -83,6 +109,16 @@ export class BotSettingsService {
 
     const creating = this.settingsRepository
       .save(this.settingsRepository.create({ userId }))
+      .then(async (row) => {
+        // Baseline so rollups know what was in force before the first Apply.
+        await this.recordSnapshot({
+          userId,
+          settings: this.toView(row),
+          patch: null,
+          source: BotSettingsSnapshotSource.BOOTSTRAP,
+        });
+        return row;
+      })
       .finally(() => {
         this.creatingRows.delete(userId);
       });
@@ -100,8 +136,37 @@ export class BotSettingsService {
     return buildSuggestedSettings(Math.max(0, equity), current);
   }
 
-  async updateSettings(patch: UpdateBotSettingsDto): Promise<BotSettingsView> {
-    const row = await this.getRow();
+  /**
+   * Apply the full suggested patch for current equity and tag the snapshot
+   * as `suggested` — James's only operator path.
+   */
+  async applySuggested(equity: number): Promise<{
+    settings: BotSettingsView;
+    suggested: SuggestedSettingsResult;
+  }> {
+    const suggested = await this.getSuggested(equity);
+    const settings = await this.updateSettings({
+      ...suggested.patch,
+      source: BotSettingsSnapshotSource.SUGGESTED,
+      suggestedEquity: equity,
+      suggestedTier: suggested.tier,
+    } as UpdateBotSettingsDto & {
+      source: BotSettingsSnapshotSource;
+      suggestedEquity: number;
+      suggestedTier: string;
+    });
+    return { settings, suggested };
+  }
+
+  async updateSettings(
+    patch: UpdateBotSettingsDto & {
+      source?: BotSettingsSnapshotSource;
+      suggestedEquity?: number;
+      suggestedTier?: string;
+    },
+  ): Promise<BotSettingsView> {
+    const userId = requireUserId();
+    const row = await this.getRow(userId);
     const before = this.toView(row);
     // Contract view fields / frontend aliases aren't columns themselves —
     // strip them before Object.assign, then translate onto the entity.
@@ -111,8 +176,15 @@ export class BotSettingsService {
       profitTargetUsd,
       profitTargetPctDayStart,
       profitTargetPctCurrent,
+      source,
+      suggestedEquity,
+      suggestedTier,
       ...rest
-    } = patch;
+    } = patch as UpdateBotSettingsDto & {
+      source?: BotSettingsSnapshotSource;
+      suggestedEquity?: number;
+      suggestedTier?: string;
+    };
     Object.assign(row, rest);
     if (strategiesEnabled) {
       row.vwapPullbackEnabled = strategiesEnabled.includes(
@@ -152,13 +224,117 @@ export class BotSettingsService {
 
     const saved = await this.settingsRepository.save(row);
     const after = this.toView(saved);
+    const snapshotSource =
+      source === BotSettingsSnapshotSource.SUGGESTED
+        ? BotSettingsSnapshotSource.SUGGESTED
+        : BotSettingsSnapshotSource.MANUAL;
+
+    // Strip non-settings meta before recording patch payload.
+    const {
+      source: _s,
+      suggestedEquity: _e,
+      suggestedTier: _t,
+      ...settingsPatch
+    } = patch as Record<string, unknown>;
+
+    await this.recordSnapshot({
+      userId,
+      settings: after,
+      patch: settingsPatch as Partial<BotSettingsView>,
+      source: snapshotSource,
+      equity:
+        suggestedEquity != null && Number.isFinite(Number(suggestedEquity))
+          ? Number(suggestedEquity)
+          : null,
+      tier: suggestedTier ?? null,
+    });
+
     await this.botEventService.record({
       lane: null,
       type: BotEventType.OPERATOR_SETTINGS,
       reason: 'SETTINGS_UPDATED',
-      payload: { before, after, patch },
+      payload: {
+        before,
+        after,
+        patch: settingsPatch,
+        source: snapshotSource,
+      },
     });
     return after;
+  }
+
+  async listHistory(
+    query: ListSettingsHistoryQuery = {},
+  ): Promise<{
+    items: BotSettingsSnapshotView[];
+    limit: number;
+    hasMoreOlder: boolean;
+  }> {
+    const userId = requireUserId();
+    const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
+    const qb = this.snapshotRepository
+      .createQueryBuilder('s')
+      .where('s.user_id = :userId', { userId })
+      .orderBy('s.at', 'DESC')
+      .take(limit + 1);
+
+    if (query.beforeAt != null) {
+      qb.andWhere('s.at < :beforeAt', { beforeAt: String(query.beforeAt) });
+    }
+    if (query.from != null) {
+      qb.andWhere('s.at >= :from', { from: String(query.from) });
+    }
+    if (query.to != null) {
+      qb.andWhere('s.at <= :to', { to: String(query.to) });
+    }
+    if (query.source) {
+      qb.andWhere('s.source = :source', { source: query.source });
+    }
+
+    const rows = await qb.getMany();
+    const hasMoreOlder = rows.length > limit;
+    const slice = hasMoreOlder ? rows.slice(0, limit) : rows;
+    return {
+      items: slice.map((r) => this.toSnapshotView(r)),
+      limit,
+      hasMoreOlder,
+    };
+  }
+
+  private async recordSnapshot(input: {
+    userId: string;
+    settings: BotSettingsView;
+    patch: Partial<BotSettingsView> | null;
+    source: BotSettingsSnapshotSource;
+    equity?: number | null;
+    tier?: string | null;
+  }): Promise<void> {
+    const at = Date.now();
+    await this.snapshotRepository.save(
+      this.snapshotRepository.create({
+        userId: input.userId,
+        at: String(at),
+        etDateKey: etDateKey(new Date(at)),
+        source: input.source,
+        settings: input.settings as unknown as Record<string, unknown>,
+        patch: (input.patch as unknown as Record<string, unknown>) ?? null,
+        equity: input.equity ?? null,
+        tier: (input.tier as BotSettingsSnapshot['tier']) ?? null,
+      }),
+    );
+  }
+
+  private toSnapshotView(row: BotSettingsSnapshot): BotSettingsSnapshotView {
+    return {
+      id: row.id,
+      at: Number(row.at),
+      etDateKey: row.etDateKey,
+      source: row.source,
+      settings: row.settings as unknown as BotSettingsView,
+      patch: (row.patch as unknown as Partial<BotSettingsView>) ?? null,
+      equity: row.equity != null ? Number(row.equity) : null,
+      tier: row.tier,
+    };
   }
 
   toView(row: BotSettings): BotSettingsView {

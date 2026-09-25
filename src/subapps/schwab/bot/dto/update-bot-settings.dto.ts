@@ -3,6 +3,7 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -12,6 +13,7 @@ import {
   Min,
 } from 'class-validator';
 
+import { BotSettingsSnapshotSource } from '../entities/bot-settings-snapshot.entity';
 import {
   BotCombineMode,
   BotDirection,
@@ -239,4 +241,26 @@ export class UpdateBotSettingsDto {
   @IsInt()
   @Min(0)
   paperSlippageCents?: number;
+
+  /**
+   * Attribution for settings history. FE Apply suggested MUST send
+   * `suggested` so weekly rollups can separate Apply from rare form Saves.
+   * Stripped before Object.assign onto the entity row.
+   */
+  @IsOptional()
+  @IsIn([
+    BotSettingsSnapshotSource.SUGGESTED,
+    BotSettingsSnapshotSource.MANUAL,
+  ])
+  source?: BotSettingsSnapshotSource.SUGGESTED | BotSettingsSnapshotSource.MANUAL;
+
+  /** Equity at Apply suggested time (history only; not a settings column). */
+  @IsOptional()
+  @IsNumber()
+  suggestedEquity?: number;
+
+  /** Tier label at Apply suggested time (history only). */
+  @IsOptional()
+  @IsString()
+  suggestedTier?: string;
 }

@@ -387,15 +387,13 @@ export function defaultPolicyGrid(): ExitPolicy[] {
       trailArmPct: null,
     });
   }
-  // Armed trails, holding stop and target at what production actually runs
-  // (25% / 40%) so the only variable is the trail. These are the cells that
-  // answer "what should trailArmPct/trailPct be", and they are only
-  // comparable to the live config if the other two legs match it.
-  for (const trailArmPct of [0.15, 0.25]) {
+  // Armed trails near the live fast-scalp profile (stop 25% / target 22%).
+  // Arm 0.20 matches Apply suggested; 0.25 remains a nearby counterfactual.
+  for (const trailArmPct of [0.2, 0.25]) {
     for (const trailPct of [0.1, 0.15, 0.25]) {
       policies.push({
         stopPct: 0.25,
-        targetPct: 0.4,
+        targetPct: 0.22,
         timeStopMs: null,
         trailPct,
         trailArmPct,
