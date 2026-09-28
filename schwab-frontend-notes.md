@@ -1705,6 +1705,19 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
 
 ## Changelog
 
+- **2026-09-28 (weekly strategy review — no FE contract change)**: The Saturday
+  improvement job now builds a research dossier and launches a cloud agent that
+  may change strategy logic, not only settings. **No existing REST or socket
+  shape changed**, so the desk needs no work. Two things are new server-side and
+  noted here only so the FE does not rediscover them as surprises:
+  `GET /bot/fixture?from=&to=` returns recorded SPY bars and option-chain
+  snapshots for offline replay — it is **not** JWT-guarded, takes a bearer
+  `BOT_FIXTURE_TOKEN`, is disabled unless that variable is set, and exposes only
+  market data (no account, order, position or P&L). The chain recorder now
+  samples 40 strikes every 5 seconds with `spot` and `option_ask` populated, so
+  `bot_chain_snapshots` grows roughly 10 MB per session and ages out to S3 after
+  90 days. A new settings column may appear in a future `bot(improve):` PR; when
+  one does, it lands here first and the desk control follows separately.
 - **2026-09-28 (dead Schwab grant is not "Connected")**: `stream-status.reason` is set when the stored refresh token is revoked, including the nested `unsupported_token_type` body seen in prod that morning. The desk shows Reconnect instead of Stale and refetches `/auth/status`. Resync does not repair it. A successful reconnect clears the cached account hash so a different Schwab account is not kept in memory.
 - **2026-09-25 (fast-scalp Apply suggested + settings history)**: James only taps Apply
   suggested — retuned `bot-suggested-settings` toward fast small scalps and restored trail
