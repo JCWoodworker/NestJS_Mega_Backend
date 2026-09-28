@@ -1340,7 +1340,7 @@ Trade post-mortems / bot context: [`schwab-bot-lessons-learned.md`](./schwab-bot
 - `strategiesEnabled`: array of
   `'VWAP_PULLBACK' | 'ORB_5M' | 'VWAP_ROLLING_100' | 'VWAP_REVERSION' | 'ORB_RETEST' | 'EMA_MOMENTUM' | 'RANGE_FADE'`.
   Default is still `['VWAP_PULLBACK', 'ORB_5M']`. The other five exist and stay off until a settings
-  write turns them on. The desk still only draws the original two toggles.
+  write turns them on. The desk settings page lists all seven.
 - `minStrategyAgreement`: integer, default `1`. `1` is the old `ANY` (first signal wins). A value
   equal to the number of enabled strategies is the old `CONFIRMING`. Anything between is a vote.
   `combineMode` is still accepted; sending `ANY` sets this to 1 and sending `CONFIRMING` sets it
@@ -1715,8 +1715,8 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
 
 - **2026-09-28 (strategy layer — additive settings fields)**: `strategiesEnabled` may now
   include `VWAP_ROLLING_100`, `VWAP_REVERSION`, `ORB_RETEST`, `EMA_MOMENTUM`, and `RANGE_FADE`.
-  Only `VWAP_PULLBACK` and `ORB_5M` are on by default, and the desk still only renders those two
-  toggles. Storage is one `strategies_enabled` jsonb column instead of a boolean per strategy.
+  Only `VWAP_PULLBACK` and `ORB_5M` are on by default. The desk settings page lists all seven
+  and a save writes the full array. Storage is one `strategies_enabled` jsonb column instead of a boolean per strategy.
   `GET`/`PUT /bot/settings` also carry `minStrategyAgreement` (integer, default 1). Existing
   `combineMode` still works and writes that integer. The candle buffer keeps the whole ET
   session instead of the last 100 bars, so `ORB_5M` no longer goes silent after 11:10 and
