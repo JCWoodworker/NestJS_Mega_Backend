@@ -41,17 +41,16 @@ import { diffStreamerHolds } from './bot-streamer-hold.util';
 import { BotOpenPosition } from './entities/bot-state.entity';
 import {
   combineSignals,
-  computeAtr,
-  computeOrbRange,
-  computeVwap,
   etNowHhMm,
   etSessionStartMs,
-  evaluateOrb5m,
-  evaluateVwapPullback,
   isAtOrPast,
   isDirectionAllowed,
   isWithinWindow,
 } from './bot-strategy.util';
+import {
+  buildStrategyContext,
+  evaluateEnabled,
+} from './strategies/registry';
 import {
   computeBudget,
   selectContractDetailed,
@@ -455,28 +454,24 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         return;
       }
       const sessionStart = etSessionStartMs();
-      const vwap = computeVwap(candles, sessionStart);
-      const atr = computeAtr(candles, settings.atrPeriod);
-      const orb = computeOrbRange(candles, sessionStart);
-
-      const results: Partial<
-        Record<'VWAP_PULLBACK' | 'ORB_5M', 'CALL' | 'PUT' | null>
-      > = {};
-      if (settings.strategiesEnabled.includes(BotStrategy.VWAP_PULLBACK)) {
-        results.VWAP_PULLBACK = evaluateVwapPullback(candles, vwap, atr);
-      }
-      if (settings.strategiesEnabled.includes(BotStrategy.ORB_5M)) {
-        results.ORB_5M = evaluateOrb5m(candles, orb);
-      }
-
-      const enabledKeys = settings.strategiesEnabled.map(
-        (s) => s as 'VWAP_PULLBACK' | 'ORB_5M',
+      const ctx = buildStrategyContext(
+        candles,
+        sessionStart,
+        settings.atrPeriod,
       );
+      const enabledKeys = settings.strategiesEnabled;
+      const results = evaluateEnabled(enabledKeys, ctx);
+      const agreement =
+        settings.minStrategyAgreement > 1
+          ? settings.minStrategyAgreement
+          : settings.combineMode === BotCombineMode.CONFIRMING
+            ? ('CONFIRMING' as const)
+            : ('ANY' as const);
       const combined = combineSignals(
         enabledKeys,
         results,
         chartTime ?? Date.now(),
-        settings.combineMode,
+        agreement,
       );
       if (!combined) {
         await this.botEventService.recordDeduped(
@@ -484,16 +479,17 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
             lane: row.lane,
             type: BotEventType.NO_SIGNAL,
             reason:
-              settings.combineMode === BotCombineMode.ANY
+              agreement === 'ANY'
                 ? 'ANY_NO_SIGNAL'
                 : 'CONFIRMING_NO_AGREEMENT',
             strategies: enabledKeys,
             payload: {
               combineMode: settings.combineMode,
+              minStrategyAgreement: settings.minStrategyAgreement,
               results,
-              vwap,
-              atr,
-              orb,
+              vwap: ctx.vwap,
+              atr: ctx.atr,
+              orb: ctx.orb,
               directionsEnabled: settings.directionsEnabled,
             },
           },
@@ -515,7 +511,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         combined,
         settings,
         status,
-        atr,
+        ctx.atr,
       );
     } catch (err) {
       this.logger.warn(`evaluateEntrySignal failed: ${err.message}`);

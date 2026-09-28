@@ -1,3 +1,5 @@
+import { BotStrategy } from './enums/strategy.enum';
+
 export interface BotCandle {
   open: number;
   high: number;
@@ -109,29 +111,48 @@ export function evaluateOrb5m(
   return null;
 }
 
+/** String-enum values are not assignable from their literals, so the public
+ * signal API takes the value union. Enum members assign to it. */
+export type BotStrategyId = `${BotStrategy}`;
+
 export interface CombinedSignal {
   at: number;
-  strategies: Array<'VWAP_PULLBACK' | 'ORB_5M'>;
+  strategies: BotStrategyId[];
   direction: SignalDirection;
   reason: string;
 }
 
+/** `'ANY'` is 1, `'CONFIRMING'` is every enabled strategy, a number is a vote. */
+export type SignalAgreement = number | 'CONFIRMING' | 'ANY';
+
+function agreementFloor(
+  agreement: SignalAgreement,
+  enabledCount: number,
+): number {
+  if (agreement === 'CONFIRMING') return Math.max(enabledCount, 1);
+  if (agreement === 'ANY') return 1;
+  return Math.max(1, Math.floor(agreement));
+}
+
 /**
  * Combine enabled strategy outputs.
- * - CONFIRMING (AND): every enabled strategy must signal and agree.
- * - ANY (OR): first enabled strategy with a signal fires; if several agree,
- *   all agreeing names are attributed. Disagreeing later signals are ignored.
+ * - agreement 1 / ANY: first enabled strategy with a signal fires; later
+ *   signals that agree are attributed, later disagreements are ignored.
+ * - agreement equal to the enabled count / CONFIRMING: every enabled
+ *   strategy must signal and agree.
+ * - anything between: that many must agree, and the other direction must not.
  */
 export function combineSignals(
-  enabled: Array<'VWAP_PULLBACK' | 'ORB_5M'>,
-  results: Partial<Record<'VWAP_PULLBACK' | 'ORB_5M', SignalDirection | null>>,
+  enabled: readonly BotStrategyId[],
+  results: Partial<Record<BotStrategyId, SignalDirection | null>>,
   nowMs = Date.now(),
-  mode: 'CONFIRMING' | 'ANY' = 'ANY',
+  agreement: SignalAgreement = 'ANY',
 ): CombinedSignal | null {
   if (!enabled.length) return null;
+  const min = agreementFloor(agreement, enabled.length);
 
-  if (mode === 'ANY') {
-    const strategies: Array<'VWAP_PULLBACK' | 'ORB_5M'> = [];
+  if (min <= 1) {
+    const strategies: BotStrategyId[] = [];
     let direction: SignalDirection | null = null;
     for (const s of enabled) {
       const d = results[s] ?? null;
@@ -152,22 +173,41 @@ export function combineSignals(
     };
   }
 
-  const directions: SignalDirection[] = [];
-  const strategies: Array<'VWAP_PULLBACK' | 'ORB_5M'> = [];
+  const calls: BotStrategyId[] = [];
+  const puts: BotStrategyId[] = [];
   for (const s of enabled) {
     const d = results[s] ?? null;
-    if (!d) return null;
-    directions.push(d);
-    strategies.push(s);
+    if (d === 'CALL') calls.push(s);
+    else if (d === 'PUT') puts.push(s);
   }
-  const first = directions[0];
-  if (!directions.every((d) => d === first)) return null;
+  const callWins = calls.length >= min && calls.length > puts.length;
+  const putWins = puts.length >= min && puts.length > calls.length;
+  if (!callWins && !putWins) return null;
+  const strategies = callWins ? calls : puts;
+  const direction: SignalDirection = callWins ? 'CALL' : 'PUT';
+  const label = min >= enabled.length ? 'CONFIRMING' : `AGREE ${min}`;
   return {
     at: nowMs,
     strategies,
-    direction: first,
-    reason: `CONFIRMING ${strategies.join('+')} → ${first}`,
+    direction,
+    reason: `${label} ${strategies.join('+')} → ${direction}`,
   };
+}
+
+/** Exponential moving average of close. Null until `period` bars exist. */
+export function computeEma(
+  candles: BotCandle[],
+  period: number,
+): number | null {
+  if (period < 1 || candles.length < period) return null;
+  const k = 2 / (period + 1);
+  let ema =
+    candles.slice(0, period).reduce((sum, candle) => sum + candle.close, 0) /
+    period;
+  for (const candle of candles.slice(period)) {
+    ema = candle.close * k + ema * (1 - k);
+  }
+  return ema;
 }
 
 /** Epoch ms for 9:30 America/New_York on the given calendar day (or today). */

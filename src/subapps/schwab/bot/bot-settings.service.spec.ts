@@ -14,8 +14,8 @@ import {
 function buildService() {
   let row: any = {
     id: '1',
-    vwapPullbackEnabled: true,
-    orb5mEnabled: true,
+    strategiesEnabled: [BotStrategy.VWAP_PULLBACK, BotStrategy.ORB_5M],
+    minStrategyAgreement: 1,
     callsEnabled: true,
     putsEnabled: true,
     canBuyCalls: true,
@@ -107,8 +107,7 @@ describe('BotSettingsService — strategiesEnabled / combineMode (contract §14b
       strategiesEnabled: [BotStrategy.ORB_5M],
     });
     expect(view.strategiesEnabled).toEqual([BotStrategy.ORB_5M]);
-    expect(getRowSnapshot().vwapPullbackEnabled).toBe(false);
-    expect(getRowSnapshot().orb5mEnabled).toBe(true);
+    expect(getRowSnapshot().strategiesEnabled).toEqual([BotStrategy.ORB_5M]);
   });
 
   it('PUT with strategiesEnabled=[VWAP_PULLBACK] disables ORB_5M and keeps VWAP_PULLBACK', async () => {
@@ -117,15 +116,18 @@ describe('BotSettingsService — strategiesEnabled / combineMode (contract §14b
       strategiesEnabled: [BotStrategy.VWAP_PULLBACK],
     });
     expect(view.strategiesEnabled).toEqual([BotStrategy.VWAP_PULLBACK]);
-    expect(getRowSnapshot().vwapPullbackEnabled).toBe(true);
-    expect(getRowSnapshot().orb5mEnabled).toBe(false);
+    expect(getRowSnapshot().strategiesEnabled).toEqual([
+      BotStrategy.VWAP_PULLBACK,
+    ]);
   });
 
   it('PUT without strategiesEnabled leaves the existing flags untouched', async () => {
     const { service, getRowSnapshot } = buildService();
     await service.updateSettings({ riskPct: 25 });
-    expect(getRowSnapshot().vwapPullbackEnabled).toBe(true);
-    expect(getRowSnapshot().orb5mEnabled).toBe(true);
+    expect(getRowSnapshot().strategiesEnabled).toEqual([
+      BotStrategy.VWAP_PULLBACK,
+      BotStrategy.ORB_5M,
+    ]);
     expect(getRowSnapshot().riskPct).toBe(25);
   });
 

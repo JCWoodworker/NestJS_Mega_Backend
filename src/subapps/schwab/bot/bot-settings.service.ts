@@ -31,6 +31,8 @@ export interface BotSettingsView {
   canBuyCalls: boolean;
   canBuyPuts: boolean;
   combineMode: BotCombineMode;
+  /** 1 is ANY, the enabled count is CONFIRMING, values between are a vote. */
+  minStrategyAgreement: number;
   riskPct: number;
   useMaxLossUsd: boolean;
   maxLossUsd: number | null;
@@ -176,6 +178,10 @@ export class BotSettingsService {
       profitTargetUsd,
       profitTargetPctDayStart,
       profitTargetPctCurrent,
+      vwapPullbackEnabled,
+      orb5mEnabled,
+      minStrategyAgreement,
+      combineMode,
       source,
       suggestedEquity,
       suggestedTier,
@@ -187,10 +193,25 @@ export class BotSettingsService {
     };
     Object.assign(row, rest);
     if (strategiesEnabled) {
-      row.vwapPullbackEnabled = strategiesEnabled.includes(
-        BotStrategy.VWAP_PULLBACK,
-      );
-      row.orb5mEnabled = strategiesEnabled.includes(BotStrategy.ORB_5M);
+      row.strategiesEnabled = [...strategiesEnabled];
+    } else if (vwapPullbackEnabled != null || orb5mEnabled != null) {
+      const next = new Set(row.strategiesEnabled ?? []);
+      if (vwapPullbackEnabled === true) next.add(BotStrategy.VWAP_PULLBACK);
+      if (vwapPullbackEnabled === false) next.delete(BotStrategy.VWAP_PULLBACK);
+      if (orb5mEnabled === true) next.add(BotStrategy.ORB_5M);
+      if (orb5mEnabled === false) next.delete(BotStrategy.ORB_5M);
+      row.strategiesEnabled = [...next];
+    }
+    if (combineMode) {
+      row.combineMode = combineMode;
+    }
+    if (minStrategyAgreement != null) {
+      row.minStrategyAgreement = minStrategyAgreement;
+    } else if (combineMode === BotCombineMode.CONFIRMING) {
+      const enabled = row.strategiesEnabled ?? [];
+      row.minStrategyAgreement = Math.max(enabled.length, 1);
+    } else if (combineMode === BotCombineMode.ANY) {
+      row.minStrategyAgreement = 1;
     }
     if (directionsEnabled) {
       row.callsEnabled = directionsEnabled.includes(BotDirection.CALL);
@@ -338,13 +359,9 @@ export class BotSettingsService {
   }
 
   toView(row: BotSettings): BotSettingsView {
-    const strategiesEnabled: BotStrategy[] = [];
-    if (row.vwapPullbackEnabled) {
-      strategiesEnabled.push(BotStrategy.VWAP_PULLBACK);
-    }
-    if (row.orb5mEnabled) {
-      strategiesEnabled.push(BotStrategy.ORB_5M);
-    }
+    const strategiesEnabled = Array.isArray(row.strategiesEnabled)
+      ? [...row.strategiesEnabled]
+      : [];
     const directionsEnabled: BotDirection[] = [];
     if (row.callsEnabled) {
       directionsEnabled.push(BotDirection.CALL);
@@ -358,6 +375,7 @@ export class BotSettingsService {
       canBuyCalls: row.canBuyCalls,
       canBuyPuts: row.canBuyPuts,
       combineMode: row.combineMode,
+      minStrategyAgreement: Number(row.minStrategyAgreement ?? 1),
       riskPct: Number(row.riskPct),
       useMaxLossUsd: row.useMaxLossUsd,
       maxLossUsd: row.maxLossUsd != null ? Number(row.maxLossUsd) : null,

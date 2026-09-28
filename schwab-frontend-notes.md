@@ -1337,7 +1337,14 @@ Trade post-mortems / bot context: [`schwab-bot-lessons-learned.md`](./schwab-bot
 **Note:** `GET /bot/events` response is now `{ items, nextBeforeId, hasMoreOlder, … }`
 — not a bare array (breaking vs early §14j).
 
-- `strategiesEnabled`: array of `'VWAP_PULLBACK' | 'ORB_5M'` (both enabled by default)
+- `strategiesEnabled`: array of
+  `'VWAP_PULLBACK' | 'ORB_5M' | 'VWAP_ROLLING_100' | 'VWAP_REVERSION' | 'ORB_RETEST' | 'EMA_MOMENTUM' | 'RANGE_FADE'`.
+  Default is still `['VWAP_PULLBACK', 'ORB_5M']`. The other five exist and stay off until a settings
+  write turns them on. The desk still only draws the original two toggles.
+- `minStrategyAgreement`: integer, default `1`. `1` is the old `ANY` (first signal wins). A value
+  equal to the number of enabled strategies is the old `CONFIRMING`. Anything between is a vote.
+  `combineMode` is still accepted; sending `ANY` sets this to 1 and sending `CONFIRMING` sets it
+  to the enabled count.
 - `directionsEnabled`: array of `'CALL' | 'PUT'` — operator preference for which sides the bot may
   enter (**default `['CALL']` only** — not BOTH). UI may present this as CALL / PUT / BOTH; the wire
   shape is always the array. Soften any help copy that says the bot "does calls or puts" — that was
@@ -1452,14 +1459,15 @@ after login) and `switchUnderlying`. The diff lives in
 
 ### Strategy loop (server-internal, no frontend action needed)
 
-- 100-bar ring buffer of 1m SPY OHLCV, seeded from `price-history` on boot and appended from the
-  same internal `chart-candle` event this backend already emits over `/options`.
-- VWAP (session anchored 9:30 ET), ATR(14), and 9:30–9:35 ET opening-range high/low, recomputed on
-  every closed 1m candle.
-- `VWAP_PULLBACK` (pullback into VWAP with the prevailing trend) and `ORB_5M` (breakout of the
-  opening range) each independently emit `CALL`/`PUT`/no-signal. Default `ANY` mode takes the
-  first enabled signal; optional `CONFIRMING` requires every *enabled* strategy to agree before
-  a trade fires.
+- Session buffer of 1m SPY OHLCV for the current ET date (capped at 500 bars), seeded from
+  `price-history` on boot and appended from the same internal `chart-candle` event this backend
+  already emits over `/options`. A new ET date clears it. The old 100-bar ring dropped the 09:30
+  bars around 11:10, which turned session VWAP into a rolling average and made `ORB_5M` return
+  no range for the rest of the day.
+- VWAP (session anchored 9:30 ET), ATR(14), EMA 9/21, and 9:30–9:35 ET opening-range high/low,
+  recomputed on every closed 1m candle.
+- Each enabled strategy emits `CALL`/`PUT`/no-signal. `minStrategyAgreement` decides how many
+  must agree. `VWAP_ROLLING_100` is the old 100-bar VWAP, kept as its own rule and off by default.
 - **Direction gate (preference ∩ capability):** even after strategies fire, Nest skips the entry
   if the signal direction is not in `directionsEnabled` **or** the matching `canBuyCalls` /
   `canBuyPuts` flag is false. Skip is visible in the activity feed as
@@ -1705,6 +1713,14 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
 
 ## Changelog
 
+- **2026-09-28 (strategy layer — additive settings fields)**: `strategiesEnabled` may now
+  include `VWAP_ROLLING_100`, `VWAP_REVERSION`, `ORB_RETEST`, `EMA_MOMENTUM`, and `RANGE_FADE`.
+  Only `VWAP_PULLBACK` and `ORB_5M` are on by default, and the desk still only renders those two
+  toggles. Storage is one `strategies_enabled` jsonb column instead of a boolean per strategy.
+  `GET`/`PUT /bot/settings` also carry `minStrategyAgreement` (integer, default 1). Existing
+  `combineMode` still works and writes that integer. The candle buffer keeps the whole ET
+  session instead of the last 100 bars, so `ORB_5M` no longer goes silent after 11:10 and
+  `VWAP_PULLBACK` is session VWAP again. No socket change.
 - **2026-09-28 (weekly strategy review — no FE contract change)**: The Saturday
   improvement job now builds a research dossier and launches a cloud agent that
   may change strategy logic, not only settings. **No existing REST or socket

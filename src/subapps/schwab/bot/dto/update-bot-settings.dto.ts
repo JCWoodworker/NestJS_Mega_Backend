@@ -39,10 +39,18 @@ export class UpdateBotSettingsDto {
   @IsEnum(BotDirection, { each: true })
   directionsEnabled?: BotDirection[];
 
-  /** `CONFIRMING` = AND (all enabled must agree); `ANY` = OR (first signal wins). */
+  /** `CONFIRMING` = AND (all enabled must agree); `ANY` = OR (first signal wins).
+   * Prefer `minStrategyAgreement`. Sending this still sets that integer. */
   @IsOptional()
   @IsEnum(BotCombineMode)
   combineMode?: BotCombineMode;
+
+  /** How many enabled strategies must agree. 1 is ANY; N is CONFIRMING. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(7)
+  minStrategyAgreement?: number;
 
   @IsOptional()
   @IsBoolean()

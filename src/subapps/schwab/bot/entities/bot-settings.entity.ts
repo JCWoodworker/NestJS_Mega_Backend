@@ -6,7 +6,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-import { BotCombineMode } from '../enums/strategy.enum';
+import { BotCombineMode, BotStrategy } from '../enums/strategy.enum';
 
 /** One settings row per user — server is source of truth for bot knobs. */
 @Entity('bot_settings')
@@ -20,11 +20,16 @@ export class BotSettings {
   @Column({ type: 'varchar', name: 'user_id' })
   userId: string;
 
-  @Column({ type: 'boolean', name: 'vwap_pullback_enabled', default: true })
-  vwapPullbackEnabled: boolean;
+  @Column({
+    type: 'jsonb',
+    name: 'strategies_enabled',
+    default: () => `'["VWAP_PULLBACK","ORB_5M"]'`,
+  })
+  strategiesEnabled: BotStrategy[];
 
-  @Column({ type: 'boolean', name: 'orb_5m_enabled', default: true })
-  orb5mEnabled: boolean;
+  /** How many enabled strategies must agree. 1 is ANY; N is CONFIRMING. */
+  @Column({ type: 'int', name: 'min_strategy_agreement', default: 1 })
+  minStrategyAgreement: number;
 
   /** Operator preference — trade CALL direction when strategies fire CALL. */
   @Column({ type: 'boolean', name: 'calls_enabled', default: true })

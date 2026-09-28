@@ -15,17 +15,15 @@ import {
   sizePosition,
   type StrikeFilters,
 } from './bot-strike-selection.util';
+import { BotStrategy } from './enums/strategy.enum';
 import {
   combineSignals,
-  computeAtr,
-  computeOrbRange,
-  computeVwap,
-  evaluateOrb5m,
-  evaluateVwapPullback,
   isDirectionAllowed,
   type BotCandle,
+  type SignalAgreement,
   type SignalDirection,
 } from './bot-strategy.util';
+import { buildStrategyContext, evaluateEnabled } from './strategies/registry';
 
 /**
  * Replay a session against recorded bars and chain snapshots.
@@ -59,8 +57,15 @@ export interface BacktestSession {
 
 /** The knobs a replay varies. Mirrors the live settings row. */
 export interface BacktestConfig {
-  strategies: Array<'VWAP_PULLBACK' | 'ORB_5M'>;
+  strategies: Array<`${BotStrategy}`>;
   combineMode: 'ANY' | 'CONFIRMING';
+  /** Defaults to 1 (ANY). A number above 1 overrides combineMode. */
+  minStrategyAgreement?: number;
+  /**
+   * When set, the replay only sees this many trailing bars. 100 reproduces
+   * the pre-fix ring so a run can be compared with the full session.
+   */
+  maxBars?: number;
   directionsEnabled: SignalDirection[];
   filters: StrikeFilters;
   atrPeriod: number;
@@ -225,7 +230,9 @@ function replaySession(
   while (barIndex < bars.length) {
     const bar = bars[barIndex];
     const hhmm = etHhMm(bar.chartTime);
-    const window = [...bars.slice(0, barIndex + 1)];
+    const seen = bars.slice(0, barIndex + 1);
+    const window =
+      config.maxBars != null ? seen.slice(-config.maxBars) : [...seen];
 
     if (hhmm < config.tradeWindowStart || hhmm >= config.tradeWindowEnd) {
       barIndex += 1;
@@ -243,21 +250,20 @@ function replaySession(
       continue;
     }
 
-    const vwap = computeVwap(window, sessionStartMs);
-    const atr = computeAtr(window, config.atrPeriod);
-    const orb = computeOrbRange(window, sessionStartMs);
+    const ctx = buildStrategyContext(
+      window,
+      sessionStartMs,
+      config.atrPeriod,
+    );
+    const agreement: SignalAgreement =
+      (config.minStrategyAgreement ?? 1) > 1
+        ? (config.minStrategyAgreement as number)
+        : config.combineMode;
     const signal = combineSignals(
       config.strategies,
-      {
-        VWAP_PULLBACK: config.strategies.includes('VWAP_PULLBACK')
-          ? evaluateVwapPullback(window, vwap, atr)
-          : null,
-        ORB_5M: config.strategies.includes('ORB_5M')
-          ? evaluateOrb5m(window, orb)
-          : null,
-      },
+      evaluateEnabled(config.strategies, ctx),
       bar.chartTime,
-      config.combineMode,
+      agreement,
     );
 
     if (!signal) {
@@ -309,7 +315,7 @@ function replaySession(
     const levels = computeExitLevels({
       entryPremium,
       spot: entrySnapshot.spot ?? bar.close,
-      atr,
+      atr: ctx.atr,
       direction: signal.direction,
       usePremiumStop: config.usePremiumStop,
       premiumStopPct: config.premiumStopPct,
