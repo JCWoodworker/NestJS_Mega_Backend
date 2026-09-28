@@ -386,9 +386,11 @@ io(`${VITE_SOCKET_URL}${VITE_SOCKET_NAMESPACE}`, {
   immediately on connect if the ladder is already established (see "late-joiner replay" below) —
   previously a client connecting after the ladder had already stabilized got nothing until the
   next actual re-center, which could be a long wait.
-- **`stream-status`** — `{ connected: boolean, lastFrameAt: number | null }`. **Live-verified**:
+- **`stream-status`** — `{ connected: boolean, lastFrameAt: number | null, reason?: string }`. **Live-verified**:
   `connected: true`, stable, no flapping (see Changelog for the bug that used to cause constant
   `true`→`false` flapping). Also now sent immediately on connect (see "late-joiner replay" below).
+  When `reason` contains `Reconnect Schwab`, the stored grant is dead: the desk must reconnect.
+  Refresh and Resync do not fix it. The Connected badge is refetched from `/auth/status`.
 - **`account-snapshot`** — every ~4s:
   ```ts
   {
@@ -1703,6 +1705,7 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
 
 ## Changelog
 
+- **2026-09-28 (dead Schwab grant is not "Connected")**: `stream-status.reason` is set when the stored refresh token is revoked, including the nested `unsupported_token_type` body seen in prod that morning. The desk shows Reconnect instead of Stale and refetches `/auth/status`. Resync does not repair it. A successful reconnect clears the cached account hash so a different Schwab account is not kept in memory.
 - **2026-09-25 (fast-scalp Apply suggested + settings history)**: James only taps Apply
   suggested — retuned `bot-suggested-settings` toward fast small scalps and restored trail
   aggressiveness toward the original design. **Suggested / entity defaults (COMFORTABLE):**

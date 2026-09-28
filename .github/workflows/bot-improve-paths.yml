@@ -1,0 +1,26 @@
+name: bot-improve path allowlist
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  paths:
+    if: startsWith(github.event.pull_request.title, 'bot(improve):')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject forbidden paths
+        run: |
+          set -euo pipefail
+          files=$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD)
+          echo "$files"
+          forbidden='bot-execution.service.ts|src/subapps/schwab/auth/|src/subapps/schwab/orders/|src/subapps/schwab/streaming/|/migrations/'
+          if echo "$files" | grep -E "$forbidden"; then
+            echo "bot(improve) PR touched a forbidden path"
+            exit 1
+          fi
+          if echo "$files" | grep -vE '^(src/subapps/schwab/bot/|bot-reports/)'; then
+            echo "bot(improve) PR left the Nest bot allowlist"
+            exit 1
+          fi

@@ -78,6 +78,13 @@ export default registerAs('schwab', () => ({
    * lane is ever armed.
    */
   botSupervisorEnabled: process.env.BOT_DAILY_SUPERVISOR_ENABLED === 'true',
+  /** Saturday propose job. Off until explicitly enabled. Does not open PRs. */
+  botProposeEnabled: process.env.BOT_PROPOSE_ENABLED === 'true',
+  /**
+   * Cloud agent pull requests. Off until a week is actionable and this is
+   * turned on. The propose job can still write the packet without it.
+   */
+  botProposeAgentEnabled: process.env.BOT_PROPOSE_AGENT_ENABLED === 'true',
   /**
    * Arms a few minutes after the open rather than at 09:30 exactly: the first
    * minutes are the widest spreads of the day, and VWAP/ORB need bars before

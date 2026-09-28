@@ -17,6 +17,7 @@ import {
   type PolicyResult,
   type Readiness,
 } from './bot-analysis.util';
+import { NON_STRATEGY_EXIT_REASONS } from './bot-propose.util';
 import { BotDailyReport } from './entities/bot-daily-report.entity';
 import { BotTradeTape } from './entities/bot-trade-tape.entity';
 import { BotTrade } from './entities/bot-trade.entity';
@@ -301,6 +302,19 @@ export class BotAnalyzerService {
           (r) => `| ${r.reason} | ${r.trades} | ${r.netPnl} | ${r.avgNetPnl} |`,
         ),
       );
+      const ops = aggregate.exitReasons.filter((r) =>
+        NON_STRATEGY_EXIT_REASONS.has(r.reason),
+      );
+      if (ops.length) {
+        const opsTrades = ops.reduce((sum, r) => sum + r.trades, 0);
+        const opsNet = ops.reduce((sum, r) => sum + r.netPnl, 0);
+        lines.push(
+          '',
+          '## Ops exits',
+          '',
+          `Infrastructure flattens (${[...NON_STRATEGY_EXIT_REASONS].join(', ')}): ${opsTrades} trades, net ${opsNet}. These stay in the session totals above and are excluded from propose-readiness.`,
+        );
+      }
     }
 
     if (policyResults.length) {

@@ -37,6 +37,8 @@ export interface LadderRecenteredPayload {
 export interface StreamStatusPayload {
   connected: boolean;
   lastFrameAt: number | null;
+  /** Human-readable, when the stream is down for a reason the desk can act on. */
+  reason?: string;
 }
 
 export interface AccountSnapshotPayload {

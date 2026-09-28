@@ -4,6 +4,10 @@ import { ConfigType } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import * as WebSocket from 'ws';
 
+import {
+  classifySchwabAuthFailure,
+  SCHWAB_REAUTH_REASON,
+} from '@schwab/auth/schwab-auth-failure.util';
 import { SchwabAuthService } from '@schwab/auth/schwab-auth.service';
 import schwabConfig from '@schwab/config/schwab.config';
 import { runAsUser } from '@schwab/shared/schwab-user-context';
@@ -114,6 +118,11 @@ export class SchwabStreamerSession {
   private flushTimer: NodeJS.Timeout | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private destroyed = false;
+  /** One forced refresh per outage, so a rejected access token can recover
+   * without an OAuth loop when the refresh token is still good. */
+  private authRecoveryAttempted = false;
+  /** Set when the stored Schwab grant is dead. Replayed to late joiners. */
+  private streamStatusReason: string | null = null;
 
   private underlyingSymbol = 'SPY';
   private optionRoot = 'SPY';
@@ -177,11 +186,21 @@ export class SchwabStreamerSession {
    * being broken, as in the original bug report).
    */
   getSnapshotForNewClient(): {
-    streamStatus: { connected: boolean; lastFrameAt: number | null };
+    streamStatus: {
+      connected: boolean;
+      lastFrameAt: number | null;
+      reason?: string;
+    };
     ladder: { centerStrike: number; symbols: string[] } | null;
   } {
     return {
-      streamStatus: { connected: this.loggedIn, lastFrameAt: this.lastFrameAt },
+      streamStatus: {
+        connected: this.loggedIn,
+        lastFrameAt: this.lastFrameAt,
+        ...(this.streamStatusReason
+          ? { reason: this.streamStatusReason }
+          : {}),
+      },
       ladder:
         this.centerStrike !== null
           ? {
@@ -281,6 +300,10 @@ export class SchwabStreamerSession {
       this.streamerInfo = await this.fetchStreamerInfo();
       this.openSocket(accessToken);
     } catch (err) {
+      if (await this.recoverAuthIfPossible(err)) {
+        this.scheduleReconnect(0);
+        return;
+      }
       this.logger.warn(
         `Schwab streamer not started yet (${err.message}); retrying in ${
           CONNECT_RETRY_WHEN_UNAUTHENTICATED_MS / 1000
@@ -288,6 +311,40 @@ export class SchwabStreamerSession {
       );
       this.scheduleReconnect(CONNECT_RETRY_WHEN_UNAUTHENTICATED_MS);
     }
+  }
+
+  /**
+   * A Schwab 400 while our access-token clock still looks valid is not fixed
+   * by Resync. Try one refresh-token rotation first. A still-valid refresh
+   * token keeps the account connected. Only a dead grant tells the desk to
+   * reconnect.
+   */
+  private async recoverAuthIfPossible(err: unknown): Promise<boolean> {
+    const kind = classifySchwabAuthFailure(err);
+    if (!kind || this.authRecoveryAttempted) {
+      this.emitReauthIfDead(err);
+      return false;
+    }
+    this.authRecoveryAttempted = true;
+    try {
+      await this.authService.forceRefresh(this.userId);
+      return true;
+    } catch (refreshErr) {
+      this.emitReauthIfDead(refreshErr);
+      this.emitReauthIfDead(err);
+      return false;
+    }
+  }
+
+  private emitReauthIfDead(err: unknown): void {
+    if (classifySchwabAuthFailure(err) !== 'dead_refresh') return;
+    if (this.streamStatusReason === SCHWAB_REAUTH_REASON) return;
+    this.streamStatusReason = SCHWAB_REAUTH_REASON;
+    this.optionsGateway.emitStreamStatus(this.userId, {
+      connected: false,
+      lastFrameAt: this.lastFrameAt,
+      reason: SCHWAB_REAUTH_REASON,
+    });
   }
 
   private async fetchStreamerInfo(): Promise<StreamerInfo> {
@@ -417,6 +474,8 @@ export class SchwabStreamerSession {
   private async onLoggedIn(): Promise<void> {
     this.loggedIn = true;
     this.disconnectedAt = null;
+    this.authRecoveryAttempted = false;
+    this.streamStatusReason = null;
     this.logger.log('Schwab streamer LOGIN succeeded');
     this.optionsGateway.emitStreamStatus(this.userId, {
       connected: true,

@@ -9,6 +9,7 @@ import {
   schwabHttpsAgent,
 } from '@schwab/http/schwab-https-agent';
 import { OrdersModule } from '@schwab/orders/orders.module';
+import { SchwabSharedModule } from '@schwab/shared/schwab-shared.module';
 
 import { SchwabToken } from './entities/schwab-token.entity';
 import { SchwabAuthController } from './schwab-auth.controller';
@@ -27,6 +28,7 @@ import { SchwabAuthService } from './schwab-auth.service';
     // Cycle: SchwabAuthModule -> OrdersModule -> SchwabHttpModule ->
     // SchwabAuthModule (for the Bearer interceptor). forwardRef breaks it.
     forwardRef(() => OrdersModule),
+    forwardRef(() => SchwabSharedModule),
   ],
   controllers: [SchwabAuthController],
   providers: [SchwabAuthService],

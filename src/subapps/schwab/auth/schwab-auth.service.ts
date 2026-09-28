@@ -15,10 +15,12 @@ import { Repository } from 'typeorm';
 
 import schwabConfig from '@schwab/config/schwab.config';
 import { OrdersService } from '@schwab/orders/orders.service';
+import { SchwabAccountResolver } from '@schwab/shared/schwab-account-resolver.service';
 import { runAsUser } from '@schwab/shared/schwab-user-context';
 
 import { getAllowedOrigins } from '@utils/allowed-origins';
 
+import { classifySchwabAuthFailure } from './schwab-auth-failure.util';
 import { SchwabToken } from './entities/schwab-token.entity';
 import { decryptToken, encryptToken } from './token-encryption.util';
 
@@ -80,6 +82,8 @@ export class SchwabAuthService {
     private readonly httpService: HttpService,
     @Inject(forwardRef(() => OrdersService))
     private readonly ordersService: OrdersService,
+    @Inject(forwardRef(() => SchwabAccountResolver))
+    private readonly accountResolver: SchwabAccountResolver,
     @Inject(schwabConfig.KEY)
     private readonly config: ConfigType<typeof schwabConfig>,
   ) {}
@@ -253,6 +257,26 @@ export class SchwabAuthService {
   }
 
   /**
+   * Rotate the access token even when our stored expiry still looks fine.
+   *
+   * Schwab can revoke a grant while the access token's `expires_in` clock
+   * has time left. Callers that receive `unsupported_token_type` /
+   * `invalid_grant` use this once before asking the user to reconnect. A
+   * still-valid refresh token recovers the session; a dead one clears the
+   * row inside `refreshAccessToken`.
+   */
+  async forceRefresh(userId: string): Promise<string> {
+    this.cachedAccessTokens.delete(userId);
+    const token = await this.getTokenRow(userId);
+    if (!token) {
+      throw new UnauthorizedException(
+        'Schwab account is not connected yet. Visit /auth/connect first.',
+      );
+    }
+    return this.refreshAccessTokenOnce(token);
+  }
+
+  /**
    * Ensures only one `grant_type=refresh_token` call per user is ever in
    * flight at a time. `getValidAccessToken()` is called independently by
    * every outgoing Schwab HTTP request (the Bearer interceptor in
@@ -347,21 +371,33 @@ export class SchwabAuthService {
       await this.persistTokenResponse(token.userId, tokenResponse, token.id);
       return tokenResponse.access_token;
     } catch (err) {
-      if (err?.response?.data?.error === 'invalid_grant') {
+      if (classifySchwabAuthFailure(err) === 'dead_refresh') {
         // Refresh token is permanently dead (revoked/reused/expired) —
         // nothing will make a subsequent refresh succeed. Clear the row so
         // `/auth/status` stops reporting a stale "connected: true" for up
         // to 7 more days and the user is clearly prompted to reconnect via
         // /auth/connect instead of silently getting no live data.
-        await this.tokenRepository.delete({ id: token.id });
-        this.cachedAccessTokens.delete(token.userId);
-        this.cachedAccountHashes.delete(token.userId);
+        //
+        // Match the nested trader-API shape as well as a bare
+        // `invalid_grant`. Prod 2026-09-28 only logged the nested form, so
+        // the exact `error === 'invalid_grant'` check never cleared the row
+        // and Settings stayed "Connected" while the streamer 400'd.
+        await this.forgetStoredToken(token.userId, token.id);
         this.logger.error(
           `Schwab refresh token for user ${token.userId} was rejected as invalid/revoked — cleared stored token, user must reconnect via /auth/connect`,
         );
       }
       throw err;
     }
+  }
+
+  private async forgetStoredToken(
+    userId: string,
+    tokenId: string,
+  ): Promise<void> {
+    await this.tokenRepository.delete({ id: tokenId });
+    this.cachedAccessTokens.delete(userId);
+    this.cachedAccountHashes.delete(userId);
   }
 
   private async requestToken(
@@ -400,6 +436,15 @@ export class SchwabAuthService {
     // next refresh would fail with `invalid_grant` days later and far from
     // the cause.
     if (!tokenResponse?.access_token || !tokenResponse?.refresh_token) {
+      // The refresh token we just sent is already spent. Leaving the row
+      // would keep `/auth/status` at connected:true with a credential that
+      // can never work again.
+      if (existingId) {
+        await this.forgetStoredToken(userId, existingId);
+        this.logger.error(
+          `Schwab token response for user ${userId} omitted the rotated refresh token — cleared stored token, user must reconnect via /auth/connect`,
+        );
+      }
       throw new Error(
         'Schwab token response was missing access_token or refresh_token — the sent refresh token is already spent, so the user must reconnect via /auth/connect',
       );
@@ -436,6 +481,10 @@ export class SchwabAuthService {
       tokenResponse.access_token,
       accessTokenExpiresAt,
     );
+    // A reconnect can point at a different Schwab account. Both hash caches
+    // otherwise keep the first account until the process restarts.
+    this.cachedAccountHashes.delete(userId);
+    this.accountResolver.invalidate(userId);
   }
 
   private cacheAccessToken(

@@ -3,6 +3,7 @@ import { forwardRef, Injectable, Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule, ConfigType } from '@nestjs/config';
 import type { InternalAxiosRequestConfig } from 'axios';
 
+import { classifySchwabAuthFailure } from '@schwab/auth/schwab-auth-failure.util';
 import { SchwabAuthModule } from '@schwab/auth/schwab-auth.module';
 import { SchwabAuthService } from '@schwab/auth/schwab-auth.service';
 import schwabConfig from '@schwab/config/schwab.config';
@@ -38,6 +39,26 @@ class SchwabBearerInterceptor implements OnModuleInit {
         return config;
       },
     );
+
+    // One recovery attempt when Schwab rejects the access token we just
+    // attached. A live refresh token is rotated and the call is retried, so
+    // an already-linked account is not sent through OAuth again. A dead
+    // refresh token is cleared inside forceRefresh and the error propagates.
+    this.httpService.axiosRef.interceptors.response.use(undefined, async (error) => {
+      const config = error?.config as
+        | (InternalAxiosRequestConfig & { __schwabAuthRetried?: boolean })
+        | undefined;
+      if (!config || config.__schwabAuthRetried) {
+        return Promise.reject(error);
+      }
+      if (!classifySchwabAuthFailure(error)) {
+        return Promise.reject(error);
+      }
+      config.__schwabAuthRetried = true;
+      const accessToken = await this.authService.forceRefresh(requireUserId());
+      config.headers.set('Authorization', `Bearer ${accessToken}`);
+      return this.httpService.axiosRef.request(config);
+    });
   }
 }
 

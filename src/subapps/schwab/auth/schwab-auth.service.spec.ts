@@ -27,6 +27,7 @@ function build(rows: Record<string, ReturnType<typeof tokenRow>>) {
   };
   const httpService = { post: jest.fn() };
   const ordersService = { listAccounts: jest.fn() };
+  const accountResolver = { invalidate: jest.fn() };
   const config = {
     clientId: 'client',
     clientSecret: 'secret',
@@ -44,6 +45,7 @@ function build(rows: Record<string, ReturnType<typeof tokenRow>>) {
     repository as any,
     httpService as any,
     ordersService as any,
+    accountResolver as any,
     config as any,
   );
 
@@ -189,6 +191,48 @@ describe('SchwabAuthService multi-tenant isolation', () => {
       /missing access_token or refresh_token/,
     );
     expect(repository.save).not.toHaveBeenCalled();
+    expect(repository.delete).toHaveBeenCalledWith({ id: 'row-user-a' });
+  });
+
+  it('rotates an unexpired access token when forceRefresh is asked', async () => {
+    const { service, httpService } = build({
+      'user-a': tokenRow('user-a', 'still-good', 60 * 60 * 1000),
+    });
+    httpService.post.mockReturnValue(
+      of({
+        data: {
+          access_token: 'rotated-access',
+          refresh_token: 'rotated-refresh',
+          expires_in: 1800,
+          token_type: 'Bearer',
+        },
+      }),
+    );
+
+    await expect(service.forceRefresh('user-a')).resolves.toBe(
+      'rotated-access',
+    );
+    expect(httpService.post).toHaveBeenCalled();
+  });
+
+  it('clears the row when the trader API nests invalid_grant under unsupported_token_type', async () => {
+    const { service, repository, httpService } = build({
+      'user-a': tokenRow('user-a', 'stale-a', -1000),
+    });
+    httpService.post.mockImplementation(() => {
+      throw {
+        response: {
+          data: {
+            error: 'unsupported_token_type',
+            error_description:
+              '400 Bad Request: "{"error_description":"Refresh token is invalid, expired or revoked","error":"invalid_grant"}"',
+          },
+        },
+      };
+    });
+
+    await expect(service.getValidAccessToken('user-a')).rejects.toBeDefined();
+    expect(repository.delete).toHaveBeenCalledWith({ id: 'row-user-a' });
   });
 
   it('clears only the offending user on invalid_grant', async () => {
