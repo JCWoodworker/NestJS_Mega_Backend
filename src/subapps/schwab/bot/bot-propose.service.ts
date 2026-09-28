@@ -9,11 +9,19 @@ import { etDateKey } from '@schwab/pnl/et-date.util';
 import { runAsUser } from '@schwab/shared/schwab-user-context';
 
 import { defaultPolicyGrid, type AnalyzedTrade } from './bot-analysis.util';
+import {
+  buildWeeklyDossier,
+  type DossierEvent,
+  type DossierSession,
+} from './bot-dossier.util';
 import { BotProposeAgentService } from './bot-propose-agent.service';
 import {
   buildEvidencePacket,
+  type ProposePacket,
   type ProposeSettings,
 } from './bot-propose.util';
+import { BotEvent } from './entities/bot-event.entity';
+import { BotMarketDay } from './entities/bot-market-day.entity';
 import { BotProposal } from './entities/bot-proposal.entity';
 import { BotSettings } from './entities/bot-settings.entity';
 import { BotSettingsSnapshotSource } from './entities/bot-settings-snapshot.entity';
@@ -39,6 +47,10 @@ export class BotProposeService {
     private readonly settingsRepository: Repository<BotSettings>,
     @InjectRepository(BotProposal)
     private readonly proposalRepository: Repository<BotProposal>,
+    @InjectRepository(BotEvent)
+    private readonly eventRepository: Repository<BotEvent>,
+    @InjectRepository(BotMarketDay)
+    private readonly marketDayRepository: Repository<BotMarketDay>,
     @Inject(schwabConfig.KEY)
     private readonly config: ConfigType<typeof schwabConfig>,
     private readonly agent: BotProposeAgentService,
@@ -96,7 +108,7 @@ export class BotProposeService {
     });
     if (!settingsRow) return null;
 
-    const packet = buildEvidencePacket({
+    const evidence = buildEvidencePacket({
       trades,
       tapeByTradeKey: await this.loadTape(ownerUserId, trades),
       policies: defaultPolicyGrid(),
@@ -104,10 +116,26 @@ export class BotProposeService {
       weekEndingEt,
     });
 
+    const dossier = buildWeeklyDossier({
+      weekEndingEt,
+      trades: rows
+        .filter((row) => row.etDateKey <= weekEndingEt)
+        .map((row) => ({
+          ...toAnalyzed(row),
+          configVersion: row.configVersion ?? null,
+        })),
+      events: await this.loadEvents(ownerUserId),
+      sessions: await this.loadSessions(weekEndingEt),
+    });
+
+    // Spread rather than nest so `packet.patch` stays where the 09:20 apply
+    // path already looks for it.
+    const packet: ProposePacket = { ...evidence, dossier };
+
     const saved = await this.proposalRepository.save({
       userId: ownerUserId,
       weekEndingEt,
-      actionable: packet.actionable,
+      actionable: evidence.actionable,
       packet: packet as unknown as Record<string, unknown>,
       status: 'draft',
       appliedAt: null,
@@ -119,9 +147,46 @@ export class BotProposeService {
       await this.proposalRepository.save(saved);
     }
     this.logger.log(
-      `Propose ${weekEndingEt}: actionable=${packet.actionable} blocked=${packet.blockedReasons.join(',') || 'none'} agent=${launch.status}`,
+      `Propose ${weekEndingEt}: ${dossier.sessions.length} session(s), ` +
+        `${evidence.strategyTradeCount} strategy trades, ` +
+        `capped-patch actionable=${evidence.actionable} ` +
+        `(${evidence.blockedReasons.join(',') || 'no blockers'}), ` +
+        `agent=${launch.status}`,
     );
     return saved;
+  }
+
+  /**
+   * Refusal and signal events for the census. Retention on `bot_events` is 30
+   * days, so this is a trailing window by construction — the dossier copies
+   * what it finds into the proposal, which is durable.
+   */
+  private async loadEvents(userId: string): Promise<DossierEvent[]> {
+    const rows = await this.eventRepository.find({
+      where: { userId },
+      order: { at: 'ASC' },
+    });
+    return rows.map((row) => ({
+      at: Number(row.at),
+      type: String(row.type),
+      reason: row.reason ?? null,
+      strategies: row.strategies ?? null,
+      direction: row.direction == null ? null : String(row.direction),
+      payload: row.payload ?? null,
+    }));
+  }
+
+  private async loadSessions(weekEndingEt: string): Promise<DossierSession[]> {
+    const rows = await this.marketDayRepository.find({
+      order: { etDateKey: 'ASC' },
+    });
+    return rows
+      .filter((row) => row.etDateKey <= weekEndingEt)
+      .map((row) => ({
+        etDateKey: row.etDateKey,
+        bars: (row.bars ?? []) as DossierSession['bars'],
+        fullSession: row.fullSession,
+      }));
   }
 
   /** Applies a proposal only after a human has marked it merged. */

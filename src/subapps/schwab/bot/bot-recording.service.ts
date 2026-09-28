@@ -482,48 +482,68 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
   /**
    * Pull the session's SPY 1m bars once the close has passed. Idempotent — a
    * restart mid-evening re-runs harmlessly and a re-fetch just overwrites.
+   *
+   * Every row is keyed by the ET date its own bars carry, never by the date
+   * that was asked for. The period-based request this used to make returned
+   * the *previous* completed session, so each row was stored one session out
+   * of step — a silent misalignment that would point any entry replay at the
+   * wrong day's tape. Reading the date off the response makes the request
+   * window's exact edges unimportant, and lets a run fill gaps it stumbles on.
    */
   async backfillMarketDay(dateKey = etDateKey()): Promise<void> {
     if (this.lastBackfilledDate === dateKey) return;
-    const existing = await this.marketDayRepository.findOne({
-      where: { etDateKey: dateKey },
-    });
-    if (existing) {
-      this.lastBackfilledDate = dateKey;
-      return;
-    }
 
     const symbol = this.config.underlyingSymbol ?? 'SPY';
+    const anchor = Date.parse(`${dateKey}T00:00:00Z`);
     const { candles } = await this.marketDataService.getPriceHistory({
       symbol,
-      periodType: 'day',
-      period: 1,
       frequencyType: 'minute',
       frequency: 1,
+      // Wide enough to contain the ET day under either UTC offset.
+      startDate: anchor - 12 * 60 * 60 * 1000,
+      endDate: anchor + 36 * 60 * 60 * 1000,
     });
     if (!candles.length) return;
 
-    const bars: MarketDayBar[] = candles.map((c) => [
-      c.datetime,
-      c.open,
-      c.high,
-      c.low,
-      c.close,
-      c.volume,
-    ]);
+    const byDate = new Map<string, MarketDayBar[]>();
+    for (const candle of candles) {
+      const key = etDateKey(new Date(candle.datetime));
+      const bars = byDate.get(key) ?? [];
+      bars.push([
+        candle.datetime,
+        candle.open,
+        candle.high,
+        candle.low,
+        candle.close,
+        candle.volume,
+      ]);
+      byDate.set(key, bars);
+    }
 
-    await this.marketDayRepository.save({
-      etDateKey: dateKey,
-      symbol,
-      bars,
-      barCount: bars.length,
-      // A regular session is 390 one-minute bars; anything materially short is
-      // an early close or a partial fetch, and the analyzer should know.
-      fullSession: bars.length >= 380,
-    });
-    this.lastBackfilledDate = dateKey;
-    this.logger.log(
-      `Backfilled ${bars.length} ${symbol} 1m bars for ${dateKey}`,
-    );
+    for (const [key, bars] of byDate) {
+      // Schwab returns extended hours as well, so bar count alone says
+      // nothing about whether the traded session is complete.
+      const rthBars = bars.filter((bar) => {
+        const hhmm = etNowHhMm(new Date(bar[0]));
+        return hhmm >= SNAPSHOT_START && hhmm < SNAPSHOT_END;
+      }).length;
+
+      await this.marketDayRepository.save({
+        etDateKey: key,
+        symbol,
+        bars,
+        barCount: bars.length,
+        // A regular session is 390 one-minute bars; anything materially short
+        // is an early close or a partial fetch, and the analyzer should know.
+        fullSession: rthBars >= 380,
+      });
+      this.logger.log(
+        `Backfilled ${bars.length} ${symbol} 1m bars (${rthBars} RTH) for ${key}`,
+      );
+    }
+
+    // Only settle once the requested session is actually present, so an
+    // evening run before Schwab publishes today's bars tries again.
+    if (byDate.has(dateKey)) this.lastBackfilledDate = dateKey;
   }
 }

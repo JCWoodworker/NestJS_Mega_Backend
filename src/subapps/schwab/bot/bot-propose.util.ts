@@ -5,6 +5,7 @@ import {
   ReadinessLevel,
   scorePolicies,
 } from './bot-analysis.util';
+import { WeeklyDossier } from './bot-dossier.util';
 import { TapeSample } from './bot-trade-metrics.util';
 
 /** Infrastructure flattens. Kept in daily totals, dropped from propose. */
@@ -29,6 +30,18 @@ export interface ProposeSettings {
   premiumStopPct: number;
   trailPct: number;
   trailArmPct: number;
+}
+
+/**
+ * What the agent is handed: the capped settings replay plus the wider dossier.
+ *
+ * `actionable` describes only the settings patch — whether a two-key, capped
+ * change survives walk-forward, bootstrap and stability. It is evidence about
+ * one narrow question, not permission to review the week, and the dossier is
+ * present either way.
+ */
+export interface ProposePacket extends EvidencePacket {
+  dossier: WeeklyDossier;
 }
 
 export interface EvidencePacket {

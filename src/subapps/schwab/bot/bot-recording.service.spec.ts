@@ -14,12 +14,13 @@ function build(
   const tradeRepository = { insert: jest.fn(), upsert: jest.fn() };
   const capitalEventRepository = { insert: jest.fn() };
   const snapshotRepository = { insert: jest.fn() };
+  const marketDayRepository = { upsert: jest.fn(), save: jest.fn() };
 
   const service = new BotRecordingService(
     tapeRepository as any,
     tradeRepository as any,
     snapshotRepository as any,
-    { upsert: jest.fn() } as any,
+    marketDayRepository as any,
     capitalEventRepository as any,
     marketDataService as any,
     {} as any,
@@ -38,6 +39,7 @@ function build(
     tradeRepository,
     capitalEventRepository,
     snapshotRepository,
+    marketDayRepository,
   };
 }
 
@@ -344,6 +346,132 @@ describe('BotRecordingService chain snapshots', () => {
   });
 
   it('captures both rights with delta, bid and ask', async () => {
+    const { service, snapshotRepository } = buildRecorder();
+
+    await service['snapshotChain']();
+
+    const [row] = snapshotRepository.insert.mock.calls[0];
+    expect(row.quotes).toEqual([
+      [650, 0, 0.5, 1.2, 1.25],
+      [650, 1, -0.5, 1.1, 1.15],
+    ]);
+  });
+});
+
+/**
+ * Regression: the backfill asked Schwab for `periodType: day, period: 1`,
+ * which returns the *previous* completed session. Every stored row was one
+ * session out of step — `2026-09-18` held `09-17`'s bars — and a weekend
+ * re-run wrote Friday's tape under Saturday, Sunday and Monday as well.
+ * Nothing failed; an entry replay would simply have used the wrong day.
+ */
+describe('BotRecordingService market day backfill', () => {
+  const OPEN_0930_ET = Date.parse('2026-09-21T13:30:00.000Z');
+  const PREV_0930_ET = Date.parse('2026-09-18T13:30:00.000Z');
+
+  function candle(datetime: number, close: number) {
+    return { datetime, open: close, high: close, low: close, close, volume: 1 };
+  }
+
+  function buildBackfill(candles: Array<ReturnType<typeof candle>>) {
+    return build(
+      {},
+      { getPriceHistory: jest.fn(async () => ({ symbol: 'SPY', candles })) },
+    );
+  }
+
+  it('keys each row by the date its own bars carry', async () => {
+    const { service, marketDayRepository } = buildBackfill([
+      candle(PREV_0930_ET, 600),
+    ]);
+
+    await service.backfillMarketDay('2026-09-21');
+
+    expect(marketDayRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ etDateKey: '2026-09-18' }),
+    );
+  });
+
+  it('splits a response spanning two sessions into two rows', async () => {
+    const { service, marketDayRepository } = buildBackfill([
+      candle(PREV_0930_ET, 600),
+      candle(OPEN_0930_ET, 610),
+    ]);
+
+    await service.backfillMarketDay('2026-09-21');
+
+    expect(
+      marketDayRepository.save.mock.calls.map(([row]) => row.etDateKey).sort(),
+    ).toEqual(['2026-09-18', '2026-09-21']);
+  });
+
+  /** Otherwise the evening run stops retrying before today is published. */
+  it('retries when the requested session is not in the response', async () => {
+    const { service, marketDayRepository } = buildBackfill([
+      candle(PREV_0930_ET, 600),
+    ]);
+
+    await service.backfillMarketDay('2026-09-21');
+    await service.backfillMarketDay('2026-09-21');
+
+    expect(marketDayRepository.save.mock.calls.length).toBe(2);
+  });
+
+  it('settles once the requested session has arrived', async () => {
+    const { service, marketDayRepository } = buildBackfill([
+      candle(OPEN_0930_ET, 610),
+    ]);
+
+    await service.backfillMarketDay('2026-09-21');
+    await service.backfillMarketDay('2026-09-21');
+
+    expect(marketDayRepository.save.mock.calls.length).toBe(1);
+  });
+
+  /** Schwab returns extended hours, so raw bar count cannot judge completeness. */
+  it('judges a full session on regular-hours bars only', async () => {
+    const premarket = Array.from({ length: 400 }, (_, i) =>
+      candle(Date.parse('2026-09-21T11:00:00.000Z') + i * 60_000, 600),
+    );
+    const { service, marketDayRepository } = buildBackfill(premarket);
+
+    await service.backfillMarketDay('2026-09-21');
+
+    const [row] = marketDayRepository.save.mock.calls[0];
+    expect(row.barCount).toBe(400);
+    expect(row.fullSession).toBe(false);
+  });
+
+  it('marks a real session complete', async () => {
+    const rth = Array.from({ length: 390 }, (_, i) =>
+      candle(OPEN_0930_ET + i * 60_000, 600),
+    );
+    const { service, marketDayRepository } = buildBackfill(rth);
+
+    await service.backfillMarketDay('2026-09-21');
+
+    const [row] = marketDayRepository.save.mock.calls[0];
+    expect(row.fullSession).toBe(true);
+  });
+});
+
+describe('BotRecordingService chain snapshot quotes', () => {
+  const chain = [
+    { symbol: 'SPY   260917C00650000', delta: 0.5, bid: 1.2, ask: 1.25 },
+    { symbol: 'SPY   260917P00650000', delta: -0.5, bid: 1.1, ask: 1.15 },
+  ];
+
+  function buildRecorder() {
+    return build(
+      {},
+      {
+        getOptionChain: jest.fn(async () => chain),
+        getLastUnderlyingPrice: jest.fn(() => 650.12),
+      },
+    );
+  }
+
+  it('encodes both rights positionally', async () => {
     const { service, snapshotRepository } = buildRecorder();
 
     await service['snapshotChain']();
