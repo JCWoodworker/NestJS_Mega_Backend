@@ -1,26 +1,67 @@
-name: bot-improve path allowlist
+name: bot-improve guardrails
+
+# The weekly improvement agent may now rewrite strategy logic and add its own
+# settings, which a path allowlist alone cannot police: registering a new rule
+# means editing the engine, and that same file holds the kill switch and the
+# flatten paths. So this runs two checks — paths that are never in scope, and
+# a suite that fails if the safety behaviour changed.
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
 
 jobs:
-  paths:
+  guardrails:
     if: startsWith(github.event.pull_request.title, 'bot(improve):')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Reject forbidden paths
+        with:
+          fetch-depth: 0
+
+      - name: Reject out-of-scope paths
         run: |
           set -euo pipefail
           files=$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD)
+          echo "Changed files:"
           echo "$files"
-          forbidden='bot-execution.service.ts|src/subapps/schwab/auth/|src/subapps/schwab/orders/|src/subapps/schwab/streaming/|/migrations/'
+
+          # Execution, auth, streaming and order placement are never subject to
+          # weekly tuning: a mistake there does not cost a losing trade, it
+          # costs the ability to get out of one.
+          forbidden='bot-execution\.service\.ts|src/subapps/schwab/auth/|src/subapps/schwab/orders/|src/subapps/schwab/streaming/'
           if echo "$files" | grep -E "$forbidden"; then
-            echo "bot(improve) PR touched a forbidden path"
+            echo "::error::Touched a path that is never in scope for bot(improve)"
             exit 1
           fi
-          if echo "$files" | grep -vE '^(src/subapps/schwab/bot/|bot-reports/)'; then
-            echo "bot(improve) PR left the Nest bot allowlist"
+
+          # Migrations are allowed, but only the bot's own: a new strategy
+          # toggle needs a column, and nothing else here does.
+          if echo "$files" | grep -E '/migrations/' | grep -vE '^src/subapps/schwab/bot/migrations/'; then
+            echo "::error::Migrations outside the bot module are not in scope"
             exit 1
           fi
+
+          allowed='^(src/subapps/schwab/bot/|bot-reports/|schwab-frontend-notes\.md$)'
+          if echo "$files" | grep -vE "$allowed"; then
+            echo "::error::Left the bot allowlist"
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: yarn install --immutable
+
+      - name: Typecheck
+        run: yarn tsc --noEmit
+
+      # The real guard. A rewrite that quietly weakens the kill switch, the
+      # lockout, the socket-loss flatten or the equity floor fails here rather
+      # than relying on a human noticing it inside a strategy diff.
+      - name: Safety invariants
+        run: yarn jest src/subapps/schwab/bot/bot-safety-invariants.spec.ts
+
+      - name: Bot suite
+        run: yarn jest src/subapps/schwab/bot

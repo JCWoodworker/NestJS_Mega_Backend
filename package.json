@@ -23,6 +23,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "migrate:run": "typeorm migration:run -d dist/typeorm-cli.config",
     "migrate:revert": "typeorm migration:revert -d dist/typeorm-cli.config",
+    "bot:backtest": "ts-node -r tsconfig-paths/register ./src/subapps/schwab/bot/bot-backtest.cli.ts",
     "seed:users": "ts-node ./src/seeders/users.seed.ts",
     "seed:woodpricing": "node dist/src/subapps/woodpricing/seed-wood-pricing.js",
     "mcp:stdio": "ts-node -r tsconfig-paths/register src/subapps/woodpricing/mcp/mcp-stdio.ts"

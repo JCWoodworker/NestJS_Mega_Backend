@@ -15,12 +15,15 @@ import { SchwabStreamingModule } from '@schwab/streaming/schwab-streaming.module
 
 import { BotAdminController } from './bot-admin.controller';
 import { BotAnalyzerService } from './bot-analyzer.service';
+import { BotArchiveService } from './bot-archive.service';
 import { BotProposeAgentService } from './bot-propose-agent.service';
 import { BotProposeService } from './bot-propose.service';
 import { BotCorpusHealthService } from './bot-corpus-health.service';
 import { BotEngineService } from './bot-engine.service';
 import { BotEventService } from './bot-event.service';
 import { BotExecutionService } from './bot-execution.service';
+import { BotFixtureController } from './bot-fixture.controller';
+import { BotFixtureService } from './bot-fixture.service';
 import { BotMarketDataService } from './bot-market-data.service';
 import { BotRecordingService } from './bot-recording.service';
 import { BotSettingsService } from './bot-settings.service';
@@ -65,7 +68,7 @@ import { BotTrade } from './entities/bot-trade.entity';
     forwardRef(() => SchwabStreamingModule),
     PnlModule,
   ],
-  controllers: [BotController, BotAdminController],
+  controllers: [BotController, BotAdminController, BotFixtureController],
   providers: [
     BotSettingsService,
     BotStateService,
@@ -79,6 +82,8 @@ import { BotTrade } from './entities/bot-trade.entity';
     BotAnalyzerService,
     BotProposeAgentService,
     BotProposeService,
+    BotFixtureService,
+    BotArchiveService,
   ],
   exports: [BotStateService, BotSettingsService, BotEventService],
 })
