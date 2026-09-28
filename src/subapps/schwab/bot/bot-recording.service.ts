@@ -50,6 +50,8 @@ const SNAPSHOT_END = '16:00';
 const BACKFILL_AFTER = '16:05';
 /** A failed backfill should not retry on every tick. */
 const BACKFILL_RETRY_MS = 60_000;
+/** How far back a backfill reaches to fill sessions the recorder missed. */
+const BACKFILL_LOOKBACK_DAYS = 7;
 /** Strikes each side of the money to capture. */
 const SNAPSHOT_STRIKE_COUNT = 40;
 
@@ -499,8 +501,10 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
       symbol,
       frequencyType: 'minute',
       frequency: 1,
-      // Wide enough to contain the ET day under either UTC offset.
-      startDate: anchor - 12 * 60 * 60 * 1000,
+      // A week back rather than just this session, so one call also fills any
+      // day the recorder missed while it was down. Costs nothing extra: the
+      // response is grouped by date and only missing days are written.
+      startDate: anchor - BACKFILL_LOOKBACK_DAYS * 24 * 60 * 60 * 1000,
       endDate: anchor + 36 * 60 * 60 * 1000,
     });
     if (!candles.length) return;
@@ -520,7 +524,17 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
       byDate.set(key, bars);
     }
 
+    const known = new Set(
+      (await this.marketDayRepository.find({ select: ['etDateKey'] })).map(
+        (row) => row.etDateKey,
+      ),
+    );
+
     for (const [key, bars] of byDate) {
+      // Rewrite the requested session every time — the evening's first run can
+      // catch a partial series — but leave settled days alone.
+      if (key !== dateKey && known.has(key)) continue;
+
       // Schwab returns extended hours as well, so bar count alone says
       // nothing about whether the traded session is complete.
       const rthBars = bars.filter((bar) => {

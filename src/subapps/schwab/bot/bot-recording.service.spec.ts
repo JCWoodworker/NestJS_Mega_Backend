@@ -14,7 +14,11 @@ function build(
   const tradeRepository = { insert: jest.fn(), upsert: jest.fn() };
   const capitalEventRepository = { insert: jest.fn() };
   const snapshotRepository = { insert: jest.fn() };
-  const marketDayRepository = { upsert: jest.fn(), save: jest.fn() };
+  const marketDayRepository = {
+    upsert: jest.fn(),
+    save: jest.fn(),
+    find: jest.fn(async () => [] as Array<{ etDateKey: string }>),
+  };
 
   const service = new BotRecordingService(
     tapeRepository as any,
@@ -373,11 +377,18 @@ describe('BotRecordingService market day backfill', () => {
     return { datetime, open: close, high: close, low: close, close, volume: 1 };
   }
 
-  function buildBackfill(candles: Array<ReturnType<typeof candle>>) {
-    return build(
+  function buildBackfill(
+    candles: Array<ReturnType<typeof candle>>,
+    knownDates: string[] = [],
+  ) {
+    const built = build(
       {},
       { getPriceHistory: jest.fn(async () => ({ symbol: 'SPY', candles })) },
     );
+    built.marketDayRepository.find.mockResolvedValue(
+      knownDates.map((etDateKey) => ({ etDateKey })),
+    );
+    return built;
   }
 
   it('keys each row by the date its own bars carry', async () => {
@@ -440,6 +451,33 @@ describe('BotRecordingService market day backfill', () => {
     const [row] = marketDayRepository.save.mock.calls[0];
     expect(row.barCount).toBe(400);
     expect(row.fullSession).toBe(false);
+  });
+
+  /** One call a night should close any gap left by a restart or an outage. */
+  it('fills a session the recorder missed earlier in the week', async () => {
+    const { service, marketDayRepository } = buildBackfill(
+      [candle(PREV_0930_ET, 600), candle(OPEN_0930_ET, 610)],
+      ['2026-09-21'],
+    );
+
+    await service.backfillMarketDay('2026-09-21');
+
+    expect(
+      marketDayRepository.save.mock.calls.map(([row]) => row.etDateKey).sort(),
+    ).toEqual(['2026-09-18', '2026-09-21']);
+  });
+
+  it('leaves settled sessions alone', async () => {
+    const { service, marketDayRepository } = buildBackfill(
+      [candle(PREV_0930_ET, 600), candle(OPEN_0930_ET, 610)],
+      ['2026-09-18', '2026-09-21'],
+    );
+
+    await service.backfillMarketDay('2026-09-21');
+
+    expect(
+      marketDayRepository.save.mock.calls.map(([row]) => row.etDateKey),
+    ).toEqual(['2026-09-21']);
   });
 
   it('marks a real session complete', async () => {
