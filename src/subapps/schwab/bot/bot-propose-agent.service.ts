@@ -1,3 +1,4 @@
+import { Agent, CursorAgentError } from '@cursor/sdk';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 
@@ -40,11 +41,11 @@ export class BotProposeAgentService {
     const feRepo = process.env.BOT_PROPOSE_FE_REPO;
     if (!nestRepo) return { status: 'no_repo' };
 
-    const repos = [{ repository: nestRepo, ref: 'main' }];
+    const repos = [{ url: nestRepo, startingRef: 'main' }];
     const wantsFe = packet.allowedPaths.some((path) =>
       FE_ALLOWED.some((prefix) => path.startsWith(prefix)),
     );
-    if (wantsFe && feRepo) repos.push({ repository: feRepo, ref: 'main' });
+    if (wantsFe && feRepo) repos.push({ url: feRepo, startingRef: 'main' });
 
     const prompt = [
       'You are opening a pull request for a paper-bot settings review.',
@@ -59,27 +60,24 @@ export class BotProposeAgentService {
     ].join('\n');
 
     try {
-      const importer = new Function(
-        'specifier',
-        'return import(specifier)',
-      ) as (specifier: string) => Promise<{
-        Agent: {
-          prompt: (
-            prompt: string,
-            options: Record<string, unknown>,
-          ) => Promise<{ status?: string; id?: string }>;
-        };
-      }>;
-      const sdk = await importer('@cursor/sdk');
-      const result = await sdk.Agent.prompt(prompt, {
+      const result = await Agent.prompt(prompt, {
         apiKey,
+        model: { id: 'composer-2.5' },
         cloud: { repos, autoCreatePR: true },
       });
-      this.logger.log(`propose agent launched: ${result.id ?? result.status}`);
-      return { status: 'launched', detail: result.id };
+      const prUrl = result.git?.branches.find((branch) => branch.prUrl)?.prUrl;
+      this.logger.log(
+        `propose agent ${result.status}: ${result.id}${prUrl ? ` ${prUrl}` : ''}`,
+      );
+      if (result.status === 'error') {
+        return { status: 'error', detail: result.error?.message ?? result.id };
+      }
+      return { status: 'launched', detail: prUrl ?? result.id };
     } catch (err) {
-      this.logger.error(`propose agent skipped: ${(err as Error).message}`);
-      return { status: 'sdk_unavailable', detail: (err as Error).message };
+      const message = err instanceof Error ? err.message : String(err);
+      const kind = err instanceof CursorAgentError ? 'startup' : 'sdk_unavailable';
+      this.logger.error(`propose agent ${kind}: ${message}`);
+      return { status: kind, detail: message };
     }
   }
 }
