@@ -12,9 +12,9 @@ import {
  *   [strike, right, delta, bid, ask]
  *
  * where `right` is 0 for CALL and 1 for PUT. Positional tuples rather than
- * objects because repeating the key names across ~32 contracts every minute of
- * every session *is* the storage cost — this form is roughly 3–4x smaller and
- * the field order is fixed here so it stays readable.
+ * objects because repeating the key names across ~80 contracts every five
+ * seconds of every session *is* the storage cost — this form is roughly 3–4x
+ * smaller and the field order is fixed here so it stays readable.
  */
 export type ChainSnapshotQuote = [
   strike: number,
@@ -25,7 +25,7 @@ export type ChainSnapshotQuote = [
 ];
 
 /**
- * The near-the-money option chain, captured once per minute for the whole
+ * The near-the-money option chain, captured every few seconds for the whole
  * session, whether or not the bot is in a position or even trading.
  *
  * The entire value is having the chain at the minutes we *did not* act, so
@@ -49,9 +49,10 @@ export class BotChainSnapshot {
   @Column({ type: 'varchar', length: 10, name: 'et_date_key' })
   etDateKey: string;
 
-  /** ET wall clock `HH:MM` of the snapshot — cheap bucketing for
-   * time-of-day studies without re-deriving the timezone per row. */
-  @Column({ type: 'varchar', length: 5, name: 'et_hhmm' })
+  /** ET wall clock of the snapshot — cheap bucketing for time-of-day studies
+   * without re-deriving the timezone per row. `HH:MM:SS` since the recorder
+   * went sub-minute; rows written before that are `HH:MM`. */
+  @Column({ type: 'varchar', length: 8, name: 'et_hhmm' })
   etHhMm: string;
 
   @Column({ type: 'varchar', length: 16, name: 'underlying_symbol' })

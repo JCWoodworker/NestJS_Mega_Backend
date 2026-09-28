@@ -782,6 +782,10 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       const direction = pos.direction ?? row.lastSignal?.direction;
 
       let optionBid: number | null = null;
+      // Recorded alongside the bid purely for research: exits price off the
+      // bid, but modelling a round trip needs the spread that was actually
+      // quoted at the time.
+      let optionAsk: number | null = null;
       const now = Date.now();
       const trail =
         this.stateFor().trail?.symbol === pos.symbol
@@ -798,6 +802,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
           now - streamed.at <= PREMIUM_STREAM_MAX_AGE_MS
         ) {
           optionBid = streamed.bid;
+          optionAsk = streamed.ask ?? null;
         } else if (
           now - this.stateFor().lastPremiumQuoteAt >=
           PREMIUM_REST_FALLBACK_MIN_MS
@@ -810,6 +815,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
             });
             const quote = chain.find((q) => q.symbol === pos.symbol);
             if (quote?.bid != null) optionBid = Number(quote.bid);
+            if (quote?.ask != null) optionAsk = Number(quote.ask);
           } catch (err) {
             this.logger.warn(
               `premium quote fetch failed: ${(err as Error).message}`,
@@ -829,7 +835,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
           lane: row.lane,
           at: now,
           optionBid,
-          optionAsk: null,
+          optionAsk,
           spot,
         });
       }

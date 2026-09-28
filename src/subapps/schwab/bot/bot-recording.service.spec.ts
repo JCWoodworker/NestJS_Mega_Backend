@@ -6,28 +6,39 @@ import { BotLane } from './enums/bot-lane.enum';
 
 const OWNER = 'owner-user-id';
 
-function build(overrides: Record<string, unknown> = {}) {
+function build(
+  overrides: Record<string, unknown> = {},
+  marketDataService: Record<string, unknown> = {},
+) {
   const tapeRepository = { insert: jest.fn(), find: jest.fn(() => []) };
   const tradeRepository = { insert: jest.fn(), upsert: jest.fn() };
   const capitalEventRepository = { insert: jest.fn() };
+  const snapshotRepository = { insert: jest.fn() };
 
   const service = new BotRecordingService(
     tapeRepository as any,
     tradeRepository as any,
-    { insert: jest.fn() } as any,
+    snapshotRepository as any,
     { upsert: jest.fn() } as any,
     capitalEventRepository as any,
-    {} as any,
+    marketDataService as any,
     {} as any,
     {
       ownerUserId: OWNER,
       improvementLanes: ['BOT_PAPER'],
       botRecordingEnabled: false,
+      underlyingSymbol: 'SPY',
       ...overrides,
     } as any,
   );
 
-  return { service, tapeRepository, tradeRepository, capitalEventRepository };
+  return {
+    service,
+    tapeRepository,
+    tradeRepository,
+    capitalEventRepository,
+    snapshotRepository,
+  };
 }
 
 const tapeSample = {
@@ -253,5 +264,94 @@ describe('BotRecordingService corpus gate', () => {
 
     expect(tradeRepository.insert).not.toHaveBeenCalled();
     expect(tradeRepository.upsert).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The chain snapshot is the only record of the moments the bot did *not*
+ * act, and `/chains` has no "as of" parameter — anything missed here is
+ * missed permanently.
+ */
+describe('BotRecordingService chain snapshots', () => {
+  const chain = [
+    { symbol: 'SPY   260917C00650000', delta: 0.5, bid: 1.2, ask: 1.25 },
+    { symbol: 'SPY   260917P00650000', delta: -0.5, bid: 1.1, ask: 1.15 },
+  ];
+
+  function buildRecorder(underlyingPrice: number | null = 650.12) {
+    return build(
+      {},
+      {
+        getOptionChain: jest.fn(async () => chain),
+        getLastUnderlyingPrice: jest.fn(() => underlyingPrice),
+      },
+    );
+  }
+
+  it('stamps spot from the chain fetch instead of writing null', async () => {
+    const { service, snapshotRepository } = buildRecorder();
+
+    await service['snapshotChain']();
+
+    expect(snapshotRepository.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ spot: 650.12 }),
+    );
+  });
+
+  /** A stale underlying is worse than none: it silently misdates the row. */
+  it('leaves spot null when no fresh underlying price is available', async () => {
+    const { service, snapshotRepository } = buildRecorder(null);
+
+    await service['snapshotChain']();
+
+    expect(snapshotRepository.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ spot: null }),
+    );
+  });
+
+  it('records the wall clock to the second', async () => {
+    const { service, snapshotRepository } = buildRecorder();
+
+    await service['snapshotChain']();
+
+    const [row] = snapshotRepository.insert.mock.calls[0];
+    expect(row.etHhMm).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+  });
+
+  /**
+   * The cadence guard used to key on the ET minute, which at sub-minute
+   * recording would have thrown away all but the first snapshot of each
+   * minute — the exact data this cadence exists to collect.
+   */
+  it('writes more than once within the same minute', async () => {
+    const { service, snapshotRepository } = buildRecorder();
+
+    await service['snapshotChain']();
+    service['lastSnapshotAt'] = Date.now() - 5_000;
+    await service['snapshotChain']();
+
+    expect(snapshotRepository.insert).toHaveBeenCalledTimes(2);
+  });
+
+  /** But a tick that runs long must not double-write the same instant. */
+  it('skips a second snapshot taken immediately after the first', async () => {
+    const { service, snapshotRepository } = buildRecorder();
+
+    await service['snapshotChain']();
+    await service['snapshotChain']();
+
+    expect(snapshotRepository.insert).toHaveBeenCalledTimes(1);
+  });
+
+  it('captures both rights with delta, bid and ask', async () => {
+    const { service, snapshotRepository } = buildRecorder();
+
+    await service['snapshotChain']();
+
+    const [row] = snapshotRepository.insert.mock.calls[0];
+    expect(row.quotes).toEqual([
+      [650, 0, 0.5, 1.2, 1.25],
+      [650, 1, -0.5, 1.1, 1.15],
+    ]);
   });
 });

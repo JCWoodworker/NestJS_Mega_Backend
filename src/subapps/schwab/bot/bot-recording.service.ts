@@ -17,7 +17,7 @@ import { etDateKey } from '@schwab/pnl/et-date.util';
 import { currentUserId, runAsUser } from '@schwab/shared/schwab-user-context';
 
 import { commissionForRoundTrip } from './bot-fees.const';
-import { etNowHhMm, isWithinWindow } from './bot-strategy.util';
+import { etNowHhMm, etNowHhMmSs, isWithinWindow } from './bot-strategy.util';
 import {
   computeTradeExcursion,
   computeTradePnl,
@@ -37,14 +37,21 @@ import { BotTrade } from './entities/bot-trade.entity';
 import { BotLane } from './enums/bot-lane.enum';
 import { BotDirection, BotStrategy } from './enums/strategy.enum';
 
-const TICK_MS = 60_000;
+/**
+ * Snapshot cadence. One minute was too coarse to judge an exit: a stop can be
+ * touched and recovered well inside a single bar, so a minute-resolution
+ * replay silently credits trades that would have been stopped out.
+ */
+const TICK_MS = 5_000;
 /** Session bounds for chain snapshots (ET). */
 const SNAPSHOT_START = '09:30';
 const SNAPSHOT_END = '16:00';
 /** Backfill SPY bars once the session is safely over. */
 const BACKFILL_AFTER = '16:05';
+/** A failed backfill should not retry on every tick. */
+const BACKFILL_RETRY_MS = 60_000;
 /** Strikes each side of the money to capture. */
-const SNAPSHOT_STRIKE_COUNT = 16;
+const SNAPSHOT_STRIKE_COUNT = 40;
 
 interface ParsedOsi {
   expiration: string;
@@ -90,8 +97,8 @@ export function parseOsi(symbol: string): ParsedOsi | null {
  * Three recording jobs live here:
  *  - the bid path of an open position (driven by the engine's exit loop, which
  *    already has the bid in hand, so this costs no extra Schwab calls);
- *  - a per-minute snapshot of the near-the-money chain, taken whether or not
- *    the bot is trading, since entry counterfactuals need the minutes we did
+ *  - a few-second snapshot of the near-the-money chain, taken whether or not
+ *    the bot is trading, since entry counterfactuals need the moments we did
  *    *not* act on and `/chains` has no "as of" parameter;
  *  - SPY 1m bars, backfilled after the close because the underlying — unlike
  *    options — is reliably retrievable after the fact.
@@ -101,10 +108,11 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BotRecordingService.name);
   private timer: NodeJS.Timeout | null = null;
   private ticking = false;
-  /** ET `YYYY-MM-DD HH:MM` of the last snapshot, so a 60s timer that drifts
-   * cannot write the same minute twice. */
-  private lastSnapshotMinute: string | null = null;
+  /** Epoch ms of the last snapshot, so a timer that drifts or a tick that
+   * runs long cannot write two rows for the same instant. */
+  private lastSnapshotAt = 0;
   private lastBackfilledDate: string | null = null;
+  private lastBackfillAttemptAt = 0;
   /** Last recurring tick problem, so it is logged on change rather than every minute. */
   private lastTickProblem: string | null = null;
 
@@ -134,7 +142,8 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
     }
     this.timer = setInterval(() => void this.tick(), TICK_MS);
     this.logger.log(
-      'Bot recording enabled — chain snapshots every 60s in-session',
+      `Bot recording enabled — ${SNAPSHOT_STRIKE_COUNT}-strike chain ` +
+        `snapshots every ${TICK_MS / 1000}s in-session`,
     );
   }
 
@@ -397,8 +406,15 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
       const nowHhMm = etNowHhMm();
       await runAsUser(ownerUserId, async () => {
         if (isWithinWindow(nowHhMm, SNAPSHOT_START, SNAPSHOT_END)) {
-          await this.snapshotChain(nowHhMm);
+          await this.snapshotChain();
         } else if (nowHhMm >= BACKFILL_AFTER && nowHhMm < '23:59') {
+          // A backfill that returns nothing leaves the date unmarked so it can
+          // be retried, which at this cadence would otherwise mean hundreds of
+          // price-history calls an evening.
+          if (Date.now() - this.lastBackfillAttemptAt < BACKFILL_RETRY_MS) {
+            return;
+          }
+          this.lastBackfillAttemptAt = Date.now();
           await this.backfillMarketDay();
         }
       });
@@ -418,13 +434,15 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
     this.logger.warn(message);
   }
 
-  private async snapshotChain(nowHhMm: string): Promise<void> {
-    const dateKey = etDateKey();
-    const minuteKey = `${dateKey} ${nowHhMm}`;
-    if (this.lastSnapshotMinute === minuteKey) return;
+  private async snapshotChain(): Promise<void> {
+    // Guard on elapsed time rather than a wall-clock label: at this cadence a
+    // tick that runs long can land in the same second as the next one.
+    const startedAt = Date.now();
+    if (startedAt - this.lastSnapshotAt < TICK_MS * 0.8) return;
 
+    const symbol = this.config.underlyingSymbol ?? 'SPY';
     const chain = await this.marketDataService.getOptionChain({
-      symbol: this.config.underlyingSymbol ?? 'SPY',
+      symbol,
       strikeCount: SNAPSHOT_STRIKE_COUNT,
     });
     if (!chain.length) return;
@@ -445,16 +463,20 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
     }
     if (!quotes.length) return;
 
+    const at = new Date();
     await this.snapshotRepository.insert({
-      at: String(Date.now()),
-      etDateKey: dateKey,
-      etHhMm: nowHhMm,
-      underlyingSymbol: this.config.underlyingSymbol ?? 'SPY',
-      spot: null,
+      at: String(at.getTime()),
+      etDateKey: etDateKey(at),
+      etHhMm: etNowHhMmSs(at),
+      underlyingSymbol: symbol,
+      // Comes free with the chain fetch above. Null when Schwab omitted it or
+      // the value is older than the snapshot cadence, rather than stamping a
+      // stale price onto a fresh row.
+      spot: this.marketDataService.getLastUnderlyingPrice(symbol, TICK_MS),
       expiration,
       quotes,
     });
-    this.lastSnapshotMinute = minuteKey;
+    this.lastSnapshotAt = startedAt;
   }
 
   /**

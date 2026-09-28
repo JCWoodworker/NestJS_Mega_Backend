@@ -72,8 +72,32 @@ export class MarketDataService {
     string,
     Promise<OptionChainQuote[]>
   >();
+  /**
+   * Underlying price as reported by the last `/chains` fetch, per symbol.
+   *
+   * Schwab returns it on the chain response and the quote mapper drops it.
+   * Keeping it here lets the recorder stamp spot on a snapshot without a
+   * second market-data call, which at a few seconds per snapshot would be a
+   * meaningful share of the rate budget.
+   */
+  private readonly lastUnderlyingPrice = new Map<
+    string,
+    { price: number; at: number }
+  >();
 
   constructor(private readonly httpService: HttpService) {}
+
+  /**
+   * Last underlying price seen on a chain fetch, or null when there is none
+   * recent enough to trust. Chain responses are cached briefly, so a caller
+   * reading this right after `getOptionChain` may be looking at a value a
+   * moment older than its own call.
+   */
+  getLastUnderlyingPrice(symbol: string, maxAgeMs = 10_000): number | null {
+    const seen = this.lastUnderlyingPrice.get(symbol.toUpperCase());
+    if (!seen) return null;
+    return Date.now() - seen.at <= maxAgeMs ? seen.price : null;
+  }
 
   async getPriceHistory(
     query: PriceHistoryQueryDto,
@@ -323,6 +347,14 @@ export class MarketDataService {
           },
         }),
       );
+
+      const underlying = Number(response.data?.underlyingPrice);
+      if (Number.isFinite(underlying) && underlying > 0) {
+        this.lastUnderlyingPrice.set(query.symbol.toUpperCase(), {
+          price: underlying,
+          at: Date.now(),
+        });
+      }
 
       const quotes = mapOptionChainResponse(response.data);
       if (!query.symbols) return quotes;

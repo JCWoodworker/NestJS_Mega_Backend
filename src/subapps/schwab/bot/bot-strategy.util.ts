@@ -207,6 +207,22 @@ export function etNowHhMm(now: Date = new Date()): string {
   }).format(now);
 }
 
+/**
+ * ET wall clock to the second. Sub-minute recording needs this: `etNowHhMm`
+ * is still the right key for anything bucketed by minute, and lexical
+ * comparison against an `HH:MM` bound would treat `16:00:30` as past `16:00`,
+ * so the two are kept separate rather than one widened.
+ */
+export function etNowHhMmSs(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'America/New_York',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(now);
+}
+
 export function isWithinWindow(
   nowHhMm: string,
   start: string,
