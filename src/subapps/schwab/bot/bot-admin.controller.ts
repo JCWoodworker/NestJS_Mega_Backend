@@ -18,6 +18,7 @@ import { SchwabOwnerGuard } from '@schwab/shared/schwab-owner.guard';
 
 import { BotAnalyzerService } from './bot-analyzer.service';
 import { BotCorpusHealthService } from './bot-corpus-health.service';
+import { BotRecordingService } from './bot-recording.service';
 import { BotSettingsService } from './bot-settings.service';
 import { BotSupervisorService } from './bot-supervisor.service';
 import { ListSettingsHistoryDto } from './dto/list-settings-history.dto';
@@ -44,6 +45,7 @@ export class BotAdminController {
     private readonly supervisorService: BotSupervisorService,
     private readonly analyzerService: BotAnalyzerService,
     private readonly botSettingsService: BotSettingsService,
+    private readonly recordingService: BotRecordingService,
   ) {}
 
   /**
@@ -104,6 +106,18 @@ export class BotAdminController {
   @Get('settings-history')
   async settingsHistory(@Query() query: ListSettingsHistoryDto) {
     return this.botSettingsService.listHistory(query);
+  }
+
+  /**
+   * Paper capital injections (floor top-ups and manual resets), newest first.
+   * The equity curve sums session net P&L and marks these so a reset is not
+   * drawn as a gain.
+   */
+  @Get('capital-events')
+  async capitalEvents(@Query('limit') limit?: string) {
+    return this.recordingService.listCapitalEvents(
+      Math.min(Math.max(Number(limit) || 120, 1), 200),
+    );
   }
 
   /** Stored nightly reports, newest first. */

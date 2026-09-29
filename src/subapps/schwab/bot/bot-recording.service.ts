@@ -375,6 +375,40 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /** Owner ledger, newest first. Admin curve marks these so a reset is not a gain. */
+  async listCapitalEvents(limit = 120): Promise<
+    Array<{
+      id: string;
+      at: number;
+      etDateKey: string;
+      lane: BotLane | null;
+      reason: BotCapitalEventReason;
+      balanceBefore: number;
+      balanceAfter: number;
+      amount: number;
+    }>
+  > {
+    const ownerUserId = this.config.ownerUserId;
+    if (!ownerUserId) return [];
+
+    const rows = await this.capitalEventRepository.find({
+      where: { userId: ownerUserId },
+      order: { at: 'DESC' },
+      take: limit,
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      at: new Date(row.at).getTime(),
+      etDateKey: row.etDateKey,
+      lane: row.lane,
+      reason: row.reason,
+      balanceBefore: Number(row.balanceBefore),
+      balanceAfter: Number(row.balanceAfter),
+      amount: Number(row.amount),
+    }));
+  }
+
   // --- Scheduled recording --------------------------------------------------
 
   private async tick(): Promise<void> {

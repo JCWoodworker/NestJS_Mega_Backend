@@ -125,6 +125,12 @@ export class SchwabStreamerSession {
   private streamStatusReason: string | null = null;
 
   private underlyingSymbol = 'SPY';
+  /**
+   * While set, a desk `subscribe-underlying` cannot leave this symbol.
+   * The bot sets it to SPY for the whole time `mode === BOT`, because this
+   * session is shared with the browser tab.
+   */
+  private feedLock: string | null = null;
   private optionRoot = 'SPY';
   private strikeIncrement = 1;
 
@@ -217,6 +223,15 @@ export class SchwabStreamerSession {
    * would otherwise have to maintain independently. */
   getLastKnownSpotPrice(): number | null {
     return this.lastKnownSpotPrice;
+  }
+
+  getUnderlyingSymbol(): string {
+    return this.underlyingSymbol;
+  }
+
+  /** `null` clears the lock (manual mode). */
+  setFeedLock(symbol: string | null): void {
+    this.feedLock = symbol;
   }
 
   /** Last streamed option quote for soft-stop/target marks (partial merges). */
@@ -562,6 +577,7 @@ export class SchwabStreamerSession {
    */
   async switchUnderlying(
     requestedSymbol: string,
+    opts?: { force?: boolean; ignoreLock?: boolean },
   ): Promise<SwitchUnderlyingResult> {
     const symbol = normalizeUnderlyingSymbol(requestedSymbol ?? '');
     if (!symbol) {
@@ -572,7 +588,21 @@ export class SchwabStreamerSession {
       };
     }
 
-    if (symbol === this.underlyingSymbol) {
+    if (
+      this.feedLock &&
+      symbol !== this.feedLock &&
+      !opts?.ignoreLock
+    ) {
+      return {
+        status: 'error',
+        symbol,
+        message: `The underlying is for manual trading only. The bot is on, so this feed stays on ${this.feedLock}.`,
+      };
+    }
+
+    // Re-emitting the current symbol is how the desk reconnects. Resync passes
+    // force so a stalled feed is torn down and subscribed again.
+    if (symbol === this.underlyingSymbol && !opts?.force) {
       return { status: 'ok', symbol };
     }
 
@@ -652,7 +682,9 @@ export class SchwabStreamerSession {
       message:
         symbol === 'SPX' || symbol === 'SPXW'
           ? 'Index underlying price feed via LEVELONE_EQUITIES is unverified against live Schwab data - confirm before trading real money'
-          : undefined,
+          : opts?.force
+            ? `Resubscribed to ${symbol}`
+            : undefined,
     };
   }
 

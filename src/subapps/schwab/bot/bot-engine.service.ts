@@ -295,7 +295,28 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
 
   /** Called by BotStateService after any control-plane mutation. */
   onControlPlaneChange(): void {
+    void this.syncBotFeedLock();
     void this.emitStatus(true);
+  }
+
+  /**
+   * The browser and the bot share one streamer session. While mode is BOT,
+   * that session is locked to SPY so a desk underlying change cannot pull
+   * the bot onto another product. Manual mode clears the lock.
+   */
+  async syncBotFeedLock(): Promise<void> {
+    const userId = requireUserId();
+    const row = await this.botStateService.getRow();
+    const session = this.streamerPool.peek(userId);
+    if (!session) return;
+    if (row.mode !== BotMode.BOT) {
+      session.setFeedLock(null);
+      return;
+    }
+    session.setFeedLock('SPY');
+    if (session.getUnderlyingSymbol() !== 'SPY') {
+      await session.switchUnderlying('SPY', { force: true, ignoreLock: true });
+    }
   }
 
   /**
@@ -309,9 +330,9 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     userId: string,
     candle?: ChartCandlePayload,
   ): void => {
-    // Only SPY equity bars drive entry evaluation (option chart shares the
-    // same gateway event and would otherwise double-eval).
-    if (candle && candle.assetType !== 'EQUITY') return;
+    // Only SPY equity bars drive entry evaluation. Option-chart bars share
+    // this event, and a manual desk symbol must not become a bot signal.
+    if (!candle || candle.assetType !== 'EQUITY' || candle.symbol !== 'SPY') return;
     void runAsUser(userId, () => this.evaluateEntrySignal(candle?.chartTime));
   };
 
@@ -1222,7 +1243,8 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
 
     for (const userId of toAcquire) {
       try {
-        this.streamerPool.acquireForBackgroundWork(userId);
+        const session = this.streamerPool.acquireForBackgroundWork(userId);
+        session.setFeedLock('SPY');
         this.botHeldUserIds.add(userId);
       } catch (err) {
         // Pool at capacity. This user's risk checks will see `peek()` return
@@ -1244,6 +1266,9 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       await this.botStateService.refreshLiveBalances();
       await this.botStateService.clearLockoutIfNewDay();
       const row = await this.botStateService.getRow();
+      if (row.mode === BotMode.BOT) {
+        await this.syncBotFeedLock();
+      }
       if (row.mode !== BotMode.BOT || !row.lane || row.lockout) {
         await this.emitStatus(false);
         return;

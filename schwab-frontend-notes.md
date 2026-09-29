@@ -436,8 +436,13 @@ io(`${VITE_SOCKET_URL}${VITE_SOCKET_NAMESPACE}`, {
 ### Client → server events
 - **`subscribe-underlying`** — `{ symbol: 'SPY' | 'QQQ' | 'IWM' | 'SPX' | 'SPXW' }`. Shared
   backend-wide streamer (last request wins for all clients). Supports acks:
-  `emit('subscribe-underlying', { symbol }, callback)` →
+  `emit('subscribe-underlying', { symbol, force? }, callback)` →
   `{ status: 'ok' | 'error', symbol: string, message?: string }`.
+  `force: true` resubscribes even when that symbol is already current (chart Resync).
+  While bot `mode` is `BOT`, the session is locked to `SPY`: any other symbol,
+  including `force: true` from the desk, returns `status: 'error'` and a message
+  that the underlying is for manual trading only. The bot pins SPY itself and
+  clears the lock when mode returns to `MANUAL`.
   - **SPX/SPXW caveat (still unverified)**: underlying price feed reuses the equity-quote
     streamer service, unverified for an index. Ack includes a `message` flagging this.
 
@@ -1629,6 +1634,7 @@ POST /bot/admin/supervisor/arm          → skips the time window, not the safet
 POST /bot/admin/supervisor/stand-down   → flatten + halt now
 GET  /bot/admin/corpus-health           → CorpusHealth (recorder row counts)
 GET  /bot/admin/settings-history        → durable settings snapshots (same as GET /bot/settings/history)
+GET  /bot/admin/capital-events?limit=   → BotCapitalEvent[] (newest first, max 200)
 GET  /bot/admin/reports?limit=30        → BotReportSummary[] (newest first, no markdown)
 GET  /bot/admin/reports/:dateKey        → BotReport | null
 POST /bot/admin/reports/:dateKey/rerun  → BotReport (idempotent)
@@ -1713,6 +1719,15 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
 
 ## Changelog
 
+- **2026-09-28 (bot feed lock)**: While bot `mode` is `BOT`, `subscribe-underlying`
+  cannot leave `SPY`. The desk underlying is manual-trading only. The bot pins
+  the shared session to `SPY` when Bot mode turns on and on heartbeat, and
+  clears the lock on `MANUAL`. No new REST field. Not deployed until this Nest
+  tree ships.
+- **2026-09-28 (admin capital marks)**: `GET /bot/admin/capital-events` lists the
+  owner's paper top-ups (floor resets and manual resets), newest first. The
+  admin curve sums session net P&L and marks these so a refill is not drawn as
+  a gain. Additive.
 - **2026-09-28 (strategy layer — additive settings fields)**: `strategiesEnabled` may now
   include `VWAP_ROLLING_100`, `VWAP_REVERSION`, `ORB_RETEST`, `EMA_MOMENTUM`, and `RANGE_FADE`.
   Only `VWAP_PULLBACK` and `ORB_5M` are on by default. The desk settings page lists all seven

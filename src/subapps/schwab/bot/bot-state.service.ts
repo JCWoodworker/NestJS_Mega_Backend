@@ -375,6 +375,7 @@ export class BotStateService {
       reason: `${from} → ${mode}`,
       payload: { from, to: mode, running: row.running },
     });
+    await this.botEngine.syncBotFeedLock();
     this.botEngine.onControlPlaneChange();
     return this.getStatus();
   }

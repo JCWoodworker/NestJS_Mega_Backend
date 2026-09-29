@@ -292,7 +292,7 @@ export class OptionsGateway
   @SubscribeMessage('subscribe-underlying')
   async handleSubscribeUnderlying(
     @ConnectedSocket() client: Socket,
-    @MessageBody() body: { symbol: string },
+    @MessageBody() body: { symbol: string; force?: boolean },
   ): Promise<SwitchUnderlyingResult> {
     const session = this.sessionFor(client);
     if (!session) {
@@ -303,7 +303,7 @@ export class OptionsGateway
       };
     }
     this.logger.log(`Client requested underlying: ${body?.symbol}`);
-    return session.switchUnderlying(body?.symbol);
+    return session.switchUnderlying(body?.symbol, { force: body?.force === true });
   }
 
   /**
