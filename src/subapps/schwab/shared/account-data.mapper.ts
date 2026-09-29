@@ -12,13 +12,9 @@ export interface AccountBalances {
   settledCash: number;
   optionsBuyingPower: number;
   /**
-   * Start-of-day account value, from Schwab's `initialBalances` (distinct
-   * from `currentBalances`, which `equity` above reads). Lets the frontend
-   * compute `dayPnl = equity - dayStartEquity` - covering realized *and*
-   * unrealized P&L and surviving reloads - instead of only summing
-   * `positions[].dayProfitLoss`, which drops a closed trade's P&L the
-   * moment it leaves the positions array (frontend contract open item 13 /
-   * section 12).
+   * Start-of-day liquidation value, from Schwab's `initialBalances`. The
+   * frontend computes `dayPnl = equity - dayStartEquity`. Both sides prefer
+   * liquidation value so an open option is in the account on both ends.
    */
   dayStartEquity: number;
 }
@@ -32,15 +28,11 @@ export interface PositionSnapshot {
   averagePrice: number;
   marketValue: number;
   /**
-   * Unrealized P&L on the *currently open* quantity: `marketValue -
-   * averagePrice * quantity * multiplier`. Deliberately NOT Schwab's
-   * `currentDayProfitLoss` - that field is the day's realized *and*
-   * unrealized result for the symbol, so it swings on intraday round-trips
-   * (scale in/out) that never touch the remaining open lot's cost basis,
-   * producing a number that doesn't reconcile with "I bought at X, mark is
-   * X, why isn't this ~$0" (frontend contract 2026-09-09 bug report). The
-   * account bar's "Day P&L" (`equity - dayStartEquity`, section 12) already
-   * covers realized + unrealized honestly at the account level.
+   * Unrealized P&L on the lots still open. Prefers Schwab's
+   * `longOpenProfitLoss` / `shortOpenProfitLoss` (dollars, already ×100).
+   * Otherwise `marketValue - averagePrice * quantity * multiplier`.
+   * Deliberately not `currentDayProfitLoss`, which mixes in closed
+   * round-trips on the same symbol.
    */
   dayProfitLoss: number;
 }
@@ -48,6 +40,20 @@ export interface PositionSnapshot {
 /** Options are quoted per-share; Schwab's marketValue/P&L are already ×100 notional. */
 function positionMultiplier(assetType: string): number {
   return assetType === 'OPTION' ? 100 : 1;
+}
+
+function finiteNumber(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function firstFinite(...values: unknown[]): number | null {
+  for (const value of values) {
+    const n = finiteNumber(value);
+    if (n != null) return n;
+  }
+  return null;
 }
 
 export function mapAccountBalances(
@@ -59,11 +65,16 @@ export function mapAccountBalances(
     schwabAccountResponse?.securitiesAccount?.initialBalances ?? {};
 
   return {
-    equity: balances.equity ?? balances.liquidationValue ?? 0,
+    // Cash-account `equity` can be cash only. Liquidation value includes
+    // the long option, so Day P&L is not short the position's market value.
+    equity: balances.liquidationValue ?? balances.equity ?? 0,
     settledCash: balances.cashAvailableForTrading ?? balances.cashBalance ?? 0,
     optionsBuyingPower: balances.optionBuyingPower ?? balances.buyingPower ?? 0,
     dayStartEquity:
-      initialBalances.liquidationValue ?? initialBalances.accountValue ?? 0,
+      initialBalances.liquidationValue ??
+      initialBalances.accountValue ??
+      initialBalances.equity ??
+      0,
   };
 }
 
@@ -76,13 +87,31 @@ export function mapAccountPositions(
     const assetType = position.instrument?.assetType ?? 'UNKNOWN';
     const quantity =
       (position.longQuantity ?? 0) - (position.shortQuantity ?? 0);
-    const averagePrice =
-      position.averagePrice ??
-      position.averageLongPrice ??
-      position.averageShortPrice ??
-      0;
-    const marketValue = position.marketValue ?? 0;
-    const costBasis = averagePrice * quantity * positionMultiplier(assetType);
+    const multiplier = positionMultiplier(assetType);
+    const marketValue = finiteNumber(position.marketValue) ?? 0;
+    const short = quantity < 0;
+    const quotedAverage =
+      firstFinite(
+        short
+          ? position.taxLotAverageShortPrice
+          : position.taxLotAverageLongPrice,
+        short ? position.averageShortPrice : position.averageLongPrice,
+        position.averagePrice,
+        position.averageLongPrice,
+        position.averageShortPrice,
+      ) ?? 0;
+    const openPnl = firstFinite(
+      short ? position.shortOpenProfitLoss : position.longOpenProfitLoss,
+    );
+    const notional = quantity * multiplier;
+    let averagePrice = quotedAverage;
+    let dayProfitLoss = marketValue - quotedAverage * notional;
+    if (openPnl != null) {
+      dayProfitLoss = openPnl;
+      if (notional !== 0) {
+        averagePrice = (marketValue - openPnl) / notional;
+      }
+    }
 
     return {
       symbol: position.instrument?.symbol ?? '',
@@ -90,7 +119,7 @@ export function mapAccountPositions(
       quantity,
       averagePrice,
       marketValue,
-      dayProfitLoss: marketValue - costBasis,
+      dayProfitLoss,
     };
   });
 }

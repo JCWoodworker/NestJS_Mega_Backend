@@ -334,8 +334,12 @@ Confirmed live: returns the real connected account's number + hash on preprod.
 ```ts
 Array<{ symbol: string; assetType: string; quantity: number; averagePrice: number; marketValue: number; dayProfitLoss: number }>
 ```
-`dayProfitLoss` = unrealized on the open lot (`marketValue - averagePrice*quantity*multiplier`,
-×100 for options) — **not** Schwab's `currentDayProfitLoss` as of 2026-09-09, see Changelog.
+`dayProfitLoss` = unrealized on the lots still open. Prefers Schwab `longOpenProfitLoss` /
+`shortOpenProfitLoss`, and `averagePrice` is backed out of `marketValue − that gain` so a
+penny-rounded average cannot invent the result. Otherwise
+`marketValue - averagePrice*quantity*multiplier` (×100 for options), using the tax-lot average
+when Schwab sends it. Still **not** `currentDayProfitLoss`. `equity` and `dayStartEquity`
+prefer liquidation value. See Changelog.
 Confirmed live (returns `[]` for the connected test account — no open positions).
 
 ### Error response shape
@@ -398,7 +402,7 @@ io(`${VITE_SOCKET_URL}${VITE_SOCKET_NAMESPACE}`, {
     settledCash: number
     optionsBuyingPower: number
     dayStartEquity: number // new 2026-09-03 — see section 12
-    positions: Array<{ symbol: string; assetType: string; quantity: number; averagePrice: number; marketValue: number; dayProfitLoss: number }> // dayProfitLoss = unrealized on open lot, see 2026-09-09 Changelog
+    positions: Array<{ symbol: string; assetType: string; quantity: number; averagePrice: number; marketValue: number; dayProfitLoss: number }> // open-lot unrealized; average backed out of long/short open P&L when present. equity and dayStartEquity are liquidation value.
     asOf: number
   }
   ```
@@ -1720,6 +1724,8 @@ Basic (and admin) users can request deletion; admins fulfill with the same purge
 Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Settings → Delete account; Admin → Deletions tab.
 
 ## Changelog
+
+- **2026-09-29 (open P&L keeps the fraction of a cent)**: `positions[].dayProfitLoss` prefers Schwab `longOpenProfitLoss` / `shortOpenProfitLoss`, and `averagePrice` is backed out of `marketValue − that gain` so a penny-rounded `averagePrice` cannot invent the open result. Tax-lot average is the fallback. Still not `currentDayProfitLoss`. `equity` and `dayStartEquity` prefer liquidation value, so Day P&L includes an open option. No new fields. The position row prints option premiums to 4 decimals, cost, percent versus cost, and an exit figure off the live bid (ask for a short).
 
 - **2026-09-29 (paper training keeps trading)**: Paper reset default is **$10,000** (minimum reset still $5,000). Paper no longer halts on daily loss or profit targets, and `minEquityThreshold` is **0** on the paper lane (live stays **$5,000**). `POST /bot/unlock` and a paper reset clear an existing paper `MAX_LOSS_*` / `PROFIT_TARGET_*` lockout and re-arm. Live loss/profit halts and `RECON_MISMATCH` still **409** until the next day. Per-trade stops are unchanged. The paper heartbeat also drops a leftover paper money lockout so a bot already stuck after a red day resumes once this tree ships.
 

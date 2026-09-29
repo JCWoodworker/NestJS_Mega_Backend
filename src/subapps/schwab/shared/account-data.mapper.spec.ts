@@ -25,6 +25,24 @@ describe('account-data.mapper', () => {
       });
     });
 
+    it('prefers current liquidationValue over a cash-only equity field', () => {
+      const response = {
+        securitiesAccount: {
+          currentBalances: {
+            equity: 1.11,
+            liquidationValue: 4.11,
+            cashAvailableForTrading: 1.11,
+          },
+          initialBalances: { liquidationValue: 4.43 },
+        },
+      };
+
+      const balances = mapAccountBalances(response);
+      expect(balances.equity).toBe(4.11);
+      expect(balances.dayStartEquity).toBe(4.43);
+      expect(balances.equity - balances.dayStartEquity).toBeCloseTo(-0.32, 5);
+    });
+
     it('falls back to initialBalances.accountValue when liquidationValue is absent', () => {
       const response = {
         securitiesAccount: {
@@ -127,6 +145,81 @@ describe('account-data.mapper', () => {
 
       // cost basis = 200 * 10 * 1 = 2000; unrealized = 2050 - 2000 = 50
       expect(mapAccountPositions(response)[0]?.dayProfitLoss).toBe(50);
+    });
+
+    it('rebuilds a sub-penny average from longOpenProfitLoss and ignores the penny average', () => {
+      const response = {
+        securitiesAccount: {
+          positions: [
+            {
+              instrument: {
+                symbol: 'SPY   260929C00780000',
+                assetType: 'OPTION',
+              },
+              longQuantity: 2,
+              shortQuantity: 0,
+              averagePrice: 0.01,
+              taxLotAverageLongPrice: 0.02,
+              marketValue: 3,
+              longOpenProfitLoss: -0.32,
+              currentDayProfitLoss: 99,
+            },
+          ],
+        },
+      };
+
+      const position = mapAccountPositions(response)[0];
+      expect(position?.dayProfitLoss).toBeCloseTo(-0.32, 5);
+      expect(position?.averagePrice).toBeCloseTo(0.0166, 5);
+    });
+
+    it('uses the tax-lot average when the open-gain field is absent', () => {
+      const response = {
+        securitiesAccount: {
+          positions: [
+            {
+              instrument: {
+                symbol: 'SPY   260929C00780000',
+                assetType: 'OPTION',
+              },
+              longQuantity: 2,
+              shortQuantity: 0,
+              averagePrice: 0.01,
+              taxLotAverageLongPrice: 0.0166,
+              marketValue: 3,
+            },
+          ],
+        },
+      };
+
+      const position = mapAccountPositions(response)[0];
+      expect(position?.averagePrice).toBeCloseTo(0.0166, 5);
+      expect(position?.dayProfitLoss).toBeCloseTo(-0.32, 5);
+    });
+
+    it('uses the short-lot open gain for a short option', () => {
+      const response = {
+        securitiesAccount: {
+          positions: [
+            {
+              instrument: {
+                symbol: 'SPY   260929P00760000',
+                assetType: 'OPTION',
+              },
+              longQuantity: 0,
+              shortQuantity: 1,
+              averagePrice: 0.01,
+              marketValue: -15,
+              shortOpenProfitLoss: 5,
+            },
+          ],
+        },
+      };
+
+      const position = mapAccountPositions(response)[0];
+      expect(position?.quantity).toBe(-1);
+      expect(position?.dayProfitLoss).toBe(5);
+      expect(position?.averagePrice).toBeCloseTo(0.2, 5);
     });
 
     it('returns an empty array when there are no positions', () => {
