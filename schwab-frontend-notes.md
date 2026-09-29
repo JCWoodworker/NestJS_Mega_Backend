@@ -1374,8 +1374,8 @@ Trade post-mortems / bot context: [`schwab-bot-lessons-learned.md`](./schwab-bot
 - `paperSlippageCents` (1) — paper fills are `ask + slippage` on entry, `bid - slippage` on exit
 - Soft exits: `usePremiumStop`/`premiumStopPct` (25), `usePremiumTarget`/`premiumTargetPct` (22),
   `stopAtrMult` (1.5), `targetAtrMult` (1.8)
-- **Trailing stop:** `useTrailStop` (**true**), `trailArmPct` (20, min 5), `trailPct` (15),
-  `trailMinLockPct` (0, breakeven-only) — see below
+- **Trailing stop:** `useTrailStop` (**true**), `trailArmPct` (suggested **8**, min 5), `trailPct` (15),
+  `trailMinLockPct` (suggested **5**) — see below
 
 ### Trailing profit ratchet (`useTrailStop`, default on)
 
@@ -1411,12 +1411,13 @@ against the merged row. Internal backstop caps the stop one cent below the peak.
 - The trail config is captured at entry rather than re-read per tick, matching how
   `stopPremium` / `targetPremium` are stamped at fill time. Editing settings mid-position does
   not re-plan the open trade.
-- `bot-suggested-settings` (2026-09-25 fast-scalp): `useTrailStop: true`, `trailArmPct: 20`
-  (MICRO 15), `trailMinLockPct: 0`, `premiumTargetPct: 22` (MICRO 18 / SMALL 20),
-  `cooldownMins: 2`, `targetAtrMult: 1.8`. Applying suggestions is the SoT path — James does
-  not hand-tune. Arm 20 restores the original design after the 2026-09-23 arm-10 regression.
-- Offline analyzer `ExitPolicy` grid uses stop 25% / target 22% with arms 20%/25% — aligned to
-  live Apply suggested.
+- `bot-suggested-settings` (2026-09-29): `useTrailStop: true`, `trailArmPct: 8`,
+  `trailMinLockPct: 5` on every tier, `premiumTargetPct: 22` (MICRO 18 / SMALL 20),
+  `cooldownMins: 2`, `targetAtrMult: 1.8`, `trailPct` 15 (MICRO 12). A trade up 8% locks
+  about 5% instead of falling back to the fill-time stop. Applying suggestions is the SoT
+  path and also resets `strategiesEnabled` to VWAP pullback and ORB 5m.
+- Offline analyzer `ExitPolicy` grid still uses stop 25% / target 22% with arms 20%/25%.
+  Live suggested arm is 8 with a +5% lock.
 
 ### Settings history (`bot_settings_snapshots`)
 
@@ -1718,6 +1719,8 @@ Basic (and admin) users can request deletion; admins fulfill with the same purge
 Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Settings → Delete account; Admin → Deletions tab.
 
 ## Changelog
+
+- **2026-09-29 (trail locks a small gain)**: Suggested settings arm the trail at **+8%** and lock **+5%** on every tier (`trailPct` unchanged: 15, MICRO 12). A trade that is up 8% no longer rides back to the fill-time stop. Not a new field. Apply suggested still replaces the whole patch, including `strategiesEnabled`. The live paper row is updated directly so today's extra strategies stay on.
 
 - **2026-09-28 (bot feed lock)**: While bot `mode` is `BOT`, `subscribe-underlying`
   cannot leave `SPY`. The desk underlying is manual-trading only. The bot pins

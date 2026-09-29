@@ -28,12 +28,11 @@ export function classifySettingsTier(equity: number): BotSettingsTier {
 /**
  * Fee/math-aware recommended settings for the given equity + capability.
  *
- * 2026-09-25 fast-scalp bias (Apply suggested is the only operator path):
- * - Lower premium targets (~18–22%) so small bumps are taken instead of
- *   waiting on a lofty 40% that rarely prints on VWAP/ORB chop.
- * - Restore trail arm to the original ~+20% design (MICRO +15) so a brief
- *   +10% wick cannot lock a permanent floor. Min-lock is breakeven-only (0)
- *   so arming does not choke small scalps.
+ * 2026-09-29 small-gain lock (Apply suggested is the only operator path):
+ * - Trail arms at +8% and locks +5%. A trade that is merely green no longer
+ *   rides all the way back to the fill-time stop. The 15% give-back only
+ *   lifts the floor once the peak is up about 24%; until then the lock is +5%.
+ * - Premium targets stay ~18–22% so a full run is still taken.
  * - Short cooldown (2m) so a run can be re-entered after a quick scalp.
  * - Slightly tighter ATR target mult for faster underlying exits.
  *
@@ -70,8 +69,8 @@ export function buildSuggestedSettings(
   suggested.usePremiumTarget = true;
   suggested.stopAtrMult = 1.5;
   suggested.targetAtrMult = 1.8;
-  // Keep trail on, but arm only after a meaningful premium gain so brief
-  // wicks cannot permanently raise the floor (2026-09-23 arm-10 regression).
+  // Arm once the bid is up 8% and lock +5%, so a small green trade cannot
+  // fall back to the fill-time stop. The 15% trail still follows big peaks.
   suggested.useTrailStop = true;
 
   const directions: BotDirection[] = [];
@@ -102,9 +101,9 @@ export function buildSuggestedSettings(
     suggested.profitPctCurrent = null;
     suggested.premiumStopPct = 20;
     suggested.premiumTargetPct = 18;
-    suggested.trailArmPct = 15;
+    suggested.trailArmPct = 8;
     suggested.trailPct = 12;
-    suggested.trailMinLockPct = 0;
+    suggested.trailMinLockPct = 5;
     rationale.push(
       'MICRO (<$500): ANY combine — either VWAP or ORB can enter; fast-scalp targets (~18%) + 2m cooldown.',
     );
@@ -137,9 +136,9 @@ export function buildSuggestedSettings(
     suggested.profitPctCurrent = null;
     suggested.premiumStopPct = 25;
     suggested.premiumTargetPct = 20;
-    suggested.trailArmPct = 20;
+    suggested.trailArmPct = 8;
     suggested.trailPct = 15;
-    suggested.trailMinLockPct = 0;
+    suggested.trailMinLockPct = 5;
     rationale.push(
       'SMALL ($500–$2k): dual strategies under ANY; fast-scalp premium target 20%; 2m cooldown for run re-entry.',
     );
@@ -160,9 +159,9 @@ export function buildSuggestedSettings(
     suggested.profitPctCurrent = null;
     suggested.premiumStopPct = 25;
     suggested.premiumTargetPct = 22;
-    suggested.trailArmPct = 20;
+    suggested.trailArmPct = 8;
     suggested.trailPct = 15;
-    suggested.trailMinLockPct = 0;
+    suggested.trailMinLockPct = 5;
     rationale.push(
       'STANDARD ($2k–$5k): higher minPremium so commission is a smaller % of each trade; scalp target 22%.',
     );
@@ -183,16 +182,16 @@ export function buildSuggestedSettings(
     suggested.profitPctCurrent = null;
     suggested.premiumStopPct = 25;
     suggested.premiumTargetPct = 22;
-    suggested.trailArmPct = 20;
+    suggested.trailArmPct = 8;
     suggested.trailPct = 15;
-    suggested.trailMinLockPct = 0;
+    suggested.trailMinLockPct = 5;
     rationale.push(
-      'COMFORTABLE (≥$5k): both strategies, ANY combine, 2m cooldown — take small bumps fast (target 22%), trail arms at +20%.',
+      'COMFORTABLE (≥$5k): both strategies, ANY combine, 2m cooldown — take small bumps fast (target 22%), trail arms at +8% and locks +5%.',
     );
   }
 
   rationale.push(
-    `Trail on: ${suggested.trailPct}% off peak once +${suggested.trailArmPct}% (breakeven floor only — min-lock 0) so winners cannot fully give back to the fill-time stop without choking small scalps.`,
+    `Trail on: ${suggested.trailPct}% off peak once +${suggested.trailArmPct}%, with a +${suggested.trailMinLockPct}% floor, so a small green trade cannot fall back to the fill-time stop.`,
   );
   rationale.push(
     `Fast-scalp exits: premium target ${suggested.premiumTargetPct}% / stop ${suggested.premiumStopPct}%; ATR target mult ${suggested.targetAtrMult}.`,
