@@ -1163,12 +1163,12 @@ as the rest of the Schwab subapp:
 |--------|------|------|-------|
 | GET | `/status` | — | `BotStatus` (see below); poll this or listen for `bot-status`. |
 | POST | `/mode` | `{ mode: 'MANUAL' \| 'BOT' }` | `MANUAL`/`BOT` are mutually exclusive. |
-| POST | `/lane` | `{ lane: 'BOT_PAPER' \| 'BOT_LIVE', confirmLive?: boolean }` | `BOT_LIVE` requires `confirmLive: true` **and** a prior `/live/enable`, else **400**. Paper and live both require equity ≥ **$5,000**, else **400**. Switching lanes while a bot position is open in the *other* lane returns **409**. |
+| POST | `/lane` | `{ lane: 'BOT_PAPER' \| 'BOT_LIVE', confirmLive?: boolean }` | `BOT_LIVE` requires `confirmLive: true` **and** a prior `/live/enable`, else **400**. Live requires equity ≥ **$5,000**, else **400**. Paper training has no dollar floor (a negative ledger still **400**s). Switching lanes while a bot position is open in the *other* lane returns **409**. |
 | POST | `/kill` | `{ scope: 'ALL' \| 'PAPER' \| 'LIVE' }` | Flattens any open bot position in scope, cancels bot-tagged working orders (live), and sets `lockout: true`, `lockoutReason: 'KILL_SWITCH'`. |
 | POST | `/unlock` | `{}` | **New 2026-09-04.** Operator recovery from a kill-switch / precautionary lockout, same trading session — see "Clearing a lockout" below. |
 | POST | `/live/enable` | `{ confirm: true }` | Arms live trading; `confirm !== true` → **400**. Equity must be ≥ **$5,000**, else **400**. Arming alone does not start trading — `lane` must still be set to `BOT_LIVE`. |
 | POST | `/live/disable` | `{}` | Disarms live; if currently `BOT_LIVE`, flattens + halts (scope `LIVE`) first, then clears the lane. |
-| POST | `/paper/reset` | `{ equity?: number }` | Reset bot-paper ledger to `equity` (default **$6,000**, min **$5,000**). **409** if an open BOT_PAPER position exists. |
+| POST | `/paper/reset` | `{ equity?: number }` | Reset bot-paper ledger to `equity` (default **$10,000**, min **$5,000**). **409** if an open BOT_PAPER position exists. Also clears a paper loss/profit lockout and re-arms when mode is `BOT`. |
 | GET | `/settings` | — | `BotSettings` (see below). |
 | PUT | `/settings` | partial `BotSettings` patch | Server is the source of truth; unspecified fields are unchanged. |
 
@@ -1193,8 +1193,8 @@ frontend already has `/options` open.
   dayStartEquity: number            // active lane's session start (% gate denominator)
   paperEquity: number               // bot-paper ledger (always present)
   paperSettledCash: number
-  minEquityOk: boolean              // equity >= $5,000 (paper and live)
-  minEquityThreshold: number        // 5000
+  minEquityOk: boolean              // equity >= minEquityThreshold
+  minEquityThreshold: number        // 0 on BOT_PAPER, 5000 on BOT_LIVE
   cooldownUntil: number | null      // epoch ms entries unblock; null when clear
   premiumWatchOk: boolean           // false = premium stop armed but no bid reaching the engine
   openPosition: null | {
@@ -1319,11 +1319,12 @@ Response: updated `BotStatus` (same shape as `GET /status`).
   immediately, re-arms `running: true` if `mode === 'BOT'` and a lane is still set (so the loop
   resumes `SCANNING` on the very next tick, no need to re-`POST` `/mode` or `/lane`), and emits
   `BotEvent { type: 'UNLOCK', reason: 'OPERATOR_UNLOCK' }`.
-- **Deliberately excluded — returns 409, not cleared:** `MAX_LOSS_USD`, `MAX_LOSS_PCT`,
-  `PROFIT_TARGET_USD`, `PROFIT_TARGET_PCT_DAY_START`, `PROFIT_TARGET_PCT_CURRENT`,
-  `RECON_MISMATCH`. These are risk-limit / reconciliation halts by design — same-day auto-recovery
-  for those needs an explicit product decision (are we OK re-arming after hitting a daily max
-  loss?), not a single curl. They still only clear via the next trading day's rollover above.
+- **Paper training (lane is not `BOT_LIVE`)** also clears `MAX_LOSS_USD`, `MAX_LOSS_PCT`,
+  `PROFIT_TARGET_USD`, `PROFIT_TARGET_PCT_DAY_START`, and `PROFIT_TARGET_PCT_CURRENT` the same
+  way. The paper heartbeat drops a leftover one of these on its own, and `POST /bot/paper/reset`
+  clears it too. Paper does not trip these account-level halts; per-trade stops still apply.
+- **Still 409 on `BOT_LIVE`, and `RECON_MISMATCH` on either lane:** live loss/profit halts and
+  reconciliation mismatches wait for the next trading day's rollover.
   409 body: `{ "message": "Cannot unlock a \"MAX_LOSS_USD\" lockout via this endpoint — ...", ... }`.
 
 **Acceptance (live-verified on preprod 2026-09-04):** `kill` → `status.lockout: true,
@@ -1719,6 +1720,8 @@ Basic (and admin) users can request deletion; admins fulfill with the same purge
 Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Settings → Delete account; Admin → Deletions tab.
 
 ## Changelog
+
+- **2026-09-29 (paper training keeps trading)**: Paper reset default is **$10,000** (minimum reset still $5,000). Paper no longer halts on daily loss or profit targets, and `minEquityThreshold` is **0** on the paper lane (live stays **$5,000**). `POST /bot/unlock` and a paper reset clear an existing paper `MAX_LOSS_*` / `PROFIT_TARGET_*` lockout and re-arm. Live loss/profit halts and `RECON_MISMATCH` still **409** until the next day. Per-trade stops are unchanged. The paper heartbeat also drops a leftover paper money lockout so a bot already stuck after a red day resumes once this tree ships.
 
 - **2026-09-29 (rapid scalp review, not a live mode)**: The Saturday dossier and the nightly report include `rapidScalpReplay`: the same recorded entries rescored at a fee-aware exit of about 1% of cost, or the 25% premium stop if that prints first. It does not add trades a shorter cooldown would have opened. The desk shows the switch disabled. No new settings field.
 

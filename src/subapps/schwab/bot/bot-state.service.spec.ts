@@ -62,6 +62,7 @@ function buildService() {
   const botEngine = {
     flattenAndHalt: jest.fn().mockResolvedValue(undefined),
     onControlPlaneChange: jest.fn(),
+    syncBotFeedLock: jest.fn().mockResolvedValue(undefined),
     getTransientPhase: jest.fn().mockReturnValue(null),
     getLastPremiumBidAt: jest.fn().mockReturnValue(null),
     getOpenPositionMark: jest.fn().mockReturnValue(null),
@@ -221,23 +222,23 @@ describe('BotStateService invariants', () => {
     expect(botEngine.flattenAndHalt).not.toHaveBeenCalled();
   });
 
-  it('minEquityOk is false below the $5,000 floor for paper equity', async () => {
+  it('minEquityOk stays true for a drawn-down paper ledger', async () => {
     const { service, getRowSnapshot } = buildService();
     await service.setLane(BotLane.BOT_PAPER);
     getRowSnapshot().paperEquity = 4999;
     const status = await service.getStatus();
     expect(status.equity).toBe(4999);
-    expect(status.minEquityOk).toBe(false);
-    expect(status.minEquityThreshold).toBe(5000);
+    expect(status.minEquityOk).toBe(true);
+    expect(status.minEquityThreshold).toBe(0);
   });
 
-  it('minEquityOk is true at/above the $5,000 floor for paper', async () => {
+  it('minEquityOk is false when paper equity is negative', async () => {
     const { service, getRowSnapshot } = buildService();
     await service.setLane(BotLane.BOT_PAPER);
-    getRowSnapshot().paperEquity = 6000;
+    getRowSnapshot().paperEquity = -1;
     const status = await service.getStatus();
-    expect(status.minEquityOk).toBe(true);
-    expect(status.minEquityThreshold).toBe(5000);
+    expect(status.minEquityOk).toBe(false);
+    expect(status.minEquityThreshold).toBe(0);
   });
 
   it('dayStartEquity follows the active lane (paper ledger vs live balances)', async () => {
@@ -305,9 +306,12 @@ describe('BotStateService invariants', () => {
     expect((await service.getStatus()).premiumWatchOk).toBe(true);
   });
 
-  it('rejects BOT_PAPER lane when paper equity is below $5,000', async () => {
+  it('allows BOT_PAPER below the live $5,000 floor and rejects a negative ledger', async () => {
     const { service, getRowSnapshot } = buildService();
     getRowSnapshot().paperEquity = 1000;
+    await expect(service.setLane(BotLane.BOT_PAPER)).resolves.toBeDefined();
+    getRowSnapshot().paperEquity = -1;
+    getRowSnapshot().lane = null;
     await expect(service.setLane(BotLane.BOT_PAPER)).rejects.toThrow(
       BadRequestException,
     );
@@ -467,9 +471,25 @@ describe('BotStateService invariants', () => {
       }
     });
 
-    it('rejects unlocking a risk-limit halt (e.g. MAX_LOSS_USD) — needs a product decision', async () => {
+    it('clears a paper MAX_LOSS_USD lockout and re-arms the loop', async () => {
+      const { service, getRowSnapshot } = buildService();
+      await service.setLane(BotLane.BOT_PAPER);
+      await service.setMode(BotMode.BOT);
+      const row = getRowSnapshot();
+      row.lockout = true;
+      row.lockoutReason = 'MAX_LOSS_USD';
+      row.lockoutDateKey = etDateKey();
+      row.running = false;
+
+      const status = await service.unlock();
+      expect(status.lockout).toBe(false);
+      expect(getRowSnapshot().running).toBe(true);
+    });
+
+    it('rejects unlocking a live MAX_LOSS_USD halt until the next trading day', async () => {
       const { service, getRowSnapshot } = buildService();
       const row = getRowSnapshot();
+      row.lane = BotLane.BOT_LIVE;
       row.lockout = true;
       row.lockoutReason = 'MAX_LOSS_USD';
 
@@ -486,13 +506,22 @@ describe('BotStateService invariants', () => {
       await expect(service.unlock()).rejects.toThrow(ConflictException);
     });
 
-    it('rejects unlocking a profit-target halt', async () => {
-      const { service, getRowSnapshot } = buildService();
-      const row = getRowSnapshot();
-      row.lockout = true;
-      row.lockoutReason = 'PROFIT_TARGET_USD';
+    it('clears a paper profit-target halt and still rejects one on live', async () => {
+      const paper = buildService();
+      await paper.service.setLane(BotLane.BOT_PAPER);
+      const paperRow = paper.getRowSnapshot();
+      paperRow.lockout = true;
+      paperRow.lockoutReason = 'PROFIT_TARGET_USD';
+      await expect(paper.service.unlock()).resolves.toMatchObject({
+        lockout: false,
+      });
 
-      await expect(service.unlock()).rejects.toThrow(ConflictException);
+      const live = buildService();
+      const liveRow = live.getRowSnapshot();
+      liveRow.lane = BotLane.BOT_LIVE;
+      liveRow.lockout = true;
+      liveRow.lockoutReason = 'PROFIT_TARGET_USD';
+      await expect(live.service.unlock()).rejects.toThrow(ConflictException);
     });
 
     it('does not resume running when mode is MANUAL or no lane is set', async () => {

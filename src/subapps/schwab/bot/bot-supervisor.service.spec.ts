@@ -88,8 +88,14 @@ describe('BotSupervisorService blockers', () => {
     expect(blocker?.reconcilable).toBe(true);
   });
 
-  it('blocks when paper equity is under the floor', async () => {
+  it('does not block a drawn-down paper ledger', async () => {
     const { service } = build({ paperEquity: 4999 });
+    const status = await service.getStatus();
+    expect(codes(status.blockers)).not.toContain('BELOW_MIN_EQUITY');
+  });
+
+  it('blocks when paper equity is negative', async () => {
+    const { service } = build({ paperEquity: -1 });
     const status = await service.getStatus();
     expect(codes(status.blockers)).toContain('BELOW_MIN_EQUITY');
   });
@@ -123,7 +129,7 @@ describe('BotSupervisorService blockers', () => {
 });
 
 describe('BotSupervisorService operator actions', () => {
-  it('reconcile flattens, clears the lockout, and tops up the ledger', async () => {
+  it('reconcile flattens and clears the lockout without topping up a positive ledger', async () => {
     const { service, botStateService } = build({
       row: { openPosition: { symbol: 'SPY' }, lockout: true },
       paperEquity: 1000,
@@ -133,7 +139,7 @@ describe('BotSupervisorService operator actions', () => {
 
     expect(botStateService.kill).toHaveBeenCalled();
     expect(botStateService.unlock).toHaveBeenCalled();
-    expect(botStateService.resetPaper).toHaveBeenCalled();
+    expect(botStateService.resetPaper).not.toHaveBeenCalled();
     // Reconcile deliberately does not arm — the next tick does, so the normal
     // blocker checks still run.
     expect(botStateService.setMode).not.toHaveBeenCalled();

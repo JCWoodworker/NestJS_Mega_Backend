@@ -1,14 +1,14 @@
-/** Shared floor for BOT_PAPER and BOT_LIVE entries / arming / lane-switch. */
-export const MIN_EQUITY = 5000;
+/** Live arming / entry floor. Paper training does not use this. */
+export const MIN_EQUITY_LIVE = 5000;
 
-/** @deprecated alias — paper now uses the same floor as live. */
-export const MIN_EQUITY_PAPER = MIN_EQUITY;
-
-/** @deprecated alias — prefer MIN_EQUITY. */
-export const MIN_EQUITY_LIVE = MIN_EQUITY;
+/** @deprecated alias — this is the live floor. Paper uses MIN_EQUITY_PAPER. */
+export const MIN_EQUITY = MIN_EQUITY_LIVE;
 
 /**
- * Default / reset paper ledger size — just above the min floor so paper
- * mimics a thin live account near the viability threshold.
+ * Paper training keeps scanning through a drawn-down ledger. A negative
+ * balance still cannot fund a contract.
  */
-export const DEFAULT_PAPER_EQUITY = 6000;
+export const MIN_EQUITY_PAPER = 0;
+
+/** Default / reset paper ledger. Training bank, not a thin-account mimic. */
+export const DEFAULT_PAPER_EQUITY = 10000;

@@ -25,7 +25,12 @@ import { BotEngineService } from './bot-engine.service';
 import {
   DEFAULT_PAPER_EQUITY,
   MIN_EQUITY,
+  MIN_EQUITY_PAPER,
 } from './bot-equity-thresholds.const';
+import {
+  isOperatorUnlockable,
+  isPaperTrainingLockout,
+} from './bot-lockout.const';
 import { BotEventService } from './bot-event.service';
 import { computePhase } from './bot-phase.util';
 import {
@@ -62,7 +67,7 @@ export interface BotStatusView {
   paperEquity: number;
   paperSettledCash: number;
   minEquityOk: boolean;
-  /** Dollar floor used for `minEquityOk` ($5,000 for paper and live). */
+  /** Dollar floor used for `minEquityOk` (paper training $0, live $5,000). */
   minEquityThreshold: number;
   openPosition: BotOpenPosition | null;
   /**
@@ -93,29 +98,18 @@ const RECENT_EVENTS_COUNT = 20;
  * read an option bid in this long (heartbeat is ~7s). */
 const PREMIUM_WATCH_STALE_MS = 20_000;
 
-function assertMinEquity(equity: number, context: string): void {
-  if (equity >= MIN_EQUITY) return;
+function assertMinEquity(
+  equity: number,
+  context: string,
+  floor: number,
+): void {
+  if (equity >= floor) return;
   throw new BadRequestException(
-    `${context} requires at least $${MIN_EQUITY.toLocaleString(
+    `${context} requires at least $${floor.toLocaleString(
       'en-US',
     )} equity (current: $${equity.toFixed(2)})`,
   );
 }
-
-/**
- * Lockout reasons an operator can clear same-session via `POST /bot/unlock`
- * (kill switch / precautionary halts). Risk-limit and reconciliation halts
- * (max-loss, profit targets, recon mismatch) are deliberately excluded —
- * clearing those same-day needs an explicit product decision, not a single
- * curl, so they still only clear via the next trading day's rollover
- * (`clearLockoutIfNewDay`).
- */
-const OPERATOR_UNLOCKABLE_REASONS = new Set([
-  'KILL_SWITCH',
-  'LIVE_DISABLED',
-  'HARD_FLATTEN_EOD',
-  'SOCKET_LOSS',
-]);
 
 @Injectable()
 export class BotStateService {
@@ -188,6 +182,9 @@ export class BotStateService {
           lockout: false,
           lockoutReason: null,
           liveArmed: false,
+          paperEquity: DEFAULT_PAPER_EQUITY,
+          paperSettledCash: DEFAULT_PAPER_EQUITY,
+          paperDayStartEquity: DEFAULT_PAPER_EQUITY,
         }),
       )
       .finally(() => {
@@ -272,7 +269,7 @@ export class BotStateService {
       inCooldown: cooldownUntil != null,
     });
 
-    const minEquityThreshold = MIN_EQUITY;
+    const minEquityThreshold = isPaper ? MIN_EQUITY_PAPER : MIN_EQUITY;
     const premiumArmed = Boolean(
       row.openPosition &&
         (row.openPosition.stopPremium != null ||
@@ -392,11 +389,15 @@ export class BotStateService {
           'BOT_LIVE requires live to be armed via POST /bot/live/enable',
         );
       }
-      assertMinEquity(this.getLiveBalances().equity, 'BOT_LIVE');
+      assertMinEquity(this.getLiveBalances().equity, 'BOT_LIVE', MIN_EQUITY);
     }
     if (lane === BotLane.BOT_PAPER) {
       const paperRow = await this.getRow();
-      assertMinEquity(Number(paperRow.paperEquity), 'BOT_PAPER');
+      assertMinEquity(
+        Number(paperRow.paperEquity),
+        'BOT_PAPER',
+        MIN_EQUITY_PAPER,
+      );
     }
 
     const row = await this.getRow();
@@ -426,7 +427,7 @@ export class BotStateService {
     if (confirm !== true) {
       throw new BadRequestException('confirm must be true');
     }
-    assertMinEquity(this.getLiveBalances().equity, 'BOT_LIVE');
+    assertMinEquity(this.getLiveBalances().equity, 'BOT_LIVE', MIN_EQUITY);
     const row = await this.getRow();
     row.liveArmed = true;
     await this.save(row);
@@ -441,8 +442,9 @@ export class BotStateService {
   }
 
   /**
-   * Reset the bot-paper ledger to a fixed starting equity (default $6,000).
+   * Reset the bot-paper ledger to a fixed starting equity (default $10,000).
    * Refuses while a paper position is open so we don't orphan fills.
+   * A paper loss/profit lockout clears with the reset so training can resume.
    */
   async resetPaper(equity = DEFAULT_PAPER_EQUITY): Promise<BotStatusView> {
     if (!Number.isFinite(equity) || equity < MIN_EQUITY) {
@@ -466,6 +468,16 @@ export class BotStateService {
     row.paperEquity = equity;
     row.paperSettledCash = equity;
     row.paperDayStartEquity = equity;
+    const clearedTrainingLockout =
+      row.lane !== BotLane.BOT_LIVE && isPaperTrainingLockout(row.lockoutReason);
+    if (clearedTrainingLockout) {
+      row.lockout = false;
+      row.lockoutReason = null;
+      row.lockoutDateKey = null;
+      if (row.mode === BotMode.BOT && row.lane) {
+        row.running = true;
+      }
+    }
     await this.save(row);
     await this.botEventService.record({
       lane: row.lane,
@@ -490,6 +502,13 @@ export class BotStateService {
       balanceBefore: before.paperEquity,
       balanceAfter: equity,
     });
+    if (clearedTrainingLockout) {
+      await this.botEventService.record({
+        lane: row.lane,
+        type: BotEventType.UNLOCK,
+        reason: 'OPERATOR_UNLOCK',
+      });
+    }
     this.botEngine.onControlPlaneChange();
     return this.getStatus();
   }
@@ -522,23 +541,19 @@ export class BotStateService {
   }
 
   /**
-   * Operator recovery path for a kill-switch / precautionary lockout — see
-   * `OPERATOR_UNLOCKABLE_REASONS`. Distinct from `clearLockoutIfNewDay`:
-   * this clears the lockout immediately, in the same trading session,
-   * on explicit operator request rather than waiting for ET midnight.
+   * Same-session recovery. Kill-switch and precautionary halts clear on
+   * either lane. Paper loss and profit halts clear too, so training can
+   * restart after a red day. Live loss/profit halts and reconciliation
+   * mismatches still wait for the next trading day.
    */
   async unlock(): Promise<BotStatusView> {
     const row = await this.getRow();
     if (!row.lockout) return this.getStatus();
 
-    if (
-      row.lockoutReason &&
-      !OPERATOR_UNLOCKABLE_REASONS.has(row.lockoutReason)
-    ) {
+    if (!isOperatorUnlockable(row.lane, row.lockoutReason)) {
       throw new ConflictException(
         `Cannot unlock a "${row.lockoutReason}" lockout via this endpoint — ` +
-          'risk-limit and reconciliation halts require a product decision ' +
-          'or the next trading day to clear.',
+          'live risk-limit and reconciliation halts require the next trading day.',
       );
     }
 

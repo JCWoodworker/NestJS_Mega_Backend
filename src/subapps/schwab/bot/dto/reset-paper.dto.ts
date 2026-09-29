@@ -4,7 +4,7 @@ import { IsNumber, IsOptional, Min } from 'class-validator';
 import { MIN_EQUITY } from '../bot-equity-thresholds.const';
 
 export class ResetPaperDto {
-  /** Starting paper equity / settled cash. Defaults to $6,000 server-side. */
+  /** Starting paper equity / settled cash. Defaults to $10,000 server-side. */
   @IsOptional()
   @Type(() => Number)
   @IsNumber()

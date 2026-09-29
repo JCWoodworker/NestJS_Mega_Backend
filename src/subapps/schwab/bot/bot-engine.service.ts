@@ -36,6 +36,7 @@ import { commissionForLeg, commissionForRoundTrip } from './bot-fees.const';
 import { BotMarketDataService } from './bot-market-data.service';
 import { BotRecordingService, configVersionOf } from './bot-recording.service';
 import { BotSettingsService } from './bot-settings.service';
+import { isPaperTrainingLockout } from './bot-lockout.const';
 import { BotStateService } from './bot-state.service';
 import { diffStreamerHolds } from './bot-streamer-hold.util';
 import { BotOpenPosition } from './entities/bot-state.entity';
@@ -1265,7 +1266,15 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.botStateService.refreshLiveBalances();
       await this.botStateService.clearLockoutIfNewDay();
-      const row = await this.botStateService.getRow();
+      let row = await this.botStateService.getRow();
+      if (
+        row.lane !== BotLane.BOT_LIVE &&
+        row.lockout &&
+        isPaperTrainingLockout(row.lockoutReason)
+      ) {
+        await this.botStateService.unlock();
+        row = await this.botStateService.getRow();
+      }
       if (row.mode === BotMode.BOT) {
         await this.syncBotFeedLock();
       }
@@ -1335,11 +1344,12 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     row: Awaited<ReturnType<BotStateService['getRow']>>,
     settings: Awaited<ReturnType<BotSettingsService['getSettings']>>,
   ): Promise<void> {
+    // Paper training keeps trading through a red or green day. Per-trade
+    // stops still apply. These account-level halts are live-only.
+    if (row.lane !== BotLane.BOT_LIVE) return;
+
     const status = await this.botStateService.getStatus();
-    const dayStart =
-      row.lane === BotLane.BOT_PAPER
-        ? Number(row.paperDayStartEquity)
-        : this.botStateService.getLiveBalances().dayStartEquity;
+    const dayStart = this.botStateService.getLiveBalances().dayStartEquity;
     const pnl = status.todayBotPnl;
 
     if (

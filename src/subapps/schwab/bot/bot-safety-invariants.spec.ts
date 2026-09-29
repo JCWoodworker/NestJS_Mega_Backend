@@ -243,10 +243,11 @@ describe('direction gating', () => {
 describe('equity floor', () => {
   /**
    * Pinned deliberately. Commission and spread on a 0DTE round trip make a
-   * thinner account negative-expectancy regardless of the strategy, so this
-   * is not a knob a tuning run gets to relax.
+   * thinner live account negative-expectancy regardless of the strategy, so
+   * this is not a knob a tuning run gets to relax. Paper training is a
+   * separate, explicit exception: the paper floor stays at 0.
    */
-  it('holds the shared arming floor at 5000', () => {
+  it('holds the live arming floor at 5000', () => {
     expect(MIN_EQUITY).toBe(5000);
   });
 });

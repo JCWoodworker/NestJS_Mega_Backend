@@ -11,7 +11,7 @@ import schwabConfig from '@schwab/config/schwab.config';
 import { etDateKey } from '@schwab/pnl/et-date.util';
 import { runAsUser } from '@schwab/shared/schwab-user-context';
 
-import { MIN_EQUITY } from './bot-equity-thresholds.const';
+import { MIN_EQUITY_PAPER } from './bot-equity-thresholds.const';
 import { BotEventService } from './bot-event.service';
 import { BotStateService } from './bot-state.service';
 import { etNowHhMm, isAtOrPast } from './bot-strategy.util';
@@ -259,10 +259,11 @@ export class BotSupervisorService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
-    if (paperEquity < MIN_EQUITY) {
+    if (paperEquity < MIN_EQUITY_PAPER) {
       blockers.push({
         code: 'BELOW_MIN_EQUITY',
-        message: `Paper equity is under the $${MIN_EQUITY.toLocaleString()} floor.`,
+        message:
+          'Paper equity is negative, so the ledger cannot fund another contract.',
         reconcilable: true,
       });
     }
@@ -414,7 +415,7 @@ export class BotSupervisorService implements OnModuleInit, OnModuleDestroy {
       if (afterKill.lockout) {
         await this.botStateService.unlock();
       }
-      if (status.paperEquity < MIN_EQUITY) {
+      if (status.paperEquity < MIN_EQUITY_PAPER) {
         await this.botStateService.resetPaper();
       }
     });
