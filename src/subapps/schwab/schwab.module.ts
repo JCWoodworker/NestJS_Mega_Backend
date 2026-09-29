@@ -5,6 +5,7 @@ import { AccountDeletionModule } from './account/account-deletion.module';
 import { AdminUsersModule } from './admin/admin-users.module';
 import { SchwabAuthModule } from './auth/schwab-auth.module';
 import { BotModule } from './bot/bot.module';
+import { BotV2Module } from './bot-v2/bot-v2.module';
 import schwabConfig from './config/schwab.config';
 import { MarketDataModule } from './market-data/market-data.module';
 import { OrdersModule } from './orders/orders.module';
@@ -20,6 +21,7 @@ import { SchwabStreamingModule } from './streaming/schwab-streaming.module';
     MarketDataModule,
     PnlModule,
     BotModule,
+    BotV2Module,
     AdminUsersModule,
     AccountDeletionModule,
   ],

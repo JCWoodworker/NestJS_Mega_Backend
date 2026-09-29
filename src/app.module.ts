@@ -29,6 +29,7 @@ import { RilwModule } from '@subapps/rilw/rilw.module';
 import { AdminUsersModule } from '@subapps/schwab/admin/admin-users.module';
 import { SchwabAuthModule } from '@subapps/schwab/auth/schwab-auth.module';
 import { BotModule } from '@subapps/schwab/bot/bot.module';
+import { BotV2Module } from '@subapps/schwab/bot-v2/bot-v2.module';
 import { MarketDataModule } from '@subapps/schwab/market-data/market-data.module';
 import { OrdersModule } from '@subapps/schwab/orders/orders.module';
 import { PnlModule } from '@subapps/schwab/pnl/pnl.module';
@@ -171,6 +172,10 @@ import { AppService } from './app.service';
           {
             path: 'schwab',
             module: BotModule,
+          },
+          {
+            path: 'schwab',
+            module: BotV2Module,
           },
           {
             path: 'schwab',
