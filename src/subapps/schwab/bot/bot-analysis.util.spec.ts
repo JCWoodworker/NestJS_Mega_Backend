@@ -2,8 +2,10 @@ import {
   aggregateTrades,
   assessReadiness,
   defaultPolicyGrid,
+  rapidScalpTargetBid,
   replayExitPolicy,
   scorePolicies,
+  scoreRapidScalpReplay,
   MIN_TRADES_INDICATIVE,
   MIN_TRADES_TRUSTWORTHY,
   type AnalyzedTrade,
@@ -483,6 +485,33 @@ describe('scorePolicies', () => {
     expect(results).toHaveLength(defaultPolicyGrid().length);
     expect(results.every((r) => r.trades === 0 && r.netPnl === 0)).toBe(true);
     expect(results.every((r) => r.winRate === null)).toBe(true);
+  });
+});
+
+describe('scoreRapidScalpReplay', () => {
+  it('takes a fee-aware 1% of cost instead of a 1% move in the quote', () => {
+    expect(rapidScalpTargetBid(1, 1.3, 1)).toBeCloseTo(1.023, 5);
+  });
+
+  it('banks the small target when the bid prints it before the stop', () => {
+    const result = scoreRapidScalpReplay({
+      trades: [trade({ tradeKey: 'hit', netPnl: -20, fees: 1.3, entryPrice: 1 })],
+      tapeByTradeKey: new Map([['hit', tape([1, 1.01, 1.03, 0.8])]]),
+    });
+    expect(result.tradesScored).toBe(1);
+    expect(result.netPnl).toBeCloseTo(1.7, 5);
+    expect(result.deltaVsActual).toBeCloseTo(21.7, 5);
+    expect(result.note).toMatch(/same recorded entries/i);
+  });
+
+  it('leaves a trade unscored when the tape has no bid', () => {
+    const result = scoreRapidScalpReplay({
+      trades: [trade({ tradeKey: 'blind' })],
+      tapeByTradeKey: new Map(),
+    });
+    expect(result.tradesScored).toBe(0);
+    expect(result.tradesUnscored).toBe(1);
+    expect(result.netPnl).toBe(0);
   });
 });
 

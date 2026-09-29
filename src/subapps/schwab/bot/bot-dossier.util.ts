@@ -1,4 +1,9 @@
-import { AnalyzedTrade } from './bot-analysis.util';
+import {
+  AnalyzedTrade,
+  RapidScalpReplay,
+  scoreRapidScalpReplay,
+} from './bot-analysis.util';
+import { TapeSample } from './bot-trade-metrics.util';
 
 /**
  * The weekly evidence file the improvement agent reads.
@@ -142,6 +147,11 @@ export interface WeeklyDossier {
   timeOfDay: TimeBucket[];
   sessionContext: SessionContext[];
   configWindows: ConfigWindow[];
+  /**
+   * Fee-aware 1% exit replay on the entries that already happened.
+   * Absent tape yields a scored-zero block rather than a silent omission.
+   */
+  rapidScalpReplay: RapidScalpReplay;
   notes: string[];
 }
 
@@ -473,6 +483,7 @@ export function buildWeeklyDossier(params: {
   trades: Array<AnalyzedTrade & { configVersion: string | null }>;
   events: DossierEvent[];
   sessions: DossierSession[];
+  tapeByTradeKey?: Map<string, TapeSample[]>;
   now?: number;
 }): WeeklyDossier {
   const { trades, events } = params;
@@ -506,6 +517,10 @@ export function buildWeeklyDossier(params: {
     timeOfDay: bucketByTimeOfDay(trades),
     sessionContext,
     configWindows: windowByConfig(trades),
+    rapidScalpReplay: scoreRapidScalpReplay({
+      trades,
+      tapeByTradeKey: params.tapeByTradeKey ?? new Map(),
+    }),
     notes: buildNotes({
       trades,
       sessions: sessionContext,

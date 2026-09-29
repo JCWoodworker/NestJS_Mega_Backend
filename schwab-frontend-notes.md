@@ -1720,6 +1720,8 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
 
 ## Changelog
 
+- **2026-09-29 (rapid scalp review, not a live mode)**: The Saturday dossier and the nightly report include `rapidScalpReplay`: the same recorded entries rescored at a fee-aware exit of about 1% of cost, or the 25% premium stop if that prints first. It does not add trades a shorter cooldown would have opened. The desk shows the switch disabled. No new settings field.
+
 - **2026-09-29 (trail locks a small gain)**: Suggested settings arm the trail at **+8%** and lock **+5%** on every tier (`trailPct` unchanged: 15, MICRO 12). A trade that is up 8% no longer rides back to the fill-time stop. Not a new field. Apply suggested still replaces the whole patch, including `strategiesEnabled`. The live paper row is updated directly so today's extra strategies stay on.
 
 - **2026-09-28 (bot feed lock)**: While bot `mode` is `BOT`, `subscribe-underlying`

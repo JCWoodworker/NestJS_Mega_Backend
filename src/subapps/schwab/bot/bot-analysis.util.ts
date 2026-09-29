@@ -304,6 +304,101 @@ export function replayExitPolicy(params: {
   };
 }
 
+/**
+ * Fee-aware bid that nets about 1% of the dollars in the trade.
+ *
+ * A 1% move in the option price does not clear the round-trip commission.
+ * `fees / (quantity × 100)` is that commission in premium points.
+ */
+export function rapidScalpTargetBid(
+  entryPrice: number,
+  fees: number,
+  quantity: number,
+): number {
+  const qty = Math.max(quantity, 1);
+  return entryPrice * 1.01 + fees / (qty * 100);
+}
+
+export interface RapidScalpReplay {
+  name: 'RAPID_SCALP';
+  tradesScored: number;
+  tradesUnscored: number;
+  netPnl: number;
+  actualNetPnl: number;
+  deltaVsActual: number;
+  wins: number;
+  /**
+   * Same recorded entries only. A shorter cooldown would have opened trades
+   * this replay cannot see, and a better delta is not a live-mode switch.
+   */
+  note: string;
+}
+
+export const RAPID_SCALP_NOTE =
+  'Same recorded entries only. This does not include trades a shorter cooldown would have opened, and a better number is not a reason to turn a live rapid-scalp mode on.';
+
+/**
+ * Replays the recorded bids as if each trade had taken a fee-aware 1% target
+ * or the 25% premium stop, whichever printed first. Entries stay fixed.
+ */
+export function scoreRapidScalpReplay(params: {
+  trades: AnalyzedTrade[];
+  tapeByTradeKey: Map<string, TapeSample[]>;
+}): RapidScalpReplay {
+  let netPnl = 0;
+  let actualNetPnl = 0;
+  let tradesScored = 0;
+  let tradesUnscored = 0;
+  let wins = 0;
+
+  for (const trade of params.trades) {
+    const samples = (params.tapeByTradeKey.get(trade.tradeKey) ?? [])
+      .filter((sample) => sample.optionBid != null)
+      .sort((a, b) => a.at - b.at);
+    if (!samples.length) {
+      tradesUnscored += 1;
+      continue;
+    }
+    const target = rapidScalpTargetBid(
+      trade.entryPrice,
+      trade.fees,
+      trade.quantity,
+    );
+    const stop = trade.entryPrice * 0.75;
+    let exitBid = samples[samples.length - 1].optionBid as number;
+    for (const sample of samples) {
+      const bid = sample.optionBid as number;
+      if (bid <= stop) {
+        exitBid = bid;
+        break;
+      }
+      if (bid >= target) {
+        exitBid = bid;
+        break;
+      }
+    }
+    const replayNet = round(
+      (exitBid - trade.entryPrice) * trade.quantity * 100 - trade.fees,
+      2,
+    );
+    tradesScored += 1;
+    netPnl += replayNet;
+    actualNetPnl += trade.netPnl;
+    if (replayNet > 0) wins += 1;
+  }
+
+  return {
+    name: 'RAPID_SCALP',
+    tradesScored,
+    tradesUnscored,
+    netPnl: round(netPnl, 2),
+    actualNetPnl: round(actualNetPnl, 2),
+    deltaVsActual: round(netPnl - actualNetPnl, 2),
+    wins,
+    note: RAPID_SCALP_NOTE,
+  };
+}
+
 /** Scores a set of policies across every trade that has usable tape. */
 export function scorePolicies(params: {
   trades: AnalyzedTrade[];

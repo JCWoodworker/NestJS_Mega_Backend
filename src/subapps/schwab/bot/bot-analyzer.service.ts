@@ -12,7 +12,9 @@ import {
   assessReadiness,
   defaultPolicyGrid,
   scorePolicies,
+  scoreRapidScalpReplay,
   type AnalyzedTrade,
+  type RapidScalpReplay,
   type DailyAggregate,
   type PolicyResult,
   type Readiness,
@@ -105,20 +107,23 @@ export class BotAnalyzerService {
 
     // Only bother with the grid once a conclusion could mean something.
     // Below the gate it is noise that invites over-reading.
+    const tapeByTradeKey = await this.loadTape(ownerUserId, trades);
     const policyResults =
       readiness.level === 'insufficient'
         ? []
         : scorePolicies({
             trades,
-            tapeByTradeKey: await this.loadTape(ownerUserId, trades),
+            tapeByTradeKey,
             policies: defaultPolicyGrid(),
           });
+    const rapidScalpReplay = scoreRapidScalpReplay({ trades, tapeByTradeKey });
 
     const markdown = this.renderMarkdown({
       dateKey,
       readiness,
       aggregate,
       policyResults,
+      rapidScalpReplay,
     });
 
     await this.reportRepository.save({
@@ -254,8 +259,10 @@ export class BotAnalyzerService {
     readiness: Readiness;
     aggregate: DailyAggregate;
     policyResults: PolicyResult[];
+    rapidScalpReplay: RapidScalpReplay;
   }): string {
-    const { dateKey, readiness, aggregate, policyResults } = params;
+    const { dateKey, readiness, aggregate, policyResults, rapidScalpReplay } =
+      params;
     const mins = (ms: number | null) =>
       ms == null ? 'n/a' : `${(ms / 60_000).toFixed(1)}m`;
     const pct = (value: number | null) =>
@@ -345,6 +352,15 @@ export class BotAnalyzerService {
         'Skipped — the sample is below the threshold where a winning policy means anything.',
       );
     }
+
+    lines.push(
+      '',
+      '## Rapid scalp replay',
+      '',
+      `Same entries, fee-aware exit of about 1% of cost, or the 25% premium stop if that prints first. Scored ${rapidScalpReplay.tradesScored}, unscored ${rapidScalpReplay.tradesUnscored}. Hypothetical net ${rapidScalpReplay.netPnl} versus actual ${rapidScalpReplay.actualNetPnl} (${rapidScalpReplay.deltaVsActual > 0 ? '+' : ''}${rapidScalpReplay.deltaVsActual}).`,
+      '',
+      rapidScalpReplay.note,
+    );
 
     return lines.join('\n');
   }

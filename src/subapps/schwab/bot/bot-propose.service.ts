@@ -108,9 +108,10 @@ export class BotProposeService {
     });
     if (!settingsRow) return null;
 
+    const tapeByTradeKey = await this.loadTape(ownerUserId, trades);
     const evidence = buildEvidencePacket({
       trades,
-      tapeByTradeKey: await this.loadTape(ownerUserId, trades),
+      tapeByTradeKey,
       policies: defaultPolicyGrid(),
       current: toProposeSettings(settingsRow),
       weekEndingEt,
@@ -126,6 +127,7 @@ export class BotProposeService {
         })),
       events: await this.loadEvents(ownerUserId),
       sessions: await this.loadSessions(weekEndingEt),
+      tapeByTradeKey,
     });
 
     // Spread rather than nest so `packet.patch` stays where the 09:20 apply
