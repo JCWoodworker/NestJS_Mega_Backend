@@ -454,7 +454,19 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
     const settings = await this.settingsService.get(userId);
     const book = this.book(userId);
     book.settings = settings;
-    book.position = row.openPosition;
+    // Tick exits ratchet peak and stop on the in-memory book. Replacing that
+    // with the database row every heartbeat threw those updates away, so the
+    // watch page never saw the trail move.
+    const stored = row.openPosition;
+    const live = book.position;
+    if (
+      !live ||
+      !stored ||
+      live.positionId !== stored.positionId ||
+      live.symbol !== stored.symbol
+    ) {
+      book.position = stored;
+    }
     book.running = true;
     const session = this.pool.peek(userId);
     if (book.position && session) session.pinOptionSymbol(book.position.symbol);
