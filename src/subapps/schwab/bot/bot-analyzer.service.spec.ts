@@ -58,10 +58,36 @@ function build(options: {
     findOne: jest.fn().mockResolvedValue(null),
   };
 
+  const v2Trades = {
+    createQueryBuilder: jest.fn(() => ({
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue(
+        trades.map((trade, index) => ({
+          id: String(trade.tradeKey ?? index),
+          direction: trade.direction,
+          quantity: trade.quantity,
+          entryPrice: trade.entryPrice,
+          exitPrice: trade.exitPrice,
+          openedAt: String(OPENED),
+          closedAt: String(OPENED + Number(trade.holdMs ?? 600_000)),
+          grossPnl: trade.grossPnl,
+          fees: trade.fees,
+          netPnl: trade.netPnl,
+          exitReason: trade.exitReason,
+          configVersion: 'v2|SPY|60|test',
+        })),
+      ),
+    })),
+    count: jest.fn().mockResolvedValue(options.cumulative ?? trades.length),
+  };
+
   const service = new BotAnalyzerService(
     tradeRepository as never,
     tapeRepository as never,
     reportRepository as never,
+    v2Trades as never,
     {
       ownerUserId:
         options.ownerUserId === undefined ? OWNER : options.ownerUserId,
@@ -69,7 +95,7 @@ function build(options: {
     } as never,
   );
 
-  return { service, tradeRepository, tapeRepository, reportRepository, saved };
+  return { service, tradeRepository, tapeRepository, reportRepository, v2Trades, saved };
 }
 
 describe('BotAnalyzerService', () => {
@@ -138,14 +164,14 @@ describe('BotAnalyzerService', () => {
    * reaches 30 trades, so gating per-day would keep it switched off forever.
    */
   it('gates on cumulative trades rather than the session count', async () => {
-    const { service, tradeRepository } = build({
+    const { service, v2Trades } = build({
       trades: [tradeRow()],
       cumulative: 150,
     });
 
     const result = await service.analyzeDay('2026-09-18');
 
-    expect(tradeRepository.count).toHaveBeenCalledWith({
+    expect(v2Trades.count).toHaveBeenCalledWith({
       where: { userId: OWNER },
     });
     expect(result?.readiness.level).toBe('trustworthy');
@@ -167,16 +193,15 @@ describe('BotAnalyzerService', () => {
 
   /** Scoping the loop to the owner is the multi-tenant guarantee. */
   it('only ever reads and writes the owner corpus', async () => {
-    const { service, tradeRepository, saved } = build({
+    const { service, v2Trades, saved } = build({
       trades: [tradeRow()],
       cumulative: 1,
     });
 
     await service.analyzeDay('2026-09-18');
 
-    expect(tradeRepository.find).toHaveBeenCalledWith({
-      where: { userId: OWNER, etDateKey: '2026-09-18' },
-      order: { closedAt: 'ASC' },
+    expect(v2Trades.count).toHaveBeenCalledWith({
+      where: { userId: OWNER },
     });
     expect(saved[0].userId).toBe(OWNER);
   });

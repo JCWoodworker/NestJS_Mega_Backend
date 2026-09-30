@@ -17,11 +17,12 @@ import { BotV2Trade } from './entities/bot-v2-trade.entity';
 @Module({
   imports: [
     TypeOrmModule.forFeature([BotV2Settings, BotV2State, BotV2Trade, BotV2Event]),
-    BotModule,
+    forwardRef(() => BotModule),
     MarketDataModule,
     forwardRef(() => SchwabStreamingModule),
   ],
   controllers: [BotV2Controller],
   providers: [BotV2SettingsService, BotV2StateService, BotV2EngineService],
+  exports: [BotV2SettingsService, BotV2StateService, BotV2EngineService],
 })
 export class BotV2Module {}

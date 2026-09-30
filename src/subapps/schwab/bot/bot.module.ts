@@ -15,6 +15,8 @@ import { SchwabStreamingModule } from '@schwab/streaming/schwab-streaming.module
 
 import { BotAdminController } from './bot-admin.controller';
 import { BotAnalyzerService } from './bot-analyzer.service';
+import { BotV2Module } from '../bot-v2/bot-v2.module';
+import { BotV2Trade } from '../bot-v2/entities/bot-v2-trade.entity';
 import { BotArchiveService } from './bot-archive.service';
 import { BotProposeAgentService } from './bot-propose-agent.service';
 import { BotProposeService } from './bot-propose.service';
@@ -57,6 +59,7 @@ import { BotTrade } from './entities/bot-trade.entity';
       BotCapitalEvent,
       BotDailyReport,
       BotProposal,
+      BotV2Trade,
       SchwabTradeFill,
       SchwabRealizedTrade,
     ]),
@@ -66,6 +69,7 @@ import { BotTrade } from './entities/bot-trade.entity';
     SchwabSharedModule,
     MarketDataModule,
     forwardRef(() => SchwabStreamingModule),
+    forwardRef(() => BotV2Module),
     PnlModule,
   ],
   controllers: [BotController, BotAdminController, BotFixtureController],

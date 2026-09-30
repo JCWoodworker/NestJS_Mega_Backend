@@ -32,6 +32,10 @@ export class BotV2StateService {
     return this.states.save(row);
   }
 
+  async peek(userId: string): Promise<BotV2State | null> {
+    return this.states.findOneBy({ userId });
+  }
+
   async armedUserIds(): Promise<string[]> {
     const rows = await this.states.find({
       where: { mode: 'BOT', running: true },

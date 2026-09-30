@@ -13,7 +13,7 @@ import {
   Min,
 } from 'class-validator';
 
-import { BotStrategy } from '@schwab/bot/enums/strategy.enum';
+import { BotCombineMode, BotStrategy } from '@schwab/bot/enums/strategy.enum';
 
 export class ArmBotV2Dto {
   /** Paper only. Live arming is not a V2 route. */
@@ -49,6 +49,10 @@ export class UpdateBotV2SettingsDto {
   @IsOptional()
   @IsBoolean()
   canBuyPuts?: boolean;
+
+  @IsOptional()
+  @IsIn(Object.values(BotCombineMode))
+  combineMode?: BotCombineMode;
 
   @IsOptional()
   @Type(() => Number)

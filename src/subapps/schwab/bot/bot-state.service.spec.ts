@@ -104,11 +104,11 @@ function buildService() {
 }
 
 describe('BotStateService invariants', () => {
-  it('setMode(BOT) with no lane parks (running stays false)', async () => {
+  it('setMode(BOT) is retired in favor of the V2 engine', async () => {
     const { service } = buildService();
-    const status = await service.setMode(BotMode.BOT);
-    expect(status.mode).toBe(BotMode.BOT);
-    expect(status.running).toBe(false);
+    await expect(service.setMode(BotMode.BOT)).rejects.toThrow(
+      'CHAMPION_RETIRED',
+    );
   });
 
   it('rejects BOT_LIVE lane without confirmLive (acceptance #2)', async () => {
@@ -384,7 +384,7 @@ describe('BotStateService invariants', () => {
   it('phase is LOCKOUT once locked out, regardless of mode/lane', async () => {
     const { service, getRowSnapshot } = buildService();
     await service.setLane(BotLane.BOT_PAPER);
-    await service.setMode(BotMode.BOT);
+    getRowSnapshot().mode = BotMode.BOT;
     getRowSnapshot().lockout = true;
     const status = await service.getStatus();
     expect(status.phase).toBe('LOCKOUT');
@@ -434,8 +434,8 @@ describe('BotStateService invariants', () => {
       const { service, getRowSnapshot, botEngine, botEventService } =
         buildService();
       await service.setLane(BotLane.BOT_PAPER);
-      await service.setMode(BotMode.BOT);
       const row = getRowSnapshot();
+      row.mode = BotMode.BOT;
       row.lockout = true;
       row.lockoutReason = 'KILL_SWITCH';
       row.lockoutDateKey = etDateKey();
@@ -474,8 +474,8 @@ describe('BotStateService invariants', () => {
     it('clears a paper MAX_LOSS_USD lockout and re-arms the loop', async () => {
       const { service, getRowSnapshot } = buildService();
       await service.setLane(BotLane.BOT_PAPER);
-      await service.setMode(BotMode.BOT);
       const row = getRowSnapshot();
+      row.mode = BotMode.BOT;
       row.lockout = true;
       row.lockoutReason = 'MAX_LOSS_USD';
       row.lockoutDateKey = etDateKey();

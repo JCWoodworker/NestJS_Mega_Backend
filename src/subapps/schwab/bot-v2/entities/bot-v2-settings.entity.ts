@@ -229,6 +229,10 @@ export class BotV2Settings {
   @Column({ type: 'varchar', name: 'bot_underlying', default: 'SPY' })
   botUnderlying: BotV2Underlying;
 
+  /** Set after the one-time copy from the retired champion row. */
+  @Column({ type: 'boolean', name: 'seeded_from_champion', default: false })
+  seededFromChampion: boolean;
+
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

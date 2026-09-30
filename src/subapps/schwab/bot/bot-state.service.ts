@@ -208,6 +208,26 @@ export class BotStateService {
     });
   }
 
+  /**
+   * V2 is the only engine that may hold the feed. Any champion row still
+   * marked BOT is parked in MANUAL on boot so it cannot keep the stream.
+   */
+  async retireAllChampions(): Promise<void> {
+    const rows = await this.stateRepository.find({
+      where: { mode: BotMode.BOT },
+    });
+    for (const row of rows) {
+      row.mode = BotMode.MANUAL;
+      row.running = false;
+      await this.save(row);
+      this.logger.warn(
+        `Retired champion arm for ${row.userId}${
+          row.openPosition ? ` with an open ${row.openPosition.symbol}` : ''
+        }`,
+      );
+    }
+  }
+
   async save(row: BotState): Promise<BotState> {
     return this.stateRepository.save(row);
   }
@@ -354,6 +374,9 @@ export class BotStateService {
   }
 
   async setMode(mode: BotMode): Promise<BotStatusView> {
+    if (mode === BotMode.BOT) {
+      throw new ConflictException('CHAMPION_RETIRED');
+    }
     await this.clearLockoutIfNewDay();
     const row = await this.getRow();
     const from = row.mode;

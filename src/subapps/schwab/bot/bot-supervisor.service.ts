@@ -1,4 +1,5 @@
 import {
+  forwardRef,
   Inject,
   Injectable,
   Logger,
@@ -13,6 +14,8 @@ import { runAsUser } from '@schwab/shared/schwab-user-context';
 
 import { MIN_EQUITY_PAPER } from './bot-equity-thresholds.const';
 import { BotEventService } from './bot-event.service';
+import { BotV2EngineService } from '../bot-v2/bot-v2-engine.service';
+import { BotV2StateService } from '../bot-v2/bot-v2-state.service';
 import { BotStateService } from './bot-state.service';
 import { etNowHhMm, isAtOrPast } from './bot-strategy.util';
 import { BotEventType } from './enums/bot-event-type.enum';
@@ -99,6 +102,10 @@ export class BotSupervisorService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly botStateService: BotStateService,
     private readonly botEventService: BotEventService,
+    @Inject(forwardRef(() => BotV2EngineService))
+    private readonly v2Engine: BotV2EngineService,
+    @Inject(forwardRef(() => BotV2StateService))
+    private readonly v2State: BotV2StateService,
     @Inject(schwabConfig.KEY)
     private readonly config: ConfigType<typeof schwabConfig>,
   ) {}
@@ -164,18 +171,24 @@ export class BotSupervisorService implements OnModuleInit, OnModuleDestroy {
       };
     }
 
-    const row = await runAsUser(ownerUserId, () =>
-      this.botStateService.getRow(ownerUserId),
-    );
-    const status = await runAsUser(ownerUserId, () =>
-      this.botStateService.getStatus(),
+    const v2 = await runAsUser(ownerUserId, () =>
+      this.v2State.get(ownerUserId),
     );
 
     return {
       ...base,
-      mode: row.mode,
-      lane: row.lane,
-      blockers: this.computeBlockers(row, status.paperEquity, etDate, etTime),
+      mode: v2.mode,
+      lane: v2.mode === 'BOT' ? BotLane.BOT_PAPER : null,
+      blockers: this.computeBlockers(
+        {
+          lockout: v2.lockout,
+          openPosition: v2.openPosition,
+          lane: BotLane.BOT_PAPER,
+        } as never,
+        Number(v2.paperEquity),
+        etDate,
+        etTime,
+      ),
     };
   }
 
@@ -316,19 +329,21 @@ export class BotSupervisorService implements OnModuleInit, OnModuleDestroy {
     if (!isAtOrPast(etTime, this.config.supervisorArmAt)) return;
     if (this.armedOn === etDate) return;
 
-    const row = await this.botStateService.getRow(ownerUserId);
-    const status = await this.botStateService.getStatus();
+    const v2 = await this.v2State.get(ownerUserId);
 
-    // Already running in paper — nothing to do, and record the day as armed
-    // so a manual start is not re-armed or logged every minute.
-    if (row.mode === BotMode.BOT && row.lane === BotLane.BOT_PAPER) {
+    // Already running — record the day so a manual start is not re-armed.
+    if (v2.mode === 'BOT' && v2.running) {
       this.armedOn = etDate;
       return;
     }
 
     const blockers = this.computeBlockers(
-      row,
-      status.paperEquity,
+      {
+        lockout: v2.lockout,
+        openPosition: v2.openPosition,
+        lane: BotLane.BOT_PAPER,
+      } as never,
+      Number(v2.paperEquity),
       etDate,
       etTime,
     ).filter((blocker) => blocker.code !== 'OUTSIDE_SESSION');
@@ -338,8 +353,7 @@ export class BotSupervisorService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    await this.botStateService.setLane(BotLane.BOT_PAPER);
-    await this.botStateService.setMode(BotMode.BOT);
+    await this.v2Engine.arm();
     this.armedOn = etDate;
     this.stoodDownOn = null;
     this.lastRefusal = null;
@@ -355,16 +369,18 @@ export class BotSupervisorService implements OnModuleInit, OnModuleDestroy {
   private async standDown(etDate: string): Promise<void> {
     if (this.stoodDownOn === etDate) return;
 
+    const v2 = await this.v2State.get();
     const row = await this.botStateService.getRow();
-    if (row.mode !== BotMode.BOT) {
+    if (v2.mode !== 'BOT' && row.mode !== BotMode.BOT) {
       this.stoodDownOn = etDate;
       return;
     }
 
-    // KillScope.ALL flattens and halts. The engine's own hardFlattenTime
-    // normally closes the position first; this is the backstop for a day
-    // where that did not happen.
-    await this.botStateService.kill(KillScope.ALL);
+    if (v2.mode === 'BOT') await this.v2Engine.stop('SUPERVISOR_STANDDOWN');
+    // Champion can no longer be armed, but a row left in BOT still flattens.
+    if (row.mode === BotMode.BOT) {
+      await this.botStateService.kill(KillScope.ALL);
+    }
     this.stoodDownOn = etDate;
     this.armedOn = null;
 
@@ -434,11 +450,14 @@ export class BotSupervisorService implements OnModuleInit, OnModuleDestroy {
 
     const etDate = etDateKey(new Date());
     await runAsUser(ownerUserId, async () => {
-      const row = await this.botStateService.getRow(ownerUserId);
-      const status = await this.botStateService.getStatus();
+      const v2 = await this.v2State.get(ownerUserId);
       const blockers = this.computeBlockers(
-        row,
-        status.paperEquity,
+        {
+          lockout: v2.lockout,
+          openPosition: v2.openPosition,
+          lane: BotLane.BOT_PAPER,
+        } as never,
+        Number(v2.paperEquity),
         etDate,
         etNowHhMm(),
       ).filter(
@@ -447,12 +466,9 @@ export class BotSupervisorService implements OnModuleInit, OnModuleDestroy {
           blocker.code !== 'SUPERVISOR_DISABLED',
       );
       if (blockers.length) {
-        // Surfaced through getStatus() below rather than thrown, so the panel
-        // renders the same blocker list it was already showing.
         return;
       }
-      await this.botStateService.setLane(BotLane.BOT_PAPER);
-      await this.botStateService.setMode(BotMode.BOT);
+      await this.v2Engine.arm();
       this.armedOn = etDate;
       await this.botEventService.record({
         lane: BotLane.BOT_PAPER,
@@ -470,6 +486,8 @@ export class BotSupervisorService implements OnModuleInit, OnModuleDestroy {
     if (!ownerUserId) return this.getStatus();
 
     await runAsUser(ownerUserId, async () => {
+      const v2 = await this.v2State.get(ownerUserId);
+      if (v2.mode === 'BOT') await this.v2Engine.stop('SUPERVISOR_STANDDOWN');
       const row = await this.botStateService.getRow(ownerUserId);
       if (row.mode === BotMode.BOT) {
         await this.botStateService.kill(KillScope.ALL);

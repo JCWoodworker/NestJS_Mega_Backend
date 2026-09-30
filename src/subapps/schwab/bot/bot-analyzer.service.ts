@@ -5,7 +5,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import schwabConfig from '@schwab/config/schwab.config';
-import { etDateKey } from '@schwab/pnl/et-date.util';
+import { etDateKey, etDayBounds } from '@schwab/pnl/et-date.util';
+import { BotV2Trade } from '@schwab/bot-v2/entities/bot-v2-trade.entity';
 
 import {
   aggregateTrades,
@@ -49,6 +50,8 @@ export class BotAnalyzerService {
     private readonly tapeRepository: Repository<BotTradeTape>,
     @InjectRepository(BotDailyReport)
     private readonly reportRepository: Repository<BotDailyReport>,
+    @InjectRepository(BotV2Trade)
+    private readonly v2Trades: Repository<BotV2Trade>,
     @Inject(schwabConfig.KEY)
     private readonly config: ConfigType<typeof schwabConfig>,
   ) {}
@@ -89,25 +92,44 @@ export class BotAnalyzerService {
       return null;
     }
 
-    const rows = await this.tradeRepository.find({
+    const existing = await this.reportRepository.findOne({
       where: { userId: ownerUserId, etDateKey: dateKey },
-      order: { closedAt: 'ASC' },
     });
-    const trades = rows.map((row) => this.toAnalyzed(row));
+    const { start, end } = etDayBounds(dateKey);
+    const rows = await this.v2Trades
+      .createQueryBuilder('t')
+      .where('t.user_id = :userId', { userId: ownerUserId })
+      .andWhere('t.closed_at >= :start AND t.closed_at < :end', {
+        start: String(start.getTime()),
+        end: String(end.getTime()),
+      })
+      .orderBy('t.closed_at', 'ASC')
+      .getMany();
+    const existingBook = (existing?.aggregate as { book?: string } | null)?.book;
+    if (rows.length === 0 && existing && existingBook !== 'v2') {
+      this.logger.log(`Kept the champion report for ${dateKey}`);
+      return null;
+    }
+    const trades = rows.map((row) => this.toAnalyzedV2(row, dateKey));
 
-    // Readiness is judged on the whole corpus, not the day: a single session
-    // never reaches 30 trades, and the question is whether enough history
-    // exists to trust a tuning conclusion at all.
-    const cumulativeTrades = await this.tradeRepository.count({
+    // Readiness for the new exit rule counts V2 trades, not the old book.
+    const cumulativeTrades = await this.v2Trades.count({
       where: { userId: ownerUserId },
     });
     const readiness = assessReadiness(cumulativeTrades);
 
-    const aggregate = aggregateTrades(dateKey, trades);
+    const aggregate = {
+      ...aggregateTrades(dateKey, trades),
+      book: 'v2' as const,
+      configVersion: rows[0]?.configVersion ?? null,
+    };
 
     // Only bother with the grid once a conclusion could mean something.
     // Below the gate it is noise that invites over-reading.
-    const tapeByTradeKey = await this.loadTape(ownerUserId, trades);
+    const tapeByTradeKey =
+      readiness.level === 'insufficient'
+        ? new Map()
+        : await this.loadTape(ownerUserId, trades);
     const policyResults =
       readiness.level === 'insufficient'
         ? []
@@ -124,6 +146,8 @@ export class BotAnalyzerService {
       aggregate,
       policyResults,
       rapidScalpReplay,
+      bookNote:
+        'This report counts the V2 paper book only. Older champion sessions stay in earlier reports and are not mixed into this readiness number.',
     });
 
     await this.reportRepository.save({
@@ -254,14 +278,42 @@ export class BotAnalyzerService {
    * failure mode this loop is most prone to is reading a confident story into
    * a handful of trades.
    */
+  private toAnalyzedV2(row: BotV2Trade, etDateKey: string): AnalyzedTrade {
+    const openedAt = Number(row.openedAt);
+    const closedAt = Number(row.closedAt);
+    return {
+      tradeKey: row.id,
+      etDateKey,
+      lane: 'BOT_PAPER',
+      direction: row.direction,
+      quantity: Number(row.quantity),
+      entryPrice: Number(row.entryPrice),
+      exitPrice: Number(row.exitPrice),
+      openedAt,
+      closedAt,
+      holdMs: Math.max(0, closedAt - openedAt),
+      grossPnl: Number(row.grossPnl),
+      fees: Number(row.fees),
+      netPnl: Number(row.netPnl),
+      mfePremium: null,
+      maePremium: null,
+      timeToMfeMs: null,
+      captureEfficiency: null,
+      sampleCount: 0,
+      exitReason: row.exitReason,
+      strategies: null,
+    };
+  }
+
   private renderMarkdown(params: {
     dateKey: string;
     readiness: Readiness;
     aggregate: DailyAggregate;
     policyResults: PolicyResult[];
     rapidScalpReplay: RapidScalpReplay;
+    bookNote?: string;
   }): string {
-    const { dateKey, readiness, aggregate, policyResults, rapidScalpReplay } =
+    const { dateKey, readiness, aggregate, policyResults, rapidScalpReplay, bookNote } =
       params;
     const mins = (ms: number | null) =>
       ms == null ? 'n/a' : `${(ms / 60_000).toFixed(1)}m`;
@@ -271,6 +323,7 @@ export class BotAnalyzerService {
     const lines: string[] = [
       `# Bot report — ${dateKey}`,
       '',
+      ...(bookNote ? [bookNote, ''] : []),
       `**Readiness: ${readiness.level}.** ${readiness.note}`,
       '',
       '## Session',

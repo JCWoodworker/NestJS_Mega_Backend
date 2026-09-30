@@ -37,10 +37,25 @@ function build(
     resetPaper: jest.fn().mockResolvedValue(undefined),
   };
   const botEventService = { record: jest.fn().mockResolvedValue(undefined) };
+  const v2Engine = {
+    arm: jest.fn().mockResolvedValue(undefined),
+    stop: jest.fn().mockResolvedValue(undefined),
+  };
+  const v2State = {
+    get: jest.fn().mockResolvedValue({
+      mode: row.mode === BotMode.BOT ? 'BOT' : 'MANUAL',
+      running: row.mode === BotMode.BOT,
+      lockout: row.lockout,
+      openPosition: row.openPosition,
+      paperEquity: overrides.paperEquity ?? 10000,
+    }),
+  };
 
   const service = new BotSupervisorService(
     botStateService as any,
     botEventService as any,
+    v2Engine as any,
+    v2State as any,
     {
       ownerUserId: OWNER,
       botSupervisorEnabled: true,
@@ -50,7 +65,7 @@ function build(
     } as any,
   );
 
-  return { service, botStateService, botEventService, row };
+  return { service, botStateService, botEventService, v2Engine, row };
 }
 
 function codes(blockers: Array<{ code: string }>) {
@@ -100,18 +115,11 @@ describe('BotSupervisorService blockers', () => {
     expect(codes(status.blockers)).toContain('BELOW_MIN_EQUITY');
   });
 
-  /**
-   * BOT_LIVE must stay entirely manual — an unattended process arming real
-   * money is a different risk class. Not reconcilable on purpose.
-   */
-  it('refuses to touch the live lane and offers no reconcile', async () => {
+  it('does not treat the retired champion live lane as a V2 blocker', async () => {
     const { service } = build({ row: { lane: BotLane.BOT_LIVE } });
     const status = await service.getStatus();
-    const blocker = status.blockers.find(
-      (b) => b.code === 'LIVE_LANE_SELECTED',
-    );
-    expect(blocker).toBeDefined();
-    expect(blocker?.reconcilable).toBe(false);
+    expect(codes(status.blockers)).not.toContain('LIVE_LANE_SELECTED');
+    expect(status.lane).toBeNull();
   });
 
   it('reports a blocker when disabled', async () => {
@@ -155,12 +163,12 @@ describe('BotSupervisorService operator actions', () => {
   });
 
   it('armNow arms paper when nothing blocks it', async () => {
-    const { service, botStateService } = build();
+    const { service, v2Engine, botStateService } = build();
 
     await service.armNow();
 
-    expect(botStateService.setLane).toHaveBeenCalledWith(BotLane.BOT_PAPER);
-    expect(botStateService.setMode).toHaveBeenCalledWith(BotMode.BOT);
+    expect(v2Engine.arm).toHaveBeenCalled();
+    expect(botStateService.setMode).not.toHaveBeenCalled();
   });
 
   /** A manual arm skips the time window, never the safety checks. */
@@ -172,24 +180,24 @@ describe('BotSupervisorService operator actions', () => {
     expect(botStateService.setMode).not.toHaveBeenCalled();
   });
 
-  it('armNow refuses when the live lane is selected', async () => {
-    const { service, botStateService } = build({
+  it('armNow still arms when the retired champion lane is live', async () => {
+    const { service, v2Engine } = build({
       row: { lane: BotLane.BOT_LIVE },
     });
 
     await service.armNow();
 
-    expect(botStateService.setMode).not.toHaveBeenCalled();
+    expect(v2Engine.arm).toHaveBeenCalled();
   });
 
-  it('standDownNow flattens and halts a running bot', async () => {
-    const { service, botStateService } = build({
+  it('standDownNow stops a running V2 bot', async () => {
+    const { service, v2Engine } = build({
       row: { mode: BotMode.BOT, lane: BotLane.BOT_PAPER },
     });
 
     await service.standDownNow();
 
-    expect(botStateService.kill).toHaveBeenCalled();
+    expect(v2Engine.stop).toHaveBeenCalled();
   });
 
   it('standDownNow is a no-op when the bot is not running', async () => {

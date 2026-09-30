@@ -37,6 +37,7 @@ import { BotMarketDataService } from './bot-market-data.service';
 import { BotRecordingService, configVersionOf } from './bot-recording.service';
 import { BotSettingsService } from './bot-settings.service';
 import { isPaperTrainingLockout } from './bot-lockout.const';
+import { BotV2StateService } from '../bot-v2/bot-v2-state.service';
 import { BotStateService } from './bot-state.service';
 import { diffStreamerHolds } from './bot-streamer-hold.util';
 import { BotOpenPosition } from './entities/bot-state.entity';
@@ -216,6 +217,8 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     private readonly ordersService: OrdersService,
     private readonly optionsGateway: OptionsGateway,
     private readonly streamerPool: SchwabStreamerPool,
+    @Inject(forwardRef(() => BotV2StateService))
+    private readonly v2State: BotV2StateService,
     @Inject(schwabConfig.KEY)
     private readonly config: ConfigType<typeof schwabConfig>,
   ) {}
@@ -268,7 +271,8 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     return { bid: quote.bid, at: quote.at };
   }
 
-  onModuleInit(): void {
+  async onModuleInit(): Promise<void> {
+    await this.botStateService.retireAllChampions();
     this.botMarketDataService.startListening();
     this.optionsGateway.on('chart-candle', this.handleChartCandleClose);
     this.optionsGateway.on('underlying-price', this.handleUnderlyingPrice);
@@ -311,6 +315,8 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     const session = this.streamerPool.peek(userId);
     if (!session) return;
     if (row.mode !== BotMode.BOT) {
+      const v2 = await this.v2State.peek(requireUserId());
+      if (v2?.mode === 'BOT' && v2.running) return;
       session.setFeedLock(null);
       return;
     }
@@ -1210,7 +1216,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    this.reconcileStreamerHolds(rows.map((row) => row.userId));
+    await this.reconcileStreamerHolds(rows.map((row) => row.userId));
 
     for (const { userId } of rows) {
       await runAsUser(userId, () => this.heartbeat()).catch((err) =>
@@ -1236,7 +1242,9 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
    * for every currently-armed user from the database, not from in-memory
    * socket state.
    */
-  private reconcileStreamerHolds(armedUserIds: readonly string[]): void {
+  private async reconcileStreamerHolds(
+    armedUserIds: readonly string[],
+  ): Promise<void> {
     const { toAcquire, toRelease } = diffStreamerHolds(
       armedUserIds,
       this.botHeldUserIds,
@@ -1257,8 +1265,10 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     }
 
     for (const userId of toRelease) {
-      this.streamerPool.releaseBackgroundWork(userId);
+      const v2 = await this.v2State.peek(userId);
       this.botHeldUserIds.delete(userId);
+      if (v2?.mode === 'BOT' && v2.running) continue;
+      this.streamerPool.releaseBackgroundWork(userId);
     }
   }
 
