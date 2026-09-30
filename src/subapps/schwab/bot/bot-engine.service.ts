@@ -271,8 +271,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     return { bid: quote.bid, at: quote.at };
   }
 
-  async onModuleInit(): Promise<void> {
-    await this.botStateService.retireAllChampions();
+  onModuleInit(): void {
     this.botMarketDataService.startListening();
     this.optionsGateway.on('chart-candle', this.handleChartCandleClose);
     this.optionsGateway.on('underlying-price', this.handleUnderlyingPrice);
@@ -296,6 +295,15 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       this.streamerPool.releaseBackgroundWork(userId);
     }
     this.botHeldUserIds.clear();
+  }
+
+  /**
+   * The owner's house trainer and their personal bot share one Schwab stream.
+   * While the trainer is running, the personal arm is refused.
+   */
+  async trainerHoldsFeed(userId = requireUserId()): Promise<boolean> {
+    const v2 = await this.v2State.peek(userId);
+    return v2?.mode === 'BOT' && v2.running === true;
   }
 
   /** Called by BotStateService after any control-plane mutation. */

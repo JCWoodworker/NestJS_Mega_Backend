@@ -66,6 +66,7 @@ function buildService() {
     getTransientPhase: jest.fn().mockReturnValue(null),
     getLastPremiumBidAt: jest.fn().mockReturnValue(null),
     getOpenPositionMark: jest.fn().mockReturnValue(null),
+    trainerHoldsFeed: jest.fn().mockResolvedValue(false),
   };
   const botRecordingService = {
     recordCapitalEvent: jest.fn().mockResolvedValue(undefined),
@@ -104,10 +105,21 @@ function buildService() {
 }
 
 describe('BotStateService invariants', () => {
-  it('setMode(BOT) is retired in favor of the V2 engine', async () => {
-    const { service } = buildService();
+  it('setMode(BOT) arms the personal bot when the trainer is idle', async () => {
+    const { service, getRowSnapshot } = buildService();
+    const status = await service.setMode(BotMode.BOT);
+    expect(status.mode).toBe(BotMode.BOT);
+    expect(getRowSnapshot().mode).toBe(BotMode.BOT);
+  });
+
+  it('setMode(BOT) refuses while the house trainer holds the feed', async () => {
+    const { service, botEngine } = buildService();
+    botEngine.trainerHoldsFeed.mockResolvedValue(true);
     await expect(service.setMode(BotMode.BOT)).rejects.toThrow(
-      'CHAMPION_RETIRED',
+      ConflictException,
+    );
+    await expect(service.setMode(BotMode.BOT)).rejects.toThrow(
+      /house paper trainer/,
     );
   });
 

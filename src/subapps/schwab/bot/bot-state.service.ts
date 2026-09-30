@@ -208,26 +208,6 @@ export class BotStateService {
     });
   }
 
-  /**
-   * V2 is the only engine that may hold the feed. Any champion row still
-   * marked BOT is parked in MANUAL on boot so it cannot keep the stream.
-   */
-  async retireAllChampions(): Promise<void> {
-    const rows = await this.stateRepository.find({
-      where: { mode: BotMode.BOT },
-    });
-    for (const row of rows) {
-      row.mode = BotMode.MANUAL;
-      row.running = false;
-      await this.save(row);
-      this.logger.warn(
-        `Retired champion arm for ${row.userId}${
-          row.openPosition ? ` with an open ${row.openPosition.symbol}` : ''
-        }`,
-      );
-    }
-  }
-
   async save(row: BotState): Promise<BotState> {
     return this.stateRepository.save(row);
   }
@@ -373,9 +353,40 @@ export class BotStateService {
     return true;
   }
 
+  /**
+   * The house trainer is about to take this login's Schwab stream. A flat
+   * personal bot is parked. An open personal position is left alone — the
+   * trainer must not abandon a trade it did not open.
+   */
+  async releaseFeedForTrainer(): Promise<void> {
+    const row = await this.getRow();
+    if (row.mode !== BotMode.BOT) return;
+    if (row.openPosition) {
+      throw new ConflictException(
+        'Your bot is in a trade on this Schwab feed. Flatten it before the house trainer can take the feed.',
+      );
+    }
+    const from = row.mode;
+    row.mode = BotMode.MANUAL;
+    row.running = false;
+    await this.save(row);
+    await this.botEventService.record({
+      lane: row.lane,
+      type: BotEventType.OPERATOR_MODE,
+      reason: `${from} → MANUAL (house trainer took the feed)`,
+      payload: { from, to: BotMode.MANUAL, running: false },
+    });
+    await this.botEngine.syncBotFeedLock();
+  }
+
   async setMode(mode: BotMode): Promise<BotStatusView> {
-    if (mode === BotMode.BOT) {
-      throw new ConflictException('CHAMPION_RETIRED');
+    if (
+      mode === BotMode.BOT &&
+      (await this.botEngine.trainerHoldsFeed())
+    ) {
+      throw new ConflictException(
+        'The house paper trainer is using this Schwab feed. Your bot can trade after the trainer stands down.',
+      );
     }
     await this.clearLockoutIfNewDay();
     const row = await this.getRow();

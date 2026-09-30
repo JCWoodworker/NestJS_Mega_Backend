@@ -21,7 +21,6 @@ import { etNowHhMm, isAtOrPast } from './bot-strategy.util';
 import { BotEventType } from './enums/bot-event-type.enum';
 import { BotLane } from './enums/bot-lane.enum';
 import { BotMode } from './enums/bot-mode.enum';
-import { KillScope } from './enums/kill-scope.enum';
 import {
   isBeyondCalendarCoverage,
   isMarketHoliday,
@@ -371,16 +370,12 @@ export class BotSupervisorService implements OnModuleInit, OnModuleDestroy {
 
     const v2 = await this.v2State.get();
     const row = await this.botStateService.getRow();
-    if (v2.mode !== 'BOT' && row.mode !== BotMode.BOT) {
+    if (v2.mode !== 'BOT') {
       this.stoodDownOn = etDate;
       return;
     }
 
-    if (v2.mode === 'BOT') await this.v2Engine.stop('SUPERVISOR_STANDDOWN');
-    // Champion can no longer be armed, but a row left in BOT still flattens.
-    if (row.mode === BotMode.BOT) {
-      await this.botStateService.kill(KillScope.ALL);
-    }
+    await this.v2Engine.stop('SUPERVISOR_STANDDOWN');
     this.stoodDownOn = etDate;
     this.armedOn = null;
 
@@ -420,19 +415,20 @@ export class BotSupervisorService implements OnModuleInit, OnModuleDestroy {
     if (!ownerUserId) return this.getStatus();
 
     await runAsUser(ownerUserId, async () => {
-      const row = await this.botStateService.getRow(ownerUserId);
-      const status = await this.botStateService.getStatus();
-
-      if (row.openPosition) {
-        await this.botStateService.kill(KillScope.ALL);
+      const v2 = await this.v2State.get(ownerUserId);
+      if (v2.openPosition) {
+        await this.v2Engine.stop('SUPERVISOR_RECONCILE');
       }
-      // Re-read: kill() sets a lockout of its own, so clearing has to follow.
-      const afterKill = await this.botStateService.getRow(ownerUserId);
-      if (afterKill.lockout) {
-        await this.botStateService.unlock();
+      const after = await this.v2State.get(ownerUserId);
+      if (after.lockout) {
+        after.lockout = false;
+        after.lockoutReason = null;
+        await this.v2State.save(after);
       }
-      if (status.paperEquity < MIN_EQUITY_PAPER) {
-        await this.botStateService.resetPaper();
+      if (Number(after.paperEquity) < MIN_EQUITY_PAPER) {
+        after.paperEquity = 10000;
+        after.paperSettledCash = 10000;
+        await this.v2State.save(after);
       }
     });
 
@@ -488,10 +484,6 @@ export class BotSupervisorService implements OnModuleInit, OnModuleDestroy {
     await runAsUser(ownerUserId, async () => {
       const v2 = await this.v2State.get(ownerUserId);
       if (v2.mode === 'BOT') await this.v2Engine.stop('SUPERVISOR_STANDDOWN');
-      const row = await this.botStateService.getRow(ownerUserId);
-      if (row.mode === BotMode.BOT) {
-        await this.botStateService.kill(KillScope.ALL);
-      }
     });
     this.armedOn = null;
     this.stoodDownOn = etDateKey(new Date());

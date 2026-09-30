@@ -41,14 +41,18 @@ function build(
     arm: jest.fn().mockResolvedValue(undefined),
     stop: jest.fn().mockResolvedValue(undefined),
   };
+  const v2Row = {
+    mode: row.mode === BotMode.BOT ? 'BOT' : 'MANUAL',
+    running: row.mode === BotMode.BOT,
+    lockout: row.lockout,
+    lockoutReason: row.lockout ? 'LOCKOUT' : null,
+    openPosition: row.openPosition,
+    paperEquity: overrides.paperEquity ?? 10000,
+    paperSettledCash: overrides.paperEquity ?? 10000,
+  };
   const v2State = {
-    get: jest.fn().mockResolvedValue({
-      mode: row.mode === BotMode.BOT ? 'BOT' : 'MANUAL',
-      running: row.mode === BotMode.BOT,
-      lockout: row.lockout,
-      openPosition: row.openPosition,
-      paperEquity: overrides.paperEquity ?? 10000,
-    }),
+    get: jest.fn().mockResolvedValue(v2Row),
+    save: jest.fn().mockImplementation(async (next: typeof v2Row) => next),
   };
 
   const service = new BotSupervisorService(
@@ -65,7 +69,7 @@ function build(
     } as any,
   );
 
-  return { service, botStateService, botEventService, v2Engine, row };
+  return { service, botStateService, botEventService, v2Engine, v2State, row };
 }
 
 function codes(blockers: Array<{ code: string }>) {
@@ -137,19 +141,18 @@ describe('BotSupervisorService blockers', () => {
 });
 
 describe('BotSupervisorService operator actions', () => {
-  it('reconcile flattens and clears the lockout without topping up a positive ledger', async () => {
-    const { service, botStateService } = build({
+  it('reconcile flattens and clears the trainer lockout without topping up a positive ledger', async () => {
+    const { service, botStateService, v2Engine, v2State } = build({
       row: { openPosition: { symbol: 'SPY' }, lockout: true },
       paperEquity: 1000,
     });
 
     await service.reconcile();
 
-    expect(botStateService.kill).toHaveBeenCalled();
-    expect(botStateService.unlock).toHaveBeenCalled();
+    expect(v2Engine.stop).toHaveBeenCalled();
+    expect(v2State.save).toHaveBeenCalled();
+    expect(botStateService.kill).not.toHaveBeenCalled();
     expect(botStateService.resetPaper).not.toHaveBeenCalled();
-    // Reconcile deliberately does not arm — the next tick does, so the normal
-    // blocker checks still run.
     expect(botStateService.setMode).not.toHaveBeenCalled();
   });
 
@@ -191,13 +194,14 @@ describe('BotSupervisorService operator actions', () => {
   });
 
   it('standDownNow stops a running V2 bot', async () => {
-    const { service, v2Engine } = build({
+    const { service, v2Engine, botStateService } = build({
       row: { mode: BotMode.BOT, lane: BotLane.BOT_PAPER },
     });
 
     await service.standDownNow();
 
     expect(v2Engine.stop).toHaveBeenCalled();
+    expect(botStateService.kill).not.toHaveBeenCalled();
   });
 
   it('standDownNow is a no-op when the bot is not running', async () => {

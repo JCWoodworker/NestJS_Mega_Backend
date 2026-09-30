@@ -1,5 +1,4 @@
 import {
-  ConflictException,
   Injectable,
   Logger,
   OnModuleDestroy,
@@ -108,10 +107,7 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
 
   async arm(): Promise<void> {
     const userId = requireUserId();
-    const champion = await this.champion.getRow(userId);
-    if (champion.mode === BotMode.BOT) {
-      throw new ConflictException('CHAMPION_OWNS_FEED');
-    }
+    await this.champion.releaseFeedForTrainer();
     const settings = await this.settingsService.get(userId);
     const row = await this.stateService.get(userId);
     row.mode = 'BOT';
@@ -309,10 +305,6 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
       const settings = book.settings ?? (await this.settingsService.get(userId));
       book.settings = settings;
       if (row.mode !== 'BOT' || !row.running || row.lockout) return;
-      if (await this.championOwnsFeed(userId)) {
-        await this.standDown(userId, 'CHAMPION_OWNS_FEED');
-        return;
-      }
       const nowHhMm = etNowHhMm();
       if (!isWithinWindow(nowHhMm, settings.tradeWindowStart, settings.tradeWindowEnd)) {
         return;
@@ -459,10 +451,6 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
   private async heartbeatUser(userId: string): Promise<void> {
     const row = await this.stateService.get(userId);
     if (row.mode !== 'BOT' || !row.running) return;
-    if (await this.championOwnsFeed(userId)) {
-      await this.standDown(userId, 'CHAMPION_OWNS_FEED');
-      return;
-    }
     const settings = await this.settingsService.get(userId);
     const book = this.book(userId);
     book.settings = settings;
@@ -638,11 +626,6 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
     if (book.minute.length > SESSION_CAP) {
       book.minute.splice(0, book.minute.length - SESSION_CAP);
     }
-  }
-
-  private async championOwnsFeed(userId: string): Promise<boolean> {
-    const champion = await this.champion.getRow(userId);
-    return champion.mode === BotMode.BOT;
   }
 
   private book(userId: string): Book {
