@@ -87,6 +87,12 @@ export interface TimeBucket {
   wins: number;
   netPnl: number;
   winRate: number | null;
+  /**
+   * Same strategy and direction, inside this clock window. A rule that pays
+   * at 10:00 and gives it back at 14:00 stays visible here; the bucket total
+   * above would hide that if another rule offset it.
+   */
+  strategies: StrategySplit[];
 }
 
 export interface ExcursionProfile {
@@ -350,6 +356,7 @@ function bucketByTimeOfDay(trades: AnalyzedTrade[]): TimeBucket[] {
         wins,
         netPnl: round2(group.reduce((sum, trade) => sum + trade.netPnl, 0)),
         winRate: rate(wins, group.length),
+        strategies: splitByStrategy(group),
       };
     });
 }

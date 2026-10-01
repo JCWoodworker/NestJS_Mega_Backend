@@ -1725,6 +1725,8 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
 
 ## Changelog
 
+- **2026-10-01 (weekend dossier splits each clock window by strategy)**: Saturday `timeOfDay` buckets stay 30-minute ET entry windows. Each bucket now includes `strategies` (same shape as `strategyPerformance`: strategy, direction, trades, wins, net P&L, win rate), so one rule can show a win in one window and a loss in another. Not a desk field.
+
 - **2026-10-01 (trainer today is the whole ET session)**: `GET /bot-v2/status` `todayBotPnl` and `tradesToday` are the sum and count of `bot_v2_trades` closed since midnight America/New_York. `paperEquity` stays the lifetime ledger. `GET /bot-v2/trades` is still the newest rows only (the trainer page asks for 20) and feeds the recent-closes list, not the day total. Not a new field.
 
 - **2026-09-30 (trainer watch shows the live trade meter)**: Admin → Trainer renders the same open-trade panel as the desk (percent to stop or target, bid, unrealized, trail). It listens to `option-ticks` and `underlying-price` and does not emit `subscribe-underlying`. `GET /bot-v2/status` `openPosition.peakBid` / `stopPremium` now survive the trainer heartbeat instead of being replaced by the last saved row.

@@ -78,6 +78,46 @@ function build(params: Partial<Parameters<typeof buildWeeklyDossier>[0]> = {}) {
   });
 }
 
+describe('buildWeeklyDossier time of day', () => {
+  it('keeps the same strategy separate across half-hour windows', () => {
+    const dossier = build({
+      trades: [
+        trade({
+          openedAt: MONDAY_1005_ET,
+          strategies: ['VWAP_PULLBACK'],
+          direction: 'CALL',
+          netPnl: 100,
+        }),
+        trade({
+          openedAt: MONDAY_1005_ET + 4 * 60 * 60_000,
+          strategies: ['VWAP_PULLBACK'],
+          direction: 'CALL',
+          netPnl: -80,
+        }),
+      ],
+    });
+
+    const morning = dossier.timeOfDay.find((row) => row.etBucket === '10:00');
+    const afternoon = dossier.timeOfDay.find((row) => row.etBucket === '14:00');
+    expect(morning?.strategies).toEqual([
+      expect.objectContaining({
+        strategy: 'VWAP_PULLBACK',
+        direction: 'CALL',
+        netPnl: 100,
+        trades: 1,
+      }),
+    ]);
+    expect(afternoon?.strategies).toEqual([
+      expect.objectContaining({
+        strategy: 'VWAP_PULLBACK',
+        direction: 'CALL',
+        netPnl: -80,
+        trades: 1,
+      }),
+    ]);
+  });
+});
+
 describe('etHalfHourBucket', () => {
   it('floors to the half hour in ET', () => {
     expect(etHalfHourBucket(MONDAY_1005_ET)).toBe('10:00');
