@@ -116,6 +116,28 @@ describe('buildWeeklyDossier time of day', () => {
       }),
     ]);
   });
+
+  it('splits a window by how the trade closed', () => {
+    const dossier = build({
+      trades: [
+        trade({
+          openedAt: MONDAY_1005_ET,
+          exitReason: 'PREMIUM_TARGET',
+          netPnl: 140,
+        }),
+        trade({
+          openedAt: MONDAY_1005_ET + 10 * 60_000,
+          exitReason: 'PREMIUM_STOP',
+          netPnl: -210,
+        }),
+      ],
+    });
+
+    expect(dossier.timeOfDay.find((row) => row.etBucket === '10:00')?.exits).toEqual([
+      { reason: 'PREMIUM_STOP', trades: 1, netPnl: -210 },
+      { reason: 'PREMIUM_TARGET', trades: 1, netPnl: 140 },
+    ]);
+  });
 });
 
 describe('etHalfHourBucket', () => {

@@ -119,7 +119,7 @@ describe('BotProposeAgentService prompt', () => {
   it('names the paths a strategy change may touch', () => {
     const text = prompt();
     expect(text).toContain('bot-strategy.util.ts');
-    expect(text).toContain('bot-settings.entity.ts');
+    expect(text).toContain('bot-v2-settings.entity.ts');
     expect(text).toContain('migrations/');
   });
 

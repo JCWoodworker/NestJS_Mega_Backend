@@ -6,7 +6,6 @@ import { Repository } from 'typeorm';
 
 import schwabConfig from '@schwab/config/schwab.config';
 import { etDateKey } from '@schwab/pnl/et-date.util';
-import { runAsUser } from '@schwab/shared/schwab-user-context';
 
 import { defaultPolicyGrid, type AnalyzedTrade } from './bot-analysis.util';
 import {
@@ -20,41 +19,40 @@ import {
   type ProposePacket,
   type ProposeSettings,
 } from './bot-propose.util';
-import { BotEvent } from './entities/bot-event.entity';
+import { BotV2Event } from '../bot-v2/entities/bot-v2-event.entity';
+import { BotV2Settings } from '../bot-v2/entities/bot-v2-settings.entity';
+import { BotV2Trade } from '../bot-v2/entities/bot-v2-trade.entity';
 import { BotMarketDay } from './entities/bot-market-day.entity';
 import { BotProposal } from './entities/bot-proposal.entity';
-import { BotSettings } from './entities/bot-settings.entity';
-import { BotSettingsSnapshotSource } from './entities/bot-settings-snapshot.entity';
 import { BotTradeTape } from './entities/bot-trade-tape.entity';
-import { BotTrade } from './entities/bot-trade.entity';
-import { BotSettingsService } from './bot-settings.service';
+import { computeTradeExcursion, tradeKeyFor } from './bot-trade-metrics.util';
 
 /**
- * Saturday evaluation. Scores strategy trades and, only when the replay
- * passes the gates and the agent flag is on, asks for a pull request.
- * A losing week is the input, not an automatic settings change.
+ * Saturday evaluation of the house paper trainer.
+ *
+ * The dossier, the skip census, and the 09:20 settings apply all read
+ * `bot_v2_*`. The retired champion book is not this review.
  */
 @Injectable()
 export class BotProposeService {
   private readonly logger = new Logger(BotProposeService.name);
 
   constructor(
-    @InjectRepository(BotTrade)
-    private readonly tradeRepository: Repository<BotTrade>,
+    @InjectRepository(BotV2Trade)
+    private readonly tradeRepository: Repository<BotV2Trade>,
     @InjectRepository(BotTradeTape)
     private readonly tapeRepository: Repository<BotTradeTape>,
-    @InjectRepository(BotSettings)
-    private readonly settingsRepository: Repository<BotSettings>,
+    @InjectRepository(BotV2Settings)
+    private readonly settingsRepository: Repository<BotV2Settings>,
     @InjectRepository(BotProposal)
     private readonly proposalRepository: Repository<BotProposal>,
-    @InjectRepository(BotEvent)
-    private readonly eventRepository: Repository<BotEvent>,
+    @InjectRepository(BotV2Event)
+    private readonly eventRepository: Repository<BotV2Event>,
     @InjectRepository(BotMarketDay)
     private readonly marketDayRepository: Repository<BotMarketDay>,
     @Inject(schwabConfig.KEY)
     private readonly config: ConfigType<typeof schwabConfig>,
     private readonly agent: BotProposeAgentService,
-    private readonly settings: BotSettingsService,
   ) {}
 
   /** Saturday 12:00 UTC. No-ops unless propose is explicitly enabled. */
@@ -96,12 +94,13 @@ export class BotProposeService {
     if (!ownerUserId) return null;
 
     const weekEndingEt = fridayOnOrBefore(now);
+    const events = await this.loadEvents(ownerUserId);
     const rows = await this.tradeRepository.find({
       where: { userId: ownerUserId },
       order: { closedAt: 'ASC' },
     });
     const trades = rows
-      .map((row) => toAnalyzed(row))
+      .map((row) => toAnalyzed(row, events))
       .filter((trade) => trade.etDateKey <= weekEndingEt);
     const settingsRow = await this.settingsRepository.findOneBy({
       userId: ownerUserId,
@@ -109,8 +108,11 @@ export class BotProposeService {
     if (!settingsRow) return null;
 
     const tapeByTradeKey = await this.loadTape(ownerUserId, trades);
+    const reviewed = trades.map((trade) =>
+      withTape(trade, tapeByTradeKey.get(trade.tradeKey) ?? []),
+    );
     const evidence = buildEvidencePacket({
-      trades,
+      trades: reviewed,
       tapeByTradeKey,
       policies: defaultPolicyGrid(),
       current: toProposeSettings(settingsRow),
@@ -119,13 +121,13 @@ export class BotProposeService {
 
     const dossier = buildWeeklyDossier({
       weekEndingEt,
-      trades: rows
-        .filter((row) => row.etDateKey <= weekEndingEt)
-        .map((row) => ({
-          ...toAnalyzed(row),
-          configVersion: row.configVersion ?? null,
-        })),
-      events: await this.loadEvents(ownerUserId),
+      trades: reviewed.map((trade) => ({
+        ...trade,
+        configVersion:
+          rows.find((row) => tradeKeyFor(row.symbol, Number(row.openedAt)) === trade.tradeKey)
+            ?.configVersion ?? null,
+      })),
+      events,
       sessions: await this.loadSessions(weekEndingEt),
       tapeByTradeKey,
     });
@@ -159,23 +161,32 @@ export class BotProposeService {
   }
 
   /**
-   * Refusal and signal events for the census. Retention on `bot_events` is 30
-   * days, so this is a trailing window by construction — the dossier copies
-   * what it finds into the proposal, which is durable.
+   * Trainer skips and entries. `bot_v2_events` keeps the reason on the row
+   * and the strategy list in the payload, so the census sees the same shape
+   * the champion events used.
    */
   private async loadEvents(userId: string): Promise<DossierEvent[]> {
     const rows = await this.eventRepository.find({
       where: { userId },
-      order: { at: 'ASC' },
+      order: { createdAt: 'ASC' },
     });
-    return rows.map((row) => ({
-      at: Number(row.at),
-      type: String(row.type),
-      reason: row.reason ?? null,
-      strategies: row.strategies ?? null,
-      direction: row.direction == null ? null : String(row.direction),
-      payload: row.payload ?? null,
-    }));
+    return rows.map((row) => {
+      const payload = row.payload ?? null;
+      const diagnostics = payload?.diagnostics as
+        | { rejects?: Record<string, unknown> }
+        | undefined;
+      const noContract = row.reason === 'NO_CONTRACT';
+      return {
+        at: row.createdAt.getTime(),
+        type: String(row.type),
+        reason: noContract ? 'NO_CONTRACT_MATCH' : (row.reason ?? null),
+        strategies: strategiesFromReason(row.reason, payload),
+        direction: null,
+        payload: noContract
+          ? { ...(payload ?? {}), rejects: diagnostics?.rejects ?? {} }
+          : payload,
+      };
+    });
   }
 
   private async loadSessions(weekEndingEt: string): Promise<DossierSession[]> {
@@ -203,12 +214,14 @@ export class BotProposeService {
       if (proposal.appliedAt) continue;
       const patch = (proposal.packet as { patch?: Record<string, number> }).patch;
       if (!patch || !Object.keys(patch).length) continue;
-      await runAsUser(ownerUserId, () =>
-        this.settings.updateSettings({
-          ...patch,
-          source: BotSettingsSnapshotSource.MANUAL,
-        }),
-      );
+      const row = await this.settingsRepository.findOneBy({ userId: ownerUserId });
+      if (!row) continue;
+      for (const key of ['premiumTargetPct', 'premiumStopPct', 'trailPct', 'trailArmPct'] as const) {
+        const value = patch[key];
+        if (typeof value === 'number' && Number.isFinite(value)) row[key] = value;
+      }
+      if (Number(row.trailMinLockPct) >= Number(row.trailArmPct)) continue;
+      await this.settingsRepository.save(row);
       proposal.appliedAt = new Date();
       proposal.status = 'applied';
       await this.proposalRepository.save(proposal);
@@ -250,7 +263,7 @@ function fridayOnOrBefore(now: Date): string {
   return etDateKey(now);
 }
 
-function toProposeSettings(row: BotSettings): ProposeSettings {
+function toProposeSettings(row: BotV2Settings): ProposeSettings {
   return {
     premiumTargetPct: Number(row.premiumTargetPct),
     premiumStopPct: Number(row.premiumStopPct),
@@ -259,30 +272,75 @@ function toProposeSettings(row: BotSettings): ProposeSettings {
   };
 }
 
-function toAnalyzed(row: BotTrade): AnalyzedTrade {
-  const num = (value: unknown): number => Number(value ?? 0);
-  const nullableNum = (value: unknown): number | null =>
-    value == null ? null : Number(value);
+function toAnalyzed(row: BotV2Trade, events: DossierEvent[]): AnalyzedTrade {
+  const openedAt = Number(row.openedAt);
+  const closedAt = Number(row.closedAt);
   return {
-    tradeKey: row.tradeKey,
-    etDateKey: row.etDateKey,
-    lane: String(row.lane),
-    direction: row.direction == null ? null : String(row.direction),
-    quantity: num(row.quantity),
-    entryPrice: num(row.entryPrice),
-    exitPrice: num(row.exitPrice),
-    openedAt: new Date(row.openedAt).getTime(),
-    closedAt: new Date(row.closedAt).getTime(),
-    holdMs: num(row.holdMs),
-    grossPnl: num(row.grossPnl),
-    fees: num(row.fees),
-    netPnl: num(row.netPnl),
-    mfePremium: nullableNum(row.mfePremium),
-    maePremium: nullableNum(row.maePremium),
-    timeToMfeMs: nullableNum(row.timeToMfeMs),
-    captureEfficiency: nullableNum(row.captureEfficiency),
-    sampleCount: num(row.sampleCount),
-    exitReason: row.exitReason == null ? null : String(row.exitReason),
-    strategies: row.strategies ?? null,
+    tradeKey: tradeKeyFor(row.symbol, openedAt),
+    etDateKey: etDateKey(new Date(closedAt)),
+    lane: 'BOT_PAPER',
+    direction: row.direction,
+    quantity: Number(row.quantity),
+    entryPrice: Number(row.entryPrice),
+    exitPrice: Number(row.exitPrice),
+    openedAt,
+    closedAt,
+    holdMs: Math.max(0, closedAt - openedAt),
+    grossPnl: Number(row.grossPnl),
+    fees: Number(row.fees),
+    netPnl: Number(row.netPnl),
+    mfePremium: null,
+    maePremium: null,
+    timeToMfeMs: null,
+    captureEfficiency: null,
+    sampleCount: 0,
+    exitReason: row.exitReason,
+    strategies: row.strategies ?? strategiesNearEntry(row.symbol, openedAt, events),
   };
+}
+
+function withTape(
+  trade: AnalyzedTrade,
+  samples: Array<{ at: number; optionBid: number | null }>,
+): AnalyzedTrade {
+  const excursion = computeTradeExcursion({
+    samples,
+    entryPrice: trade.entryPrice,
+    exitPrice: trade.exitPrice,
+    openedAt: trade.openedAt,
+  });
+  return { ...trade, ...excursion };
+}
+
+function strategiesFromReason(
+  reason: string | null,
+  payload: Record<string, unknown> | null,
+): string[] | null {
+  const listed = payload?.strategies;
+  if (Array.isArray(listed) && listed.every((item) => typeof item === 'string')) {
+    return listed;
+  }
+  const match = reason?.match(/^(?:ANY|CONFIRMING) ([A-Z0-9_+]+) →/);
+  if (!match) return null;
+  return match[1].split('+').filter(Boolean);
+}
+
+/** Rows closed before `strategies` was stored still name the rule on the ENTRY event. */
+function strategiesNearEntry(
+  symbol: string,
+  openedAt: number,
+  events: DossierEvent[],
+): string[] | null {
+  let best: { distance: number; strategies: string[] } | null = null;
+  for (const event of events) {
+    if (event.type !== 'ENTRY' || !event.strategies?.length) continue;
+    const eventSymbol = event.payload?.symbol;
+    if (typeof eventSymbol === 'string' && eventSymbol.trim() !== symbol.trim()) continue;
+    const distance = Math.abs(event.at - openedAt);
+    if (distance > 2 * 60_000) continue;
+    if (!best || distance < best.distance) {
+      best = { distance, strategies: event.strategies };
+    }
+  }
+  return best?.strategies ?? null;
 }

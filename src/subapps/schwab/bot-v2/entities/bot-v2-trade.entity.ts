@@ -93,6 +93,10 @@ export class BotV2Trade {
   @Column({ type: 'varchar', name: 'config_version' })
   configVersion: string;
 
+  /** Rules that agreed on the entry. Null on rows closed before this column. */
+  @Column({ type: 'jsonb', nullable: true })
+  strategies: string[] | null;
+
   @Column({ type: 'int', name: 'decision_latency_ms', nullable: true })
   decisionLatencyMs: number | null;
 

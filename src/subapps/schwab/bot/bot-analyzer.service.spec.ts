@@ -66,6 +66,7 @@ function build(options: {
       getMany: jest.fn().mockResolvedValue(
         trades.map((trade, index) => ({
           id: String(trade.tradeKey ?? index),
+          symbol: 'SPY',
           direction: trade.direction,
           quantity: trade.quantity,
           entryPrice: trade.entryPrice,
@@ -141,10 +142,10 @@ describe('BotAnalyzerService', () => {
       trades: [tradeRow()],
       cumulative: MIN_TRADES_INDICATIVE,
       tape: [
-        { tradeKey: 'SPY-1', at: String(OPENED), optionBid: '1.0000' },
-        { tradeKey: 'SPY-1', at: String(OPENED + 60_000), optionBid: '1.6000' },
+        { tradeKey: `SPY-${OPENED}`, at: String(OPENED), optionBid: '1.0000' },
+        { tradeKey: `SPY-${OPENED}`, at: String(OPENED + 60_000), optionBid: '1.6000' },
         {
-          tradeKey: 'SPY-1',
+          tradeKey: `SPY-${OPENED}`,
           at: String(OPENED + 120_000),
           optionBid: '1.1000',
         },

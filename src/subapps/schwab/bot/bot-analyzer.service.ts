@@ -22,6 +22,7 @@ import {
 } from './bot-analysis.util';
 import { NON_STRATEGY_EXIT_REASONS } from './bot-propose.util';
 import { BotDailyReport } from './entities/bot-daily-report.entity';
+import { computeTradeExcursion, tradeKeyFor } from './bot-trade-metrics.util';
 import { BotTradeTape } from './entities/bot-trade-tape.entity';
 import { BotTrade } from './entities/bot-trade.entity';
 
@@ -110,7 +111,7 @@ export class BotAnalyzerService {
       this.logger.log(`Kept the champion report for ${dateKey}`);
       return null;
     }
-    const trades = rows.map((row) => this.toAnalyzedV2(row, dateKey));
+    const mapped = rows.map((row) => this.toAnalyzedV2(row, dateKey));
 
     // Readiness for the new exit rule counts V2 trades, not the old book.
     const cumulativeTrades = await this.v2Trades.count({
@@ -118,18 +119,27 @@ export class BotAnalyzerService {
     });
     const readiness = assessReadiness(cumulativeTrades);
 
+    // Only bother with the grid once a conclusion could mean something.
+    // Below the gate it is noise that invites over-reading.
+    const tapeByTradeKey =
+      readiness.level === 'insufficient'
+        ? new Map<string, { at: number; optionBid: number | null }[]>()
+        : await this.loadTape(ownerUserId, mapped);
+    const trades = mapped.map((trade) => {
+      const excursion = computeTradeExcursion({
+        samples: tapeByTradeKey.get(trade.tradeKey) ?? [],
+        entryPrice: trade.entryPrice,
+        exitPrice: trade.exitPrice,
+        openedAt: trade.openedAt,
+      });
+      return { ...trade, ...excursion };
+    });
+
     const aggregate = {
       ...aggregateTrades(dateKey, trades),
       book: 'v2' as const,
       configVersion: rows[0]?.configVersion ?? null,
     };
-
-    // Only bother with the grid once a conclusion could mean something.
-    // Below the gate it is noise that invites over-reading.
-    const tapeByTradeKey =
-      readiness.level === 'insufficient'
-        ? new Map()
-        : await this.loadTape(ownerUserId, trades);
     const policyResults =
       readiness.level === 'insufficient'
         ? []
@@ -282,7 +292,7 @@ export class BotAnalyzerService {
     const openedAt = Number(row.openedAt);
     const closedAt = Number(row.closedAt);
     return {
-      tradeKey: row.id,
+      tradeKey: tradeKeyFor(row.symbol, openedAt),
       etDateKey,
       lane: 'BOT_PAPER',
       direction: row.direction,
@@ -301,7 +311,7 @@ export class BotAnalyzerService {
       captureEfficiency: null,
       sampleCount: 0,
       exitReason: row.exitReason,
-      strategies: null,
+      strategies: row.strategies ?? null,
     };
   }
 

@@ -27,4 +27,6 @@ export interface BotV2OpenPosition {
   scaledOut: boolean;
   signalBarSeconds: SignalBarSeconds;
   configVersion: string;
+  /** Rules that agreed on this entry. Absent on positions opened before the field. */
+  strategies?: string[];
 }

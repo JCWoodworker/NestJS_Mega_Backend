@@ -93,6 +93,11 @@ export interface TimeBucket {
    * above would hide that if another rule offset it.
    */
   strategies: StrategySplit[];
+  /**
+   * How this window closed. A morning of targets and an afternoon of premium
+   * stops can share a strategy tag and still be different trades.
+   */
+  exits: Array<{ reason: string; trades: number; netPnl: number }>;
 }
 
 export interface ExcursionProfile {
@@ -268,6 +273,26 @@ function splitByStrategy(trades: AnalyzedTrade[]): StrategySplit[] {
  * twelve trades and four hundred refusals is a different problem from a week
  * with twelve trades and twelve setups, and only this distinguishes them.
  */
+function exitsFor(
+  group: AnalyzedTrade[],
+): Array<{ reason: string; trades: number; netPnl: number }> {
+  const byReason = new Map<string, { trades: number; netPnl: number }>();
+  for (const trade of group) {
+    const reason = trade.exitReason ?? 'UNSPECIFIED';
+    const row = byReason.get(reason) ?? { trades: 0, netPnl: 0 };
+    row.trades += 1;
+    row.netPnl += trade.netPnl;
+    byReason.set(reason, row);
+  }
+  return [...byReason.entries()]
+    .map(([reason, row]) => ({
+      reason,
+      trades: row.trades,
+      netPnl: round2(row.netPnl),
+    }))
+    .sort((a, b) => a.netPnl - b.netPnl);
+}
+
 function censusSkips(events: DossierEvent[]): SkipCount[] {
   const counts = new Map<string, number>();
   for (const event of events) {
@@ -357,6 +382,7 @@ function bucketByTimeOfDay(trades: AnalyzedTrade[]): TimeBucket[] {
         netPnl: round2(group.reduce((sum, trade) => sum + trade.netPnl, 0)),
         winRate: rate(wins, group.length),
         strategies: splitByStrategy(group),
+        exits: exitsFor(group),
       };
     });
 }

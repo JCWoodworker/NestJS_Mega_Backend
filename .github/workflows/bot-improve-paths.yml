@@ -35,14 +35,20 @@ jobs:
             exit 1
           fi
 
-          # Migrations are allowed, but only the bot's own: a new strategy
-          # toggle needs a column, and nothing else here does.
-          if echo "$files" | grep -E '/migrations/' | grep -vE '^src/subapps/schwab/bot/migrations/'; then
+          # The retired champion engine is not the trainer. A weekly change
+          # lands in bot-v2, or in the shared strategy and exit helpers.
+          if echo "$files" | grep -E '^src/subapps/schwab/bot/bot-engine\.service\.ts$'; then
+            echo "::error::The champion engine is not the house trainer"
+            exit 1
+          fi
+
+          # Migrations are allowed on the trainer and the shared bot module.
+          if echo "$files" | grep -E '/migrations/' | grep -vE '^src/subapps/schwab/bot/migrations/|^src/subapps/schwab/bot-v2/migrations/'; then
             echo "::error::Migrations outside the bot module are not in scope"
             exit 1
           fi
 
-          allowed='^(src/subapps/schwab/bot/|bot-reports/|schwab-frontend-notes\.md$)'
+          allowed='^(src/subapps/schwab/bot/|src/subapps/schwab/bot-v2/|bot-reports/|schwab-frontend-notes\.md$)'
           if echo "$files" | grep -vE "$allowed"; then
             echo "::error::Left the bot allowlist"
             exit 1

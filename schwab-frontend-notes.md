@@ -1725,6 +1725,8 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
 
 ## Changelog
 
+- **2026-10-01 (Saturday review reads the trainer)**: The weekly dossier, skip census, and 09:20 settings apply use `bot_v2_trades`, `bot_v2_events`, and `bot_v2_settings`. The trainer writes a bid sample to `bot_trade_tape` about every 5 seconds while a position is open (`tradeKey` is `symbol-openedAt`). Each `timeOfDay` bucket adds `exits` (reason, trades, net P&L) beside `strategies`. New closes store `strategies` on `bot_v2_trades`. Not a desk field.
+
 - **2026-10-01 (weekend dossier splits each clock window by strategy)**: Saturday `timeOfDay` buckets stay 30-minute ET entry windows. Each bucket now includes `strategies` (same shape as `strategyPerformance`: strategy, direction, trades, wins, net P&L, win rate), so one rule can show a win in one window and a loss in another. Not a desk field.
 
 - **2026-10-01 (trainer today is the whole ET session)**: `GET /bot-v2/status` `todayBotPnl` and `tradesToday` are the sum and count of `bot_v2_trades` closed since midnight America/New_York. `paperEquity` stays the lifetime ledger. `GET /bot-v2/trades` is still the newest rows only (the trainer page asks for 20) and feeds the recent-closes list, not the day total. Not a new field.

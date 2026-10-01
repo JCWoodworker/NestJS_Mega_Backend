@@ -14,6 +14,7 @@ import {
   minLockBidFor,
   shouldForceFlattenForSocketLoss,
 } from '@schwab/bot/bot-exit.util';
+import { BotRecordingService } from '@schwab/bot/bot-recording.service';
 import { BotStateService } from '@schwab/bot/bot-state.service';
 import {
   BotCandle,
@@ -26,6 +27,7 @@ import {
 } from '@schwab/bot/bot-strategy.util';
 import { computeTradePnl } from '@schwab/bot/bot-trade-metrics.util';
 import { selectContractDetailed } from '@schwab/bot/bot-strike-selection.util';
+import { BotLane } from '@schwab/bot/enums/bot-lane.enum';
 import { BotMode } from '@schwab/bot/enums/bot-mode.enum';
 import { BotCombineMode, BotDirection } from '@schwab/bot/enums/strategy.enum';
 import {
@@ -55,6 +57,8 @@ import { BotV2Settings } from './entities/bot-v2-settings.entity';
 import { BotV2Trade } from './entities/bot-v2-trade.entity';
 
 const HEARTBEAT_MS = 7_000;
+/** Bid samples for the Saturday excursion tape. Finer than the heartbeat, coarser than every tick. */
+const TAPE_SAMPLE_MS = 5_000;
 const QUOTE_FRESHNESS_MS = 2_000;
 const SOCKET_LOSS_GRACE_MS = 15_000;
 const SESSION_CAP = 500;
@@ -69,6 +73,8 @@ interface Book {
   running: boolean;
   evaluating: boolean;
   exiting: boolean;
+  /** Last time a bid was written to the research tape. */
+  lastTapeAt: number;
 }
 
 @Injectable()
@@ -89,6 +95,7 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
     private readonly trades: Repository<BotV2Trade>,
     @InjectRepository(BotV2Event)
     private readonly events: Repository<BotV2Event>,
+    private readonly recording: BotRecordingService,
   ) {}
 
   onModuleInit(): void {
@@ -174,6 +181,20 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
         item.bid > 0,
     );
     if (!tick || tick.bid == null) return;
+
+    const now = Date.now();
+    if (now - book.lastTapeAt >= TAPE_SAMPLE_MS) {
+      book.lastTapeAt = now;
+      void this.recording.recordTapeSample({
+        symbol: position.symbol,
+        openedAt: position.openedAt,
+        lane: BotLane.BOT_PAPER,
+        at: now,
+        optionBid: tick.bid,
+        optionAsk: tick.ask ?? null,
+        spot: book.spot,
+      });
+    }
 
     const decision = decideTickExit({
       ratchet: {
@@ -418,6 +439,7 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
         atrUsed: levels.atrUsed,
         scaledOut: false,
         signalBarSeconds: settings.signalBarSeconds,
+        strategies: combined.strategies,
         configVersion: v2ConfigVersion({
           botUnderlying: settings.botUnderlying,
           signalBarSeconds: settings.signalBarSeconds,
@@ -430,11 +452,14 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
       row.lastTradeAt = new Date();
       await this.stateService.save(row);
       book.position = position;
+      book.lastTapeAt = 0;
       session.pinOptionSymbol(position.symbol);
       await this.record(userId, 'ENTRY', combined.reason, {
         symbol: position.symbol,
         quantity: position.quantity,
         fill,
+        strategies: combined.strategies,
+        openedAt: position.openedAt,
       });
     } finally {
       book.evaluating = false;
@@ -563,6 +588,7 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
         closedAt: String(Date.now()),
         signalBarSeconds: position.signalBarSeconds,
         configVersion: position.configVersion,
+        strategies: position.strategies ?? null,
         decisionLatencyMs: latencyMs,
       }),
     );
@@ -653,6 +679,7 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
       running: false,
       evaluating: false,
       exiting: false,
+      lastTapeAt: 0,
     };
     this.books.set(userId, fresh);
     return fresh;
