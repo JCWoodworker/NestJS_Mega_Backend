@@ -11,6 +11,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 
 import { BotStateService } from '@schwab/bot/bot-state.service';
+import { etDateKey, etDayBounds } from '@schwab/pnl/et-date.util';
 import { requireUserId } from '@schwab/shared/schwab-user-context';
 
 import { BotV2EngineService } from './bot-v2-engine.service';
@@ -39,10 +40,11 @@ export class BotV2Controller {
   @Get('status')
   async status() {
     const userId = requireUserId();
-    const [state, settings, champion] = await Promise.all([
+    const [state, settings, champion, today] = await Promise.all([
       this.stateService.get(userId),
       this.settingsService.get(userId),
       this.champion.getRow(userId),
+      this.todayStats(userId),
     ]);
     return {
       mode: state.mode,
@@ -61,8 +63,8 @@ export class BotV2Controller {
         : null,
       lastSignal: null,
       lastError: null,
-      todayBotPnl: 0,
-      tradesToday: 0,
+      todayBotPnl: today.todayBotPnl,
+      tradesToday: today.tradesToday,
       liveArmed: false,
       botUnderlying: settings.botUnderlying,
       signalBarSeconds: settings.signalBarSeconds,
@@ -147,6 +149,25 @@ export class BotV2Controller {
       nextAfterId: items[0]?.id ?? null,
       hasMoreOlder: items.length === take,
       hasMoreNewer: false,
+    };
+  }
+
+  /** Realized net and close count for the current America/New_York calendar day. */
+  private async todayStats(
+    userId: string,
+  ): Promise<{ todayBotPnl: number; tradesToday: number }> {
+    const { start, end } = etDayBounds(etDateKey());
+    const raw = await this.trades
+      .createQueryBuilder('t')
+      .select('COALESCE(SUM(t.net_pnl), 0)', 'pnl')
+      .addSelect('COUNT(*)', 'n')
+      .where('t.user_id = :userId', { userId })
+      .andWhere('t.closed_at::bigint >= :start', { start: start.getTime() })
+      .andWhere('t.closed_at::bigint < :end', { end: end.getTime() })
+      .getRawOne<{ pnl: string; n: string }>();
+    return {
+      todayBotPnl: Math.round(Number(raw?.pnl ?? 0) * 100) / 100,
+      tradesToday: Number(raw?.n ?? 0),
     };
   }
 
