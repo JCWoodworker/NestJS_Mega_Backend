@@ -185,4 +185,14 @@ export class UpdateBotV2SettingsDto {
   @IsOptional()
   @IsIn(['SPY', 'SPXW'])
   botUnderlying?: 'SPY' | 'SPXW';
+
+  @IsOptional()
+  @IsBoolean()
+  useTimeStop?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  timeStopSeconds?: number;
 }

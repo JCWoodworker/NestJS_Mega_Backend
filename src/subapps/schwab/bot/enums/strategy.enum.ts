@@ -1,6 +1,8 @@
 export enum BotStrategy {
   VWAP_PULLBACK = 'VWAP_PULLBACK',
   ORB_5M = 'ORB_5M',
+  /** Same opening range, but only the bar that first leaves it. */
+  ORB_5M_CROSS = 'ORB_5M_CROSS',
   /** The pre-fix 100-bar VWAP, kept as a named rule so it can be tested. */
   VWAP_ROLLING_100 = 'VWAP_ROLLING_100',
   VWAP_REVERSION = 'VWAP_REVERSION',

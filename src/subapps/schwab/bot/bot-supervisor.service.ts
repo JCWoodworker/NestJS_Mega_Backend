@@ -15,6 +15,7 @@ import { runAsUser } from '@schwab/shared/schwab-user-context';
 import { MIN_EQUITY_PAPER } from './bot-equity-thresholds.const';
 import { BotEventService } from './bot-event.service';
 import { BotV2EngineService } from '../bot-v2/bot-v2-engine.service';
+import { BotV2RapidProfileService } from '../bot-v2/bot-v2-rapid-profile.service';
 import { BotV2StateService } from '../bot-v2/bot-v2-state.service';
 import { BotStateService } from './bot-state.service';
 import { etNowHhMm, isAtOrPast } from './bot-strategy.util';
@@ -105,6 +106,8 @@ export class BotSupervisorService implements OnModuleInit, OnModuleDestroy {
     private readonly v2Engine: BotV2EngineService,
     @Inject(forwardRef(() => BotV2StateService))
     private readonly v2State: BotV2StateService,
+    @Inject(forwardRef(() => BotV2RapidProfileService))
+    private readonly rapidProfile: BotV2RapidProfileService,
     @Inject(schwabConfig.KEY)
     private readonly config: ConfigType<typeof schwabConfig>,
   ) {}
@@ -301,10 +304,13 @@ export class BotSupervisorService implements OnModuleInit, OnModuleDestroy {
 
       const etDate = etDateKey(new Date());
       const etTime = etNowHhMm();
-      if (!isTradingDay(etDate)) return;
-
+      if (isTradingDay(etDate)) {
+        await runAsUser(ownerUserId, () =>
+          this.evaluate(ownerUserId, etDate, etTime),
+        );
+      }
       await runAsUser(ownerUserId, () =>
-        this.evaluate(ownerUserId, etDate, etTime),
+        this.rapidProfile.applyIfDue(ownerUserId),
       );
     } catch (err) {
       this.logger.warn(`supervisor tick failed: ${(err as Error).message}`);

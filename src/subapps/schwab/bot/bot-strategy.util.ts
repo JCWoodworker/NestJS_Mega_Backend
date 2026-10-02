@@ -111,6 +111,25 @@ export function evaluateOrb5m(
   return null;
 }
 
+/**
+ * ORB breakout that fires once, on the bar that leaves the range.
+ * The previous close must still be inside so a later bar outside the range
+ * does not re-arm after every cooldown.
+ */
+export function evaluateOrb5mCrossover(
+  candles: BotCandle[],
+  orb: OrbRange | null,
+): SignalDirection | null {
+  if (!orb || candles.length < 2) return null;
+  const prev = candles[candles.length - 2];
+  const last = candles[candles.length - 1];
+  const prevInside = prev.close <= orb.high && prev.close >= orb.low;
+  if (!prevInside) return null;
+  if (last.close > orb.high) return 'CALL';
+  if (last.close < orb.low) return 'PUT';
+  return null;
+}
+
 /** String-enum values are not assignable from their literals, so the public
  * signal API takes the value union. Enum members assign to it. */
 export type BotStrategyId = `${BotStrategy}`;

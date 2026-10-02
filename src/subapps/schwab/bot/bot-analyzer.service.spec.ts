@@ -172,9 +172,9 @@ describe('BotAnalyzerService', () => {
 
     const result = await service.analyzeDay('2026-09-18');
 
-    expect(v2Trades.count).toHaveBeenCalledWith({
-      where: { userId: OWNER },
-    });
+    const where = v2Trades.count.mock.calls[0][0].where;
+    const clauses = Array.isArray(where) ? where : [where];
+    expect(clauses.every((clause: { userId: string }) => clause.userId === OWNER)).toBe(true);
     expect(result?.readiness.level).toBe('trustworthy');
     expect(result?.aggregate.trades).toBe(1);
   });
@@ -201,9 +201,9 @@ describe('BotAnalyzerService', () => {
 
     await service.analyzeDay('2026-09-18');
 
-    expect(v2Trades.count).toHaveBeenCalledWith({
-      where: { userId: OWNER },
-    });
+    const where = v2Trades.count.mock.calls[0][0].where;
+    const clauses = Array.isArray(where) ? where : [where];
+    expect(clauses.every((clause: { userId: string }) => clause.userId === OWNER)).toBe(true);
     expect(saved[0].userId).toBe(OWNER);
   });
 

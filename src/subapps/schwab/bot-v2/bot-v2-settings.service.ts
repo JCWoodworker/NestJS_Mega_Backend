@@ -166,6 +166,8 @@ export class BotV2SettingsService {
       signalBarSeconds: row.signalBarSeconds,
       useScaleOut: row.useScaleOut,
       botUnderlying: row.botUnderlying,
+      useTimeStop: row.useTimeStop,
+      timeStopSeconds: row.timeStopSeconds,
     };
   }
 }

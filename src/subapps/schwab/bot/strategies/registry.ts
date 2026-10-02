@@ -8,6 +8,7 @@ import {
 } from '../bot-strategy.util';
 import { BotStrategy } from '../enums/strategy.enum';
 import { emaMomentumStrategy } from './ema-momentum.strategy';
+import { orb5mCrossStrategy } from './orb-5m-cross.strategy';
 import { orb5mStrategy } from './orb-5m.strategy';
 import { orbRetestStrategy } from './orb-retest.strategy';
 import { rangeFadeStrategy } from './range-fade.strategy';
@@ -26,6 +27,7 @@ export const EMA_SLOW_PERIOD = 21;
 export const STRATEGY_REGISTRY: StrategyDefinition[] = [
   vwapPullbackStrategy,
   orb5mStrategy,
+  orb5mCrossStrategy,
   vwapRolling100Strategy,
   vwapReversionStrategy,
   orbRetestStrategy,

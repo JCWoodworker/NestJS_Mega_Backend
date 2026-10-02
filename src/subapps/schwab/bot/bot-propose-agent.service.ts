@@ -111,6 +111,8 @@ export class BotProposeAgentService {
       '# Weekly improvement review',
       '',
       'You are reviewing the house paper trainer, the V2 book under bot-v2.',
+      `This packet is only the ${packet.book} book. Do not mix it with trades`,
+      'from another underlying or bar size.',
       'It is not a user\'s personal bot. It runs the enabled entry rules',
       '(VWAP_PULLBACK and ORB_5M unless the dossier says otherwise), combined',
       'with ANY (first to fire wins) or CONFIRMING (all must agree). It holds',

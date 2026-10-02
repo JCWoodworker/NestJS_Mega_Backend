@@ -60,6 +60,7 @@ function build(
     botEventService as any,
     v2Engine as any,
     v2State as any,
+    { applyIfDue: jest.fn().mockResolvedValue(false) } as any,
     {
       ownerUserId: OWNER,
       botSupervisorEnabled: true,

@@ -229,6 +229,16 @@ export class BotV2Settings {
   @Column({ type: 'varchar', name: 'bot_underlying', default: 'SPY' })
   botUnderlying: BotV2Underlying;
 
+  @Column({ type: 'boolean', name: 'use_time_stop', default: false })
+  useTimeStop: boolean;
+
+  @Column({ type: 'integer', name: 'time_stop_seconds', default: 180 })
+  timeStopSeconds: number;
+
+  /** Set once the 4 PM SPXW profile job has written this row. */
+  @Column({ type: 'timestamptz', name: 'rapid_profile_applied_at', nullable: true })
+  rapidProfileAppliedAt: Date | null;
+
   /** Set after the one-time copy from the retired champion row. */
   @Column({ type: 'boolean', name: 'seeded_from_champion', default: false })
   seededFromChampion: boolean;

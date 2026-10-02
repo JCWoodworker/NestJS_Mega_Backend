@@ -1725,6 +1725,8 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
 
 ## Changelog
 
+- **2026-10-02 (trainer time-stop and ORB cross)**: `PUT /bot-v2/settings` accepts `useTimeStop` (default false) and `timeStopSeconds` (default 180). When on, a trainer trade still under +2% after that many seconds exits `TIME_STOP`. New strategy id `ORB_5M_CROSS` fires only on the bar that leaves the opening range. `ORB_5M` is unchanged. A one-time server job after 4:00 PM ET on 2026-10-02 saves the owner's trainer as SPXW, 15-second bars, scale-out, risk-at-stop at $800, the time-stop, and `ORB_5M_CROSS`, once that trainer is flat. Monday's arm is the first session on those settings. Saturday reviews one book at a time (`v2|SPY|60` or `v2|SPXW|15`).
+
 - **2026-10-01 (Saturday review reads the trainer)**: The weekly dossier, skip census, and 09:20 settings apply use `bot_v2_trades`, `bot_v2_events`, and `bot_v2_settings`. The trainer writes a bid sample to `bot_trade_tape` about every 5 seconds while a position is open (`tradeKey` is `symbol-openedAt`). Each `timeOfDay` bucket adds `exits` (reason, trades, net P&L) beside `strategies`. New closes store `strategies` on `bot_v2_trades`. Not a desk field.
 
 - **2026-10-01 (weekend dossier splits each clock window by strategy)**: Saturday `timeOfDay` buckets stay 30-minute ET entry windows. Each bucket now includes `strategies` (same shape as `strategyPerformance`: strategy, direction, trades, wins, net P&L, win rate), so one rule can show a win in one window and a loss in another. Not a desk field.

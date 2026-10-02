@@ -34,6 +34,7 @@ import {
 import { BotMarketDay, MarketDayBar } from './entities/bot-market-day.entity';
 import { BotTradeTape } from './entities/bot-trade-tape.entity';
 import { BotTrade } from './entities/bot-trade.entity';
+import { BotV2Settings } from '../bot-v2/entities/bot-v2-settings.entity';
 import { BotLane } from './enums/bot-lane.enum';
 import { BotDirection, BotStrategy } from './enums/strategy.enum';
 
@@ -113,6 +114,7 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
   /** Epoch ms of the last snapshot, so a timer that drifts or a tick that
    * runs long cannot write two rows for the same instant. */
   private lastSnapshotAt = 0;
+  private lastTrainerSnapshotAt = 0;
   private lastBackfilledDate: string | null = null;
   private lastBackfillAttemptAt = 0;
   /** Last recurring tick problem, so it is logged on change rather than every minute. */
@@ -133,6 +135,8 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
     private readonly schwabAuthService: SchwabAuthService,
     @Inject(schwabConfig.KEY)
     private readonly config: ConfigType<typeof schwabConfig>,
+    @InjectRepository(BotV2Settings)
+    private readonly v2Settings: Repository<BotV2Settings>,
   ) {}
 
   onModuleInit(): void {
@@ -471,12 +475,26 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async snapshotChain(): Promise<void> {
+    const primary = this.config.underlyingSymbol ?? 'SPY';
+    await this.writeChainSnapshot(primary, 'primary');
+    const ownerUserId = this.config.ownerUserId;
+    if (!ownerUserId) return;
+    const trainer = await this.v2Settings.findOneBy({ userId: ownerUserId });
+    const extra = trainer?.botUnderlying;
+    if (extra && extra !== primary) {
+      await this.writeChainSnapshot(extra, 'trainer');
+    }
+  }
+
+  private async writeChainSnapshot(
+    symbol: string,
+    which: 'primary' | 'trainer',
+  ): Promise<void> {
     // Guard on elapsed time rather than a wall-clock label: at this cadence a
     // tick that runs long can land in the same second as the next one.
     const startedAt = Date.now();
-    if (startedAt - this.lastSnapshotAt < TICK_MS * 0.8) return;
-
-    const symbol = this.config.underlyingSymbol ?? 'SPY';
+    const last = which === 'primary' ? this.lastSnapshotAt : this.lastTrainerSnapshotAt;
+    if (startedAt - last < TICK_MS * 0.8) return;
     const chain = await this.marketDataService.getOptionChain({
       symbol,
       strikeCount: SNAPSHOT_STRIKE_COUNT,
@@ -512,7 +530,8 @@ export class BotRecordingService implements OnModuleInit, OnModuleDestroy {
       expiration,
       quotes,
     });
-    this.lastSnapshotAt = startedAt;
+    if (which === 'primary') this.lastSnapshotAt = startedAt;
+    else this.lastTrainerSnapshotAt = startedAt;
   }
 
   /**

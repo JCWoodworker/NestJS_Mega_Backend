@@ -51,6 +51,7 @@ function packet(overrides: Partial<ProposePacket> = {}): ProposePacket {
       },
       notes: [],
     },
+    book: 'v2|SPY|60',
     ...overrides,
   };
 }

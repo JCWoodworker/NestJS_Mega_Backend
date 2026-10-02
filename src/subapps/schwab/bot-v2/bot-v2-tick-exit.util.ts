@@ -9,7 +9,7 @@ import {
 
 import { scaleOutQuantity, shouldScaleOut } from './bot-v2-scale.util';
 
-export type V2ExitReason = SoftExitReason | 'SCALE_OUT';
+export type V2ExitReason = SoftExitReason | 'SCALE_OUT' | 'TIME_STOP';
 
 export type TickExitDecision =
   | { type: 'HOLD'; ratchet: RatchetStopResult }
@@ -20,7 +20,7 @@ export type TickExitDecision =
     }
   | {
       type: 'EXIT';
-      reason: SoftExitReason;
+      reason: SoftExitReason | 'TIME_STOP';
       quantity: number;
       ratchet: RatchetStopResult;
     };
@@ -32,6 +32,11 @@ export interface TickExitInput {
   scaledOut: boolean;
   quantity: number;
   entryPremium: number;
+  /** Scratch a trade that is still under +2% after this many seconds. */
+  useTimeStop?: boolean;
+  openedAt?: number;
+  now?: number;
+  timeStopSeconds?: number;
 }
 
 /**
@@ -41,6 +46,21 @@ export interface TickExitInput {
  */
 export function decideTickExit(input: TickExitInput): TickExitDecision {
   const ratchet = ratchetPremiumStop(input.ratchet);
+  const limitMs = (input.timeStopSeconds ?? 180) * 1000;
+  if (
+    input.useTimeStop &&
+    input.openedAt != null &&
+    input.now != null &&
+    input.now - input.openedAt > limitMs &&
+    input.ratchet.optionBid < input.entryPremium * 1.02
+  ) {
+    return {
+      type: 'EXIT',
+      reason: 'TIME_STOP',
+      quantity: input.quantity,
+      ratchet,
+    };
+  }
   const fullExit = decideSoftExit({
     ...input.exit,
     optionBid: input.ratchet.optionBid,

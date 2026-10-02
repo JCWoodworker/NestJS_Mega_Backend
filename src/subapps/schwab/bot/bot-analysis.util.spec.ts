@@ -348,6 +348,26 @@ describe('replayExitPolicy', () => {
     expect(result?.reason).toBe('HELD_TO_CLOSE');
   });
 
+  it('locks the +5% floor before the 15% give-back can bind', () => {
+    const result = replayExitPolicy({
+      trade: trade(),
+      // Peak +18% arms an 8% trail. The 15% give-back is still under the
+      // +5% lock, so a dip to +4% sells at the lock rather than riding on.
+      samples: tape([1, 1.18, 1.04]),
+      policy: {
+        targetPct: null,
+        stopPct: 0.25,
+        timeStopMs: null,
+        trailPct: 0.15,
+        trailArmPct: 0.08,
+        trailMinLockPct: 0.05,
+      },
+      fees: 1.3,
+    });
+    expect(result?.reason).toBe('TRAIL_STOP');
+    expect(result?.exitPrice).toBe(1.04);
+  });
+
   it('holds to the last sample when nothing triggers', () => {
     const result = replayExitPolicy({
       trade: trade(),

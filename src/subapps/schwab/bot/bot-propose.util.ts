@@ -42,6 +42,8 @@ export interface ProposeSettings {
  */
 export interface ProposePacket extends EvidencePacket {
   dossier: WeeklyDossier;
+  /** `v2|SPY|60` or `v2|SPXW|15`. One book per review. */
+  book: string;
 }
 
 export interface EvidencePacket {

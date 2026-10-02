@@ -45,8 +45,8 @@ import {
 import { OptionTick } from '@schwab/streaming/option-tick.mapper';
 import { SchwabStreamerPool } from '@schwab/streaming/schwab-streamer-pool.service';
 
-import { pushPriceBar } from './bot-v2-bars.util';
-import { v2ConfigVersion } from './bot-v2-config.util';
+import { expandCompletedMinutes, pushPriceBar } from './bot-v2-bars.util';
+import { sameTrainerUnderlying, v2ConfigVersion } from './bot-v2-config.util';
 import { BotV2SettingsService } from './bot-v2-settings.service';
 import { sizeAtRisk } from './bot-v2-sizing.util';
 import { BotV2StateService } from './bot-v2-state.service';
@@ -57,8 +57,6 @@ import { BotV2Settings } from './entities/bot-v2-settings.entity';
 import { BotV2Trade } from './entities/bot-v2-trade.entity';
 
 const HEARTBEAT_MS = 7_000;
-/** Bid samples for the Saturday excursion tape. Finer than the heartbeat, coarser than every tick. */
-const TAPE_SAMPLE_MS = 5_000;
 const QUOTE_FRESHNESS_MS = 2_000;
 const SOCKET_LOSS_GRACE_MS = 15_000;
 const SESSION_CAP = 500;
@@ -75,6 +73,8 @@ interface Book {
   exiting: boolean;
   /** Last time a bid was written to the research tape. */
   lastTapeAt: number;
+  lastTapeBid: number | null;
+  lastTapeAsk: number | null;
 }
 
 @Injectable()
@@ -126,16 +126,26 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
     this.held.add(userId);
     session.setFeedLock(settings.botUnderlying);
     if (session.getUnderlyingSymbol() !== settings.botUnderlying) {
-      await session.switchUnderlying(settings.botUnderlying, {
+      const switched = await session.switchUnderlying(settings.botUnderlying, {
         force: true,
         ignoreLock: true,
       });
+      if (switched.status === 'error') {
+        this.logger.warn(`V2 quote unavailable: ${switched.message}`);
+        await this.standDown(userId, 'QUOTE_UNAVAILABLE');
+        return;
+      }
     }
     const book = this.book(userId);
     book.settings = settings;
     book.position = row.openPosition;
     book.running = true;
     await this.seedMinuteBars(userId, settings.botUnderlying);
+    if (settings.signalBarSeconds === 15) {
+      book.microClosed = expandCompletedMinutes(book.minute, Date.now()).slice(
+        -SESSION_CAP,
+      );
+    }
     await this.record(userId, 'ARMED', settings.botUnderlying, null);
   }
 
@@ -183,8 +193,17 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
     if (!tick || tick.bid == null) return;
 
     const now = Date.now();
-    if (now - book.lastTapeAt >= TAPE_SAMPLE_MS) {
+    const bidMoved =
+      book.lastTapeBid == null || Math.abs(tick.bid - book.lastTapeBid) >= 0.02;
+    const askMoved =
+      tick.ask != null &&
+      book.lastTapeAsk != null &&
+      Math.abs(tick.ask - book.lastTapeAsk) >= 0.02;
+    const tapeDue = book.lastTapeAt === 0 || (now - book.lastTapeAt >= 500 && (bidMoved || askMoved));
+    if (tapeDue) {
       book.lastTapeAt = now;
+      book.lastTapeBid = tick.bid;
+      book.lastTapeAsk = tick.ask ?? null;
       void this.recording.recordTapeSample({
         symbol: position.symbol,
         openedAt: position.openedAt,
@@ -225,6 +244,10 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
       scaledOut: position.scaledOut,
       quantity: position.quantity,
       entryPremium: position.entryPrice,
+      useTimeStop: settings.useTimeStop,
+      openedAt: position.openedAt,
+      now,
+      timeStopSeconds: settings.timeStopSeconds,
     });
 
     position.peakBid = decision.ratchet.peakBid;
@@ -279,7 +302,7 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
   ): Promise<void> {
     const book = this.books.get(userId);
     if (!book?.running || !book.settings) return;
-    if (payload.symbol !== book.settings.botUnderlying) return;
+    if (!sameTrainerUnderlying(book.settings.botUnderlying, payload.symbol)) return;
     book.spot = payload.price;
     if (book.settings.signalBarSeconds !== 15) return;
     const step = pushPriceBar(
@@ -300,7 +323,7 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
   private async onMinute(userId: string, candle: ChartCandlePayload): Promise<void> {
     const book = this.books.get(userId);
     if (!book?.running || !book.settings) return;
-    if (candle.symbol !== book.settings.botUnderlying) return;
+    if (!sameTrainerUnderlying(book.settings.botUnderlying, candle.symbol)) return;
     this.pushMinute(book, {
       open: candle.open,
       high: candle.high,
@@ -453,6 +476,8 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
       await this.stateService.save(row);
       book.position = position;
       book.lastTapeAt = 0;
+      book.lastTapeBid = null;
+      book.lastTapeAsk = null;
       session.pinOptionSymbol(position.symbol);
       await this.record(userId, 'ENTRY', combined.reason, {
         symbol: position.symbol,
@@ -680,6 +705,8 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
       evaluating: false,
       exiting: false,
       lastTapeAt: 0,
+      lastTapeBid: null,
+      lastTapeAsk: null,
     };
     this.books.set(userId, fresh);
     return fresh;

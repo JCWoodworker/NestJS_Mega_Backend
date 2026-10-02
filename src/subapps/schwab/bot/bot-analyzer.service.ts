@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Like, Repository } from 'typeorm';
 
 import schwabConfig from '@schwab/config/schwab.config';
 import { etDateKey, etDayBounds } from '@schwab/pnl/et-date.util';
@@ -22,6 +22,7 @@ import {
 } from './bot-analysis.util';
 import { NON_STRATEGY_EXIT_REASONS } from './bot-propose.util';
 import { BotDailyReport } from './entities/bot-daily-report.entity';
+import { trainerBookKey } from '@schwab/bot-v2/bot-v2-config.util';
 import { computeTradeExcursion, tradeKeyFor } from './bot-trade-metrics.util';
 import { BotTradeTape } from './entities/bot-trade-tape.entity';
 import { BotTrade } from './entities/bot-trade.entity';
@@ -113,9 +114,17 @@ export class BotAnalyzerService {
     }
     const mapped = rows.map((row) => this.toAnalyzedV2(row, dateKey));
 
-    // Readiness for the new exit rule counts V2 trades, not the old book.
+    // Readiness stays inside one book. A SPXW 15-second day does not
+    // inherit the SPY 1-minute count, and a SPY day does not inherit SPXW.
+    const book = trainerBookKey(rows[0]?.configVersion);
     const cumulativeTrades = await this.v2Trades.count({
-      where: { userId: ownerUserId },
+      where:
+        book === 'v2|SPY|60'
+          ? [
+              { userId: ownerUserId, configVersion: Like('v2|SPY|60|%') },
+              { userId: ownerUserId, configVersion: IsNull() },
+            ]
+          : { userId: ownerUserId, configVersion: Like(`${book}|%`) },
     });
     const readiness = assessReadiness(cumulativeTrades);
 

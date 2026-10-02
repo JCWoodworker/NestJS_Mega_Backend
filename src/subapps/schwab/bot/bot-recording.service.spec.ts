@@ -35,6 +35,7 @@ function build(
       underlyingSymbol: 'SPY',
       ...overrides,
     } as any,
+    { findOneBy: jest.fn().mockResolvedValue(null) } as any,
   );
 
   return {

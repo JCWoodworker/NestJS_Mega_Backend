@@ -19,6 +19,7 @@ import {
   type ProposePacket,
   type ProposeSettings,
 } from './bot-propose.util';
+import { trainerBookKey, trainerBookKeyFromSettings } from '../bot-v2/bot-v2-config.util';
 import { BotV2Event } from '../bot-v2/entities/bot-v2-event.entity';
 import { BotV2Settings } from '../bot-v2/entities/bot-v2-settings.entity';
 import { BotV2Trade } from '../bot-v2/entities/bot-v2-trade.entity';
@@ -99,13 +100,24 @@ export class BotProposeService {
       where: { userId: ownerUserId },
       order: { closedAt: 'ASC' },
     });
-    const trades = rows
-      .map((row) => toAnalyzed(row, events))
-      .filter((trade) => trade.etDateKey <= weekEndingEt);
     const settingsRow = await this.settingsRepository.findOneBy({
       userId: ownerUserId,
     });
     if (!settingsRow) return null;
+
+    const tagged = rows
+      .map((row) => ({ row, trade: toAnalyzed(row, events) }))
+      .filter((item) => item.trade.etDateKey <= weekEndingEt);
+    const byBook = new Map<string, AnalyzedTrade[]>();
+    for (const item of tagged) {
+      const key = trainerBookKey(item.row.configVersion);
+      byBook.set(key, [...(byBook.get(key) ?? []), item.trade]);
+    }
+    const currentBook = trainerBookKeyFromSettings(settingsRow);
+    const currentTrades = byBook.get(currentBook) ?? [];
+    const largest = [...byBook.entries()].sort((a, b) => b[1].length - a[1].length)[0];
+    const book = currentTrades.length ? currentBook : (largest?.[0] ?? currentBook);
+    const trades = currentTrades.length ? currentTrades : (largest?.[1] ?? []);
 
     const tapeByTradeKey = await this.loadTape(ownerUserId, trades);
     const reviewed = trades.map((trade) =>
@@ -134,7 +146,7 @@ export class BotProposeService {
 
     // Spread rather than nest so `packet.patch` stays where the 09:20 apply
     // path already looks for it.
-    const packet: ProposePacket = { ...evidence, dossier };
+    const packet: ProposePacket = { ...evidence, dossier, book };
 
     const saved = await this.proposalRepository.save({
       userId: ownerUserId,

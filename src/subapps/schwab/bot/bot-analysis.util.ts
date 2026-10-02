@@ -1,3 +1,8 @@
+import {
+  breakevenBidFor,
+  minLockBidFor,
+  ratchetPremiumStop,
+} from './bot-exit.util';
 import { TapeSample } from './bot-trade-metrics.util';
 
 /**
@@ -83,6 +88,11 @@ export interface ExitPolicy {
    * grid's verdict unusable for choosing the live setting.
    */
   trailArmPct: number | null;
+  /**
+   * Once armed, the stop cannot sit below `entry × (1 + this)`.
+   * Same fraction style as `trailArmPct`. Omitted or null means no extra lock.
+   */
+  trailMinLockPct?: number | null;
 }
 
 export interface PolicyResult {
@@ -247,39 +257,51 @@ export function replayExitPolicy(params: {
 
   const target =
     policy.targetPct != null ? trade.entryPrice * (1 + policy.targetPct) : null;
-  const stop =
+  const initialStop =
     policy.stopPct != null ? trade.entryPrice * (1 - policy.stopPct) : null;
-
-  const armAt =
-    policy.trailArmPct != null
-      ? trade.entryPrice * (1 + policy.trailArmPct)
-      : null;
+  const trailOn = policy.trailPct != null;
+  const perContractFees = fees / Math.max(trade.quantity, 1);
 
   let peak = trade.entryPrice;
   let trailArmed = false;
+  let stopPremium = initialStop;
 
   for (const sample of samples) {
     const bid = sample.optionBid as number;
-    peak = Math.max(peak, bid);
-    // Armed on the same sample that clears the threshold, but the peak is
-    // advanced first — so arming can never immediately trigger its own trail.
-    if (armAt == null || bid >= armAt) trailArmed = true;
+    if (trailOn) {
+      const ratchet = ratchetPremiumStop({
+        entryPremium: trade.entryPrice,
+        optionBid: bid,
+        peakBid: peak,
+        stopPremium,
+        trailArmed,
+        // Null arm means "from the first bid at or above entry", matching the
+        // older grid cells. A set arm is a fraction (0.08 = 8%).
+        trailArmPct:
+          policy.trailArmPct == null ? 0 : policy.trailArmPct * 100,
+        trailPct: policy.trailPct * 100,
+        breakevenBid: breakevenBidFor(trade.entryPrice, perContractFees),
+        minLockBid: minLockBidFor(
+          trade.entryPrice,
+          (policy.trailMinLockPct ?? 0) * 100,
+        ),
+      });
+      peak = ratchet.peakBid;
+      trailArmed = ratchet.trailArmed;
+      stopPremium = ratchet.stopPremium;
+    } else {
+      peak = Math.max(peak, bid);
+    }
 
     const elapsed = sample.at - trade.openedAt;
     let hit: string | null = null;
 
     // Stop before target: within one sample we cannot know which came first,
     // and assuming the favourable one is how a backtest flatters itself.
-    if (stop != null && bid <= stop) hit = 'PREMIUM_STOP';
-    else if (target != null && bid >= target) hit = 'PREMIUM_TARGET';
-    else if (
-      policy.trailPct != null &&
-      trailArmed &&
-      bid <= peak * (1 - policy.trailPct) &&
-      peak > trade.entryPrice
-    ) {
-      hit = 'TRAIL_STOP';
-    } else if (policy.timeStopMs != null && elapsed >= policy.timeStopMs) {
+    if (stopPremium != null && bid <= stopPremium) {
+      hit = trailOn && trailArmed ? 'TRAIL_STOP' : 'PREMIUM_STOP';
+    } else if (target != null && bid >= target) hit = 'PREMIUM_TARGET';
+    else if (policy.timeStopMs != null && elapsed >= policy.timeStopMs) {
       hit = 'TIME_STOP';
     }
 
@@ -482,18 +504,25 @@ export function defaultPolicyGrid(): ExitPolicy[] {
       trailArmPct: null,
     });
   }
-  // Armed trails near the live fast-scalp profile (stop 25% / target 22%).
-  // Arm 0.20 matches Apply suggested; 0.25 remains a nearby counterfactual.
-  for (const trailArmPct of [0.2, 0.25]) {
-    for (const trailPct of [0.1, 0.15, 0.25]) {
-      policies.push({
-        stopPct: 0.25,
-        targetPct: 0.22,
-        timeStopMs: null,
-        trailPct,
-        trailArmPct,
-      });
-    }
+  // Live trainer trail is arm 8% / giveback 15% / lock 5%. Arm 20% stays
+  // as a counterfactual from the older suggested profile.
+  policies.push({
+    stopPct: 0.25,
+    targetPct: 0.22,
+    timeStopMs: null,
+    trailPct: 0.15,
+    trailArmPct: 0.08,
+    trailMinLockPct: 0.05,
+  });
+  for (const trailPct of [0.15, 0.25]) {
+    policies.push({
+      stopPct: 0.25,
+      targetPct: 0.22,
+      timeStopMs: null,
+      trailPct,
+      trailArmPct: 0.2,
+      trailMinLockPct: null,
+    });
   }
   return policies;
 }
