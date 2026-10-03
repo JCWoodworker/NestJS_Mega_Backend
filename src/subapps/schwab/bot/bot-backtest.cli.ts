@@ -25,7 +25,7 @@ import {
  */
 
 const DEFAULT_CONFIG: BacktestConfig = {
-  strategies: ['VWAP_PULLBACK', 'ORB_5M'],
+  strategies: ['VWAP_PULLBACK', 'ORB_5M_CROSS'],
   combineMode: 'ANY',
   directionsEnabled: ['CALL', 'PUT'],
   filters: {
@@ -36,20 +36,20 @@ const DEFAULT_CONFIG: BacktestConfig = {
     maxSpreadPct: 5,
   },
   atrPeriod: 14,
-  cooldownMins: 5,
+  cooldownMins: 2,
   tradeWindowStart: '09:30',
   tradeWindowEnd: '15:00',
   hardFlattenTime: '15:30',
   usePremiumStop: true,
   premiumStopPct: 25,
   usePremiumTarget: true,
-  premiumTargetPct: 40,
+  premiumTargetPct: 15,
   useTrailStop: true,
-  trailArmPct: 10,
+  trailArmPct: 8,
   trailPct: 15,
   trailMinLockPct: 5,
   stopAtrMult: 1.5,
-  targetAtrMult: 2.5,
+  targetAtrMult: 1.8,
   riskPct: 10,
   equity: 6000,
 };
