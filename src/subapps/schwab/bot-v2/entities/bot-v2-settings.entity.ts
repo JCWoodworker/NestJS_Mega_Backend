@@ -28,7 +28,7 @@ export class BotV2Settings {
   @Column({
     type: 'jsonb',
     name: 'strategies_enabled',
-    default: () => `'["VWAP_PULLBACK","ORB_5M"]'`,
+    default: () => `'["VWAP_PULLBACK","ORB_5M_CROSS"]'`,
   })
   strategiesEnabled: BotStrategy[];
 
@@ -159,7 +159,7 @@ export class BotV2Settings {
     precision: 8,
     scale: 4,
     name: 'premium_target_pct',
-    default: 22,
+    default: 15,
     transformer: decimal,
   })
   premiumTargetPct: number;

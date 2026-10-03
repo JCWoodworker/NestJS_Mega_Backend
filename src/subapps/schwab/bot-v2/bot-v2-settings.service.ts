@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { BotSettingsService } from '@schwab/bot/bot-settings.service';
+import { BotStrategy } from '@schwab/bot/enums/strategy.enum';
 import { requireUserId } from '@schwab/shared/schwab-user-context';
 
 import { BotV2Settings } from './entities/bot-v2-settings.entity';
@@ -24,6 +25,8 @@ export class BotV2SettingsService {
       (await this.settings.save(
         this.settings.create({
           userId,
+          strategiesEnabled: [BotStrategy.VWAP_PULLBACK, BotStrategy.ORB_5M_CROSS],
+          premiumTargetPct: 15,
           useRiskAtStop: false,
           maxRiskUsd: 200,
           signalBarSeconds: 60,
@@ -38,7 +41,7 @@ export class BotV2SettingsService {
     return this.seedFromChampion(row, userId);
   }
 
-  /** One copy of the live champion knobs. New flags stay off. */
+  /** One copy of the live champion knobs. Trainer entry rules stay pinned. */
   private async seedFromChampion(
     row: BotV2Settings,
     userId: string,
@@ -48,7 +51,7 @@ export class BotV2SettingsService {
       const n = Number(value);
       return Number.isFinite(n) ? n : fallback;
     };
-    row.strategiesEnabled = champion.strategiesEnabled;
+    row.strategiesEnabled = [BotStrategy.VWAP_PULLBACK, BotStrategy.ORB_5M_CROSS];
     row.minStrategyAgreement = champion.minStrategyAgreement;
     row.callsEnabled = champion.callsEnabled;
     row.putsEnabled = champion.putsEnabled;
@@ -69,7 +72,7 @@ export class BotV2SettingsService {
     row.usePremiumStop = champion.usePremiumStop;
     row.premiumStopPct = num(champion.premiumStopPct, 25);
     row.usePremiumTarget = champion.usePremiumTarget;
-    row.premiumTargetPct = num(champion.premiumTargetPct, 22);
+    row.premiumTargetPct = 15;
     row.useTrailStop = champion.useTrailStop;
     row.stopAtrMult = num(champion.stopAtrMult, 1.5);
     row.targetAtrMult = num(champion.targetAtrMult, 1.8);
