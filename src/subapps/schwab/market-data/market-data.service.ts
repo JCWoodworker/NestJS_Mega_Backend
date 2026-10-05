@@ -3,6 +3,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
 
 import { etDateKey } from '@schwab/pnl/et-date.util';
+import { schwabIndexQuoteSymbol } from '@schwab/streaming/index-symbol.util';
 
 import { ExpirationsQueryDto } from './dto/expirations-query.dto';
 import { InstrumentSearchQueryDto } from './dto/instrument-search-query.dto';
@@ -48,9 +49,6 @@ export interface InstrumentSearchResponse {
   q: string;
   results: InstrumentSearchHit[];
 }
-
-/** 0DTE SPX options trade under SPXW (same as streamer). */
-const OPTION_ROOT_OVERRIDES: Record<string, string> = { SPX: 'SPXW' };
 
 /** Short TTL so 1–2s FE polls coalesce instead of stampeding Schwab. */
 const CHAIN_CACHE_TTL_MS = 750;
@@ -106,7 +104,7 @@ export class MarketDataService {
       const response = await firstValueFrom(
         this.httpService.get('/marketdata/v1/pricehistory', {
           params: {
-            symbol: query.symbol,
+            symbol: schwabIndexQuoteSymbol(query.symbol),
             periodType: query.periodType,
             period: query.period,
             frequencyType: query.frequencyType,
@@ -129,7 +127,7 @@ export class MarketDataService {
         volume: candle.volume,
       }));
 
-      return { symbol: response.data?.symbol ?? query.symbol, candles };
+      return { symbol: query.symbol, candles };
     } catch (error) {
       this.logger.error(
         'Price history fetch failed',
@@ -373,10 +371,9 @@ export class MarketDataService {
     }
   }
 
-  /** SPX equity → SPXW option root (streamer invariant). */
+  /** SPX and SPXW both list under the index symbol `$SPX`. */
   private resolveOptionSymbol(symbol: string): string {
-    const upper = symbol.toUpperCase();
-    return OPTION_ROOT_OVERRIDES[upper] ?? upper;
+    return schwabIndexQuoteSymbol(symbol);
   }
 
   private async assertExpirationAllowed(

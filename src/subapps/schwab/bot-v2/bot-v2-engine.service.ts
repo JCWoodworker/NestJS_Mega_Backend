@@ -518,6 +518,10 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
       book.position = stored;
     }
     book.running = true;
+    if (!this.held.has(userId)) {
+      await this.arm();
+      return;
+    }
     const session = this.pool.peek(userId);
     if (book.position && session) session.pinOptionSymbol(book.position.symbol);
     if (isAtOrPast(etNowHhMm(), settings.hardFlattenTime) && book.position) {

@@ -34,6 +34,10 @@ import {
 } from './level-one-fields';
 import { mapOptionTicks, OptionTick } from './option-tick.mapper';
 import { OptionsGateway } from './options.gateway';
+import {
+  schwabIndexQuoteSymbol,
+  schwabOptionRoot,
+} from './index-symbol.util';
 import { buildOsiSymbol } from './osi-symbol.util';
 
 interface StreamerInfo {
@@ -64,8 +68,6 @@ export function normalizeUnderlyingSymbol(raw: string): string | null {
   return symbol;
 }
 
-/** 0DTE SPX options trade under the SPXW root, not SPX. */
-const OPTION_ROOT_OVERRIDES: Record<string, string> = { SPX: 'SPXW' };
 const STRIKE_INCREMENT_OVERRIDES: Record<string, number> = {
   SPX: 5,
   SPXW: 5,
@@ -125,6 +127,8 @@ export class SchwabStreamerSession {
   private streamStatusReason: string | null = null;
 
   private underlyingSymbol = 'SPY';
+  /** Schwab key for the quote and candle stream. `$SPX` when the desk symbol is SPX or SPXW. */
+  private quoteSymbol = 'SPY';
   /**
    * While set, a desk `subscribe-underlying` cannot leave this symbol.
    * The bot sets it to SPY for the whole time `mode === BOT`, because this
@@ -502,7 +506,7 @@ export class SchwabStreamerSession {
       command: 'SUBS',
       requestid: this.nextRequestId(),
       parameters: {
-        keys: this.underlyingSymbol,
+        keys: this.quoteSymbol,
         fields: LEVEL_ONE_EQUITY_FIELD_KEYS,
       },
     });
@@ -513,7 +517,7 @@ export class SchwabStreamerSession {
       command: 'SUBS',
       requestid: this.nextRequestId(),
       parameters: {
-        keys: this.underlyingSymbol,
+        keys: this.quoteSymbol,
         fields: CHART_EQUITY_FIELD_KEYS,
       },
     });
@@ -548,10 +552,10 @@ export class SchwabStreamerSession {
 
     try {
       const initialPrice = await this.fetchInitialUnderlyingPrice();
-      this.recenterLadder(initialPrice);
+      if (initialPrice > 0) this.recenterLadder(initialPrice);
     } catch (err) {
       this.logger.error(
-        `Failed to fetch initial ${this.underlyingSymbol} quote for ladder seed`,
+        `Failed to fetch initial ${this.quoteSymbol} quote for ladder seed`,
         err.message,
       );
     }
@@ -561,11 +565,11 @@ export class SchwabStreamerSession {
     const response = await this.runAsSelf(() =>
       firstValueFrom(
         this.httpService.get('/marketdata/v1/quotes', {
-          params: { symbols: this.underlyingSymbol },
+          params: { symbols: this.quoteSymbol },
         }),
       ),
     );
-    const quote = response.data?.[this.underlyingSymbol]?.quote;
+    const quote = response.data?.[this.quoteSymbol]?.quote;
     return quote?.lastPrice ?? quote?.mark ?? 0;
   }
 
@@ -618,13 +622,13 @@ export class SchwabStreamerSession {
       service: 'LEVELONE_EQUITIES',
       command: 'UNSUBS',
       requestid: this.nextRequestId(),
-      parameters: { keys: this.underlyingSymbol },
+      parameters: { keys: this.quoteSymbol },
     });
     this.sendRequest({
       service: 'CHART_EQUITY',
       command: 'UNSUBS',
       requestid: this.nextRequestId(),
-      parameters: { keys: this.underlyingSymbol },
+      parameters: { keys: this.quoteSymbol },
     });
     // Pinned symbols outlive the switch: the operator changing which chain
     // they are watching says nothing about the bot's open position, and
@@ -636,7 +640,8 @@ export class SchwabStreamerSession {
     );
 
     this.underlyingSymbol = symbol;
-    this.optionRoot = OPTION_ROOT_OVERRIDES[symbol] ?? symbol;
+    this.quoteSymbol = schwabIndexQuoteSymbol(symbol);
+    this.optionRoot = schwabOptionRoot(symbol);
     this.strikeIncrement = STRIKE_INCREMENT_OVERRIDES[symbol] ?? 1;
     this.centerStrike = null;
     this.currentExpirationDateKey = null;
@@ -647,7 +652,7 @@ export class SchwabStreamerSession {
       command: 'SUBS',
       requestid: this.nextRequestId(),
       parameters: {
-        keys: this.underlyingSymbol,
+        keys: this.quoteSymbol,
         fields: LEVEL_ONE_EQUITY_FIELD_KEYS,
       },
     });
@@ -656,13 +661,20 @@ export class SchwabStreamerSession {
       command: 'SUBS',
       requestid: this.nextRequestId(),
       parameters: {
-        keys: this.underlyingSymbol,
+        keys: this.quoteSymbol,
         fields: CHART_EQUITY_FIELD_KEYS,
       },
     });
 
     try {
       const initialPrice = await this.fetchInitialUnderlyingPrice();
+      if (!(initialPrice > 0)) {
+        return {
+          status: 'error',
+          symbol,
+          message: `Could not quote ${symbol} from Schwab — check the ticker is optionable / listed`,
+        };
+      }
       this.recenterLadder(initialPrice);
     } catch (err) {
       this.logger.error(
