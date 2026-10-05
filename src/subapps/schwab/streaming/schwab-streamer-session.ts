@@ -23,6 +23,9 @@ import {
 import {
   chunkArray,
   computeNearestStrike,
+  DEFAULT_LADDER_STRIKE_COUNT,
+  ladderStrikeOffsets,
+  normalizeLadderStrikeCount,
   OPTIONS_SUBSCRIBE_CHUNK_SIZE,
   resolveLadderSubscriptions,
   shouldRecenterLadder,
@@ -129,6 +132,8 @@ export class SchwabStreamerSession {
   private underlyingSymbol = 'SPY';
   /** Schwab key for the quote and candle stream. `$SPX` when the desk symbol is SPX or SPXW. */
   private quoteSymbol = 'SPY';
+  /** Total strikes in the subscribed ladder, chosen by the desk. */
+  private ladderStrikeCount = DEFAULT_LADDER_STRIKE_COUNT;
   /**
    * While set, a desk `subscribe-underlying` cannot leave this symbol.
    * The bot sets it to SPY for the whole time `mode === BOT`, because this
@@ -581,7 +586,7 @@ export class SchwabStreamerSession {
    */
   async switchUnderlying(
     requestedSymbol: string,
-    opts?: { force?: boolean; ignoreLock?: boolean },
+    opts?: { force?: boolean; ignoreLock?: boolean; strikeCount?: number },
   ): Promise<SwitchUnderlyingResult> {
     const symbol = normalizeUnderlyingSymbol(requestedSymbol ?? '');
     if (!symbol) {
@@ -604,9 +609,25 @@ export class SchwabStreamerSession {
       };
     }
 
+    const nextCount =
+      opts?.strikeCount != null
+        ? normalizeLadderStrikeCount(opts.strikeCount)
+        : this.ladderStrikeCount;
+    const countChanged = nextCount !== this.ladderStrikeCount;
+    this.ladderStrikeCount = nextCount;
+
     // Re-emitting the current symbol is how the desk reconnects. Resync passes
     // force so a stalled feed is torn down and subscribed again.
     if (symbol === this.underlyingSymbol && !opts?.force) {
+      if (
+        countChanged &&
+        this.loggedIn &&
+        this.lastKnownSpotPrice != null &&
+        this.lastKnownSpotPrice > 0
+      ) {
+        this.centerStrike = null;
+        this.recenterLadder(this.lastKnownSpotPrice);
+      }
       return { status: 'ok', symbol };
     }
 
@@ -789,7 +810,7 @@ export class SchwabStreamerSession {
   }
 
   /**
-   * Re-centers the 16-strike (8 ITM / 8 OTM) window whenever the spot price
+   * Re-centers the desk ladder whenever the spot price
    * drifts `RECENTER_BUFFER_STRIKES` increments away from the current
    * center, OR the calendar day has rolled over since the window was last
    * built (0DTE contracts expire at today's close, so yesterday's symbols
@@ -818,8 +839,9 @@ export class SchwabStreamerSession {
       return;
     }
 
+    const { min, max } = ladderStrikeOffsets(this.ladderStrikeCount);
     const newSymbols = new Set<string>();
-    for (let offset = -8; offset < 8; offset += 1) {
+    for (let offset = min; offset <= max; offset += 1) {
       const strike = nearestStrike + offset * this.strikeIncrement;
       newSymbols.add(
         buildOsiSymbol({

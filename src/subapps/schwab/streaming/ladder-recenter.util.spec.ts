@@ -1,6 +1,8 @@
 import {
   chunkArray,
   computeNearestStrike,
+  ladderStrikeOffsets,
+  normalizeLadderStrikeCount,
   OPTIONS_SUBSCRIBE_CHUNK_SIZE,
   RECENTER_BUFFER_STRIKES,
   resolveLadderSubscriptions,
@@ -193,6 +195,12 @@ describe('chunkArray', () => {
     expect(chunks.length).toBe(2);
     expect(chunks[0].length).toBe(8);
     expect(chunks[1].length).toBe(8);
+  });
+
+  it('centers an even strike count on the nearest strike', () => {
+    expect(ladderStrikeOffsets(16)).toEqual({ min: -7, max: 8 });
+    expect(ladderStrikeOffsets(24)).toEqual({ min: -11, max: 12 });
+    expect(normalizeLadderStrikeCount(7)).toBe(16);
   });
 
   it('throws for a non-positive chunk size', () => {
