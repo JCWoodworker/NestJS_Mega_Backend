@@ -3,6 +3,12 @@ import { computeBudget, sizePosition } from '@schwab/bot/bot-strike-selection.ut
 /** One SPY/SPXW option tick. A tighter stop is not a real risk distance. */
 export const OPTION_PREMIUM_TICK = 0.01;
 
+/**
+ * One contract until the premium exit has a recorded week.
+ * The dollar risk cap still applies; it cannot raise this.
+ */
+export const TRAINER_MAX_CONTRACTS = 1;
+
 export type SizeReason = 'OK' | 'STOP_TOO_TIGHT' | 'NO_STOP' | 'NO_BUDGET';
 
 export interface SizeAtRiskInput {
@@ -34,9 +40,12 @@ export function sizeAtRisk(input: SizeAtRiskInput): SizeAtRiskResult {
   }
 
   if (!input.useRiskAtStop) {
-    const qty = sizePosition(
-      computeBudget(input.settledCash, input.equity, input.riskPct),
-      input.ask,
+    const qty = Math.min(
+      sizePosition(
+        computeBudget(input.settledCash, input.equity, input.riskPct),
+        input.ask,
+      ),
+      TRAINER_MAX_CONTRACTS,
     );
     return { qty, reason: qty > 0 ? 'OK' : 'NO_BUDGET' };
   }
@@ -56,6 +65,6 @@ export function sizeAtRisk(input: SizeAtRiskInput): SizeAtRiskResult {
 
   const riskQty = Math.floor(input.maxRiskUsd / (distance * 100));
   const cashQty = Math.floor(input.settledCash / (input.ask * 100));
-  const qty = Math.min(riskQty, cashQty);
+  const qty = Math.min(riskQty, cashQty, TRAINER_MAX_CONTRACTS);
   return { qty, reason: qty > 0 ? 'OK' : 'NO_BUDGET' };
 }

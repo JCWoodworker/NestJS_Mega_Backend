@@ -1725,6 +1725,8 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
 
 ## Changelog
 
+- **2026-10-05 (trainer exits on the option, one contract)**: New trainer trades do not set an index stop or index target. They exit on the premium stop, the premium target, the trail, or the time stop. The trainer buys at most one contract. The personal bot's index exits are unchanged. Not a new field.
+
 - **2026-10-05 (desk chain strike count)**: `subscribe-underlying` accepts optional `strikeCount` of 8, 12, 16, 24, or 32. The desk ladder recenters to that many strikes. Omitted, it stays 16. The trainer's own entry chain is unchanged.
 
 - **2026-10-02 (trainer time-stop and ORB cross)**: `PUT /bot-v2/settings` accepts `useTimeStop` (default false) and `timeStopSeconds` (default 180). When on, a trainer trade still under +2% after that many seconds exits `TIME_STOP`. New strategy id `ORB_5M_CROSS` fires only on the bar that leaves the opening range. `ORB_5M` is unchanged. A one-time server job after 4:00 PM ET on 2026-10-02 saves the owner's trainer as SPXW, 15-second bars, scale-out, risk-at-stop at $800, the time-stop, and `ORB_5M_CROSS`, once that trainer is flat. Monday's arm is the first session on those settings. Saturday reviews one book at a time (`v2|SPY|60` or `v2|SPXW|15`).

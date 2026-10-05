@@ -11,9 +11,21 @@ describe('sizeAtRisk', () => {
     riskPct: 10,
   };
 
-  it('uses premium notional when the flag is off', () => {
+  it('uses premium notional when the flag is off, capped at one contract', () => {
     const result = sizeAtRisk(base);
-    expect(result).toEqual({ qty: 10, reason: 'OK' });
+    expect(result).toEqual({ qty: 1, reason: 'OK' });
+  });
+
+  it('does not buy four contracts when the dollar cap would allow it', () => {
+    const result = sizeAtRisk({
+      ...base,
+      useRiskAtStop: true,
+      maxRiskUsd: 800,
+      ask: 7,
+      stopPremium: 5.25,
+      settledCash: 10_000,
+    });
+    expect(result).toEqual({ qty: 1, reason: 'OK' });
   });
 
   it('sizes to the stop and still respects cash', () => {

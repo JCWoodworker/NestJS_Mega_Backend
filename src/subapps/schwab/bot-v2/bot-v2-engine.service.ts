@@ -451,8 +451,10 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
         entryPrice: fill,
         openedAt: Date.now(),
         entryUnderlying: book.spot,
-        stopUnderlying: levels.stopUnderlying,
-        targetUnderlying: levels.targetUnderlying,
+        // 15-second index levels sit inside the spread and the trail arm, so
+        // they were closing the trade before the premium stop, target, and trail.
+        stopUnderlying: null,
+        targetUnderlying: null,
         stopPremium: levels.stopPremium,
         targetPremium: levels.targetPremium,
         initialStopPremium: levels.stopPremium,
