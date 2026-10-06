@@ -1725,6 +1725,8 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
 
 ## Changelog
 
+- **2026-10-06 (supervisor retries a missed arm)**: If the 9:45 ET arm stands back down because the Schwab quote stream is not connected, the supervisor tries again on the next minute instead of treating the day as already armed. Not a new field.
+
 - **2026-10-05 (trainer exits on the option, one contract)**: New trainer trades do not set an index stop or index target. They exit on the premium stop, the premium target, the trail, or the time stop. The trainer buys at most one contract. The personal bot's index exits are unchanged. Not a new field.
 
 - **2026-10-05 (desk chain strike count)**: `subscribe-underlying` accepts optional `strikeCount` of 8, 12, 16, 24, or 32. The desk ladder recenters to that many strikes. Omitted, it stays 16. The trainer's own entry chain is unchanged.

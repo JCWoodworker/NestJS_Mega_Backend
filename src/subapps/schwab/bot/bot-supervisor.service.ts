@@ -358,17 +358,16 @@ export class BotSupervisorService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    await this.v2Engine.arm();
-    this.armedOn = etDate;
-    this.stoodDownOn = null;
-    this.lastRefusal = null;
-
-    await this.botEventService.record({
-      lane: BotLane.BOT_PAPER,
-      type: BotEventType.SUPERVISOR_ARM,
-      reason: `Armed for the ${etDate} session at ${etTime} ET`,
-    });
-    this.logger.log(`Supervisor armed BOT_PAPER for ${etDate} at ${etTime} ET`);
+    const held = await this.armAndHold(
+      ownerUserId,
+      etDate,
+      `Armed for the ${etDate} session at ${etTime} ET`,
+    );
+    if (!held) {
+      this.logger.warn(
+        `Supervisor arm did not hold for ${etDate} at ${etTime} ET; will retry`,
+      );
+    }
   }
 
   private async standDown(etDate: string): Promise<void> {
@@ -470,16 +469,42 @@ export class BotSupervisorService implements OnModuleInit, OnModuleDestroy {
       if (blockers.length) {
         return;
       }
-      await this.v2Engine.arm();
-      this.armedOn = etDate;
-      await this.botEventService.record({
-        lane: BotLane.BOT_PAPER,
-        type: BotEventType.SUPERVISOR_ARM,
-        reason: `Armed manually from the admin panel at ${etNowHhMm()} ET`,
-      });
+      const held = await this.armAndHold(
+        ownerUserId,
+        etDate,
+        `Armed manually from the admin panel at ${etNowHhMm()} ET`,
+      );
+      if (!held) {
+        this.logger.warn('Manual supervisor arm did not hold; the quote was not ready');
+      }
     });
 
     return this.getStatus();
+  }
+
+  /**
+   * Arm, then keep the day marked only if the trainer is actually running.
+   * A quote that is not connected yet stands the trainer back down; treating
+   * that as a finished arm skipped the rest of the session.
+   */
+  private async armAndHold(
+    ownerUserId: string,
+    etDate: string,
+    reason: string,
+  ): Promise<boolean> {
+    await this.v2Engine.arm();
+    const after = await this.v2State.get(ownerUserId);
+    if (after.mode !== 'BOT' || !after.running) return false;
+    this.armedOn = etDate;
+    this.stoodDownOn = null;
+    this.lastRefusal = null;
+    await this.botEventService.record({
+      lane: BotLane.BOT_PAPER,
+      type: BotEventType.SUPERVISOR_ARM,
+      reason,
+    });
+    this.logger.log(`Supervisor armed BOT_PAPER for ${etDate}`);
+    return true;
   }
 
   /** Stands the bot down now — flatten and halt. */
