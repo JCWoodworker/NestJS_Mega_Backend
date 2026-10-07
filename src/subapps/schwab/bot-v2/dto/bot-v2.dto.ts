@@ -186,6 +186,11 @@ export class UpdateBotV2SettingsDto {
   @IsIn(['SPY', 'SPXW'])
   botUnderlying?: 'SPY' | 'SPXW';
 
+  /** Trainer only. Personal bot stays 0DTE SPY. Default 0DTE. */
+  @IsOptional()
+  @IsIn(['0DTE', '1DTE'])
+  expirationMode?: '0DTE' | '1DTE';
+
   @IsOptional()
   @IsBoolean()
   useTimeStop?: boolean;

@@ -45,6 +45,7 @@ import { SchwabStreamerPool } from '@schwab/streaming/schwab-streamer-pool.servi
 
 import { expandCompletedMinutes, pushPriceBar } from './bot-v2-bars.util';
 import { sameTrainerUnderlying, v2ConfigVersion } from './bot-v2-config.util';
+import { resolveTrainerExpiration } from './bot-v2-expiration.util';
 import { disasterStopBid } from './bot-v2-profit-lock.util';
 import {
   directionMatchesTrend,
@@ -93,6 +94,7 @@ interface Book {
   pauseUntil: number;
   /** Last AGAINST_TREND skip written, so a 15-second signal does not log four times a minute. */
   lastTrendSkipAt: number;
+  lastExpirationSkipAt: number;
 }
 
 @Injectable()
@@ -431,9 +433,32 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
+      let expiration: string | undefined;
+      if (settings.expirationMode === '1DTE') {
+        const calendar = await this.marketData.getExpirations({
+          symbol: settings.botUnderlying,
+        });
+        const resolved = resolveTrainerExpiration(
+          '1DTE',
+          etDateKey(),
+          calendar.expirations,
+        );
+        if (!resolved) {
+          if (now - book.lastExpirationSkipAt >= 60_000) {
+            book.lastExpirationSkipAt = now;
+            await this.record(userId, 'SKIP', 'NO_EXPIRATION', {
+              mode: '1DTE',
+              today: etDateKey(),
+            });
+          }
+          return;
+        }
+        expiration = resolved;
+      }
       const chain = await this.marketData.getOptionChain({
         symbol: settings.botUnderlying,
         strikeCount: 16,
+        expiration,
       });
       const picked = selectContractDetailed(chain, direction, {
         deltaMin: Number(settings.deltaMin),
@@ -498,6 +523,7 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
         configVersion: v2ConfigVersion({
           botUnderlying: settings.botUnderlying,
           signalBarSeconds: settings.signalBarSeconds,
+          expirationMode: settings.expirationMode === '1DTE' ? '1DTE' : '0DTE',
           settings: settings as unknown as Record<string, unknown>,
         }),
       };
@@ -513,6 +539,8 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
       session.pinOptionSymbol(position.symbol);
       await this.record(userId, 'ENTRY', combined.reason, {
         symbol: position.symbol,
+        expiration: expiration ?? etDateKey(),
+        expirationMode: settings.expirationMode === '1DTE' ? '1DTE' : '0DTE',
         quantity: position.quantity,
         fill,
         strategies: combined.strategies,
@@ -777,6 +805,7 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
       stopStreak: 0,
       pauseUntil: 0,
       lastTrendSkipAt: 0,
+      lastExpirationSkipAt: 0,
     };
     this.books.set(userId, fresh);
     return fresh;

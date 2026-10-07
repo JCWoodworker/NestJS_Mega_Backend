@@ -8,6 +8,7 @@ import { requireUserId } from '@schwab/shared/schwab-user-context';
 import { BotV2Settings } from './entities/bot-v2-settings.entity';
 import { isSignalBarSeconds } from './bot-v2-bars.util';
 import { isBotV2Underlying } from './bot-v2-config.util';
+import { isTrainerExpirationMode } from './bot-v2-expiration.util';
 
 @Injectable()
 export class BotV2SettingsService {
@@ -99,6 +100,12 @@ export class BotV2SettingsService {
       throw new BadRequestException('FUTURES_QUOTE_UNAVAILABLE');
     }
     if (
+      patch.expirationMode != null &&
+      !isTrainerExpirationMode(String(patch.expirationMode))
+    ) {
+      throw new BadRequestException('EXPIRATION_MODE');
+    }
+    if (
       patch.signalBarSeconds != null &&
       !isSignalBarSeconds(Number(patch.signalBarSeconds))
     ) {
@@ -166,6 +173,7 @@ export class BotV2SettingsService {
       signalBarSeconds: row.signalBarSeconds,
       useScaleOut: row.useScaleOut,
       botUnderlying: row.botUnderlying,
+      expirationMode: row.expirationMode === '1DTE' ? '1DTE' : '0DTE',
       useTimeStop: row.useTimeStop,
       timeStopSeconds: row.timeStopSeconds,
     };

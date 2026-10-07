@@ -10,6 +10,7 @@ import { BotCombineMode, BotStrategy } from '@schwab/bot/enums/strategy.enum';
 
 import { SignalBarSeconds } from '../bot-v2-bars.util';
 import { BotV2Underlying } from '../bot-v2-config.util';
+import { TrainerExpirationMode } from '../bot-v2-expiration.util';
 
 const decimal = {
   to: (value: number | null) => value,
@@ -228,6 +229,10 @@ export class BotV2Settings {
 
   @Column({ type: 'varchar', name: 'bot_underlying', default: 'SPY' })
   botUnderlying: BotV2Underlying;
+
+  /** 0DTE is today. 1DTE is the next listed day, still flattened the same session. */
+  @Column({ type: 'varchar', name: 'expiration_mode', default: '0DTE' })
+  expirationMode: TrainerExpirationMode;
 
   @Column({ type: 'boolean', name: 'use_time_stop', default: false })
   useTimeStop: boolean;

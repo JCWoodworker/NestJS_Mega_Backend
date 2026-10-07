@@ -8,12 +8,13 @@ export function isBotV2Underlying(value: string): value is BotV2Underlying {
   return value === 'SPY' || value === 'SPXW';
 }
 
-/** `v2|SPY|60` or `v2|SPXW|15`, without the settings hash. */
+/** `v2|SPY|60`, `v2|SPXW|15`, or `v2|SPXW|15|1DTE`, without the settings hash. */
 export function trainerBookKey(configVersion: string | null | undefined): string {
   if (!configVersion) return 'v2|SPY|60';
   const parts = configVersion.split('|');
   if (parts.length >= 3 && parts[0] === 'v2') {
-    return `${parts[0]}|${parts[1]}|${parts[2]}`;
+    const base = `${parts[0]}|${parts[1]}|${parts[2]}`;
+    return parts[3] === '1DTE' ? `${base}|1DTE` : base;
   }
   return 'v2|SPY|60';
 }
@@ -38,6 +39,7 @@ export function sameTrainerUnderlying(expected: string, actual: string): boolean
 export function v2ConfigVersion(input: {
   botUnderlying: BotV2Underlying;
   signalBarSeconds: SignalBarSeconds;
+  expirationMode?: '0DTE' | '1DTE' | null;
   settings: Record<string, unknown>;
 }): string {
   const stable: Record<string, unknown> = {};
@@ -46,7 +48,8 @@ export function v2ConfigVersion(input: {
       key === 'updatedAt' ||
       key === 'id' ||
       key === 'userId' ||
-      key === 'rapidProfileAppliedAt'
+      key === 'rapidProfileAppliedAt' ||
+      key === 'expirationMode'
     ) {
       continue;
     }
@@ -56,5 +59,6 @@ export function v2ConfigVersion(input: {
     .update(JSON.stringify(stable))
     .digest('hex')
     .slice(0, 16);
-  return `v2|${input.botUnderlying}|${input.signalBarSeconds}|${hash}`;
+  const mode = input.expirationMode === '1DTE' ? '|1DTE' : '';
+  return `v2|${input.botUnderlying}|${input.signalBarSeconds}${mode}|${hash}`;
 }
