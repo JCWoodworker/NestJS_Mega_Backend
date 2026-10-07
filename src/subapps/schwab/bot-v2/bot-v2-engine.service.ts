@@ -46,6 +46,7 @@ import { SchwabStreamerPool } from '@schwab/streaming/schwab-streamer-pool.servi
 import { expandCompletedMinutes, pushPriceBar } from './bot-v2-bars.util';
 import { sameTrainerUnderlying, v2ConfigVersion } from './bot-v2-config.util';
 import { disasterStopBid } from './bot-v2-profit-lock.util';
+import { directionMatchesTrend, trendBias } from './bot-v2-trend-gate.util';
 import { BotV2SettingsService } from './bot-v2-settings.service';
 import { sizeAtRisk } from './bot-v2-sizing.util';
 import { BotV2StateService } from './bot-v2-state.service';
@@ -86,6 +87,8 @@ interface Book {
   lastStop: { direction: BotDirection; at: number } | null;
   stopStreak: number;
   pauseUntil: number;
+  /** Last AGAINST_TREND skip written, so a 15-second signal does not log four times a minute. */
+  lastTrendSkipAt: number;
 }
 
 @Injectable()
@@ -400,6 +403,18 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
         canBuyPuts: settings.canBuyPuts,
       });
       if (!allowed) return;
+      const bias = trendBias(candles, settings.signalBarSeconds);
+      if (!directionMatchesTrend(direction, bias)) {
+        if (now - book.lastTrendSkipAt >= 60_000) {
+          book.lastTrendSkipAt = now;
+          await this.record(userId, 'SKIP', 'AGAINST_TREND', {
+            direction,
+            bias,
+            strategies: combined.strategies,
+          });
+        }
+        return;
+      }
       if (
         book.lastStop &&
         book.lastStop.direction === direction &&
@@ -753,6 +768,7 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
       lastStop: null,
       stopStreak: 0,
       pauseUntil: 0,
+      lastTrendSkipAt: 0,
     };
     this.books.set(userId, fresh);
     return fresh;

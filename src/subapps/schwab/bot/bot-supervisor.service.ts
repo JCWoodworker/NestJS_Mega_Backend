@@ -333,6 +333,8 @@ export class BotSupervisorService implements OnModuleInit, OnModuleDestroy {
 
     if (!isAtOrPast(etTime, this.config.supervisorArmAt)) return;
     if (this.armedOn === etDate) return;
+    // A manual stand-down holds for the rest of that session.
+    if (this.stoodDownOn === etDate) return;
 
     const v2 = await this.v2State.get(ownerUserId);
 
