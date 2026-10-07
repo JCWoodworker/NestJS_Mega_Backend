@@ -110,6 +110,30 @@ describe('decideTickExit', () => {
     if (late.type === 'EXIT') expect(late.reason).toBe('TIME_STOP');
   });
 
+  it('pushes the deadline out one clock after a new bid high', () => {
+    const green = { ...lock, optionBid: 7.05, peakBid: 7.1, stopPremium: null };
+    // New high at 5:00 → deadline moves from 6:00 to 8:00.
+    expect(decideTickExit({ ...clock, lock: green, peakAt: 300_000, now: 361_000 }).type).toBe('HOLD');
+    expect(decideTickExit({ ...clock, lock: green, peakAt: 300_000, now: 479_000 }).type).toBe('HOLD');
+    const late = decideTickExit({ ...clock, lock: green, peakAt: 300_000, now: 481_000 });
+    expect(late.type).toBe('EXIT');
+    if (late.type === 'EXIT') expect(late.reason).toBe('TIME_STOP');
+  });
+
+  it('never lets a trade under +2% past three clocks', () => {
+    const green = { ...lock, optionBid: 7.05, peakBid: 7.1, stopPremium: null };
+    const late = decideTickExit({ ...clock, lock: green, peakAt: 530_000, now: 541_000 });
+    expect(late.type).toBe('EXIT');
+    if (late.type === 'EXIT') expect(late.reason).toBe('TIME_STOP');
+  });
+
+  it('a new high does not save a trade that fell back under breakeven', () => {
+    const red = { ...lock, optionBid: 6.95, peakBid: 7.1, stopPremium: null };
+    const decision = decideTickExit({ ...clock, lock: red, peakAt: 170_000, now: 181_000 });
+    expect(decision.type).toBe('EXIT');
+    if (decision.type === 'EXIT') expect(decision.reason).toBe('TIME_STOP');
+  });
+
   it('never clocks out a trade that is up +2% or more', () => {
     const going = { ...lock, optionBid: 7.15, peakBid: 7.15, stopPremium: null };
     expect(decideTickExit({ ...clock, lock: going, now: 10 * 60_000 }).type).toBe('HOLD');

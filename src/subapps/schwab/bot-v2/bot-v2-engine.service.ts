@@ -226,6 +226,8 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
+    if (position.peakBid == null || tick.bid > position.peakBid) position.peakAt = now;
+
     const decision = decideTickExit({
       lock: {
         entryPremium: position.entryPrice,
@@ -249,6 +251,7 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
       entryPremium: position.entryPrice,
       useTimeStop: settings.useTimeStop,
       openedAt: position.openedAt,
+      peakAt: position.peakAt ?? null,
       now,
       timeStopSeconds: settings.timeStopSeconds,
     });
@@ -462,6 +465,7 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
         targetPremium: null,
         initialStopPremium: disasterStopBid(fill, sized.qty, commissionForRoundTrip(sized.qty)),
         peakBid: contract.bid,
+        peakAt: Date.now(),
         trailArmed: false,
         stopPremiumSource: 'INITIAL',
         atrUsed: ctx.atr ?? null,

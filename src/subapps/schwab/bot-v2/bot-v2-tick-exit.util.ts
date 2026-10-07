@@ -33,17 +33,24 @@ export interface TickExitInput {
   entryPremium: number;
   /**
    * Scratch a trade that has not got going. After this many seconds a bid
-   * under breakeven (fees covered) sells at once; a bid that is green but
-   * still under +2% gets a second look at twice the clock.
+   * under breakeven (fees covered) sells at once. A bid that is green but
+   * still under +2% gets until twice the clock, and each new bid high after
+   * that pushes the deadline out one more clock, to a hard cap of three.
    */
   useTimeStop?: boolean;
   openedAt?: number;
+  /** When the bid last printed a new high; the fill time when unknown. */
+  peakAt?: number | null;
   now?: number;
   timeStopSeconds?: number;
 }
 
 /** Gain on the premium the clock still counts as "not working". */
 export const TIME_STOP_GOING_MULT = 1.02;
+/** A green trade under +2% gets at least this many clocks. */
+export const TIME_STOP_GREEN_CLOCKS = 2;
+/** No trade under +2% lives past this many clocks, new highs or not. */
+export const TIME_STOP_MAX_CLOCKS = 3;
 
 export function timeStopDue(input: TickExitInput): boolean {
   if (!input.useTimeStop || input.openedAt == null || input.now == null) return false;
@@ -55,7 +62,10 @@ export function timeStopDue(input: TickExitInput): boolean {
     input.entryPremium +
     input.lock.commissionRoundTrip / (100 * Math.max(1, input.lock.quantity));
   if (bid < breakevenBid) return true;
-  return heldMs > limitMs * 2 && bid < input.entryPremium * TIME_STOP_GOING_MULT;
+  if (bid >= input.entryPremium * TIME_STOP_GOING_MULT) return false;
+  if (heldMs > limitMs * TIME_STOP_MAX_CLOCKS) return true;
+  const sinceHighMs = input.now - (input.peakAt ?? input.openedAt);
+  return heldMs > limitMs * TIME_STOP_GREEN_CLOCKS && sinceHighMs > limitMs;
 }
 
 /**

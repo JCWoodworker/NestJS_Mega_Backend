@@ -21,6 +21,8 @@ export interface BotV2OpenPosition {
   targetPremium: number | null;
   initialStopPremium: number | null;
   peakBid: number | null;
+  /** When the bid last printed a new high. Absent on positions opened before the field. */
+  peakAt?: number | null;
   trailArmed: boolean;
   stopPremiumSource: StopPremiumSource;
   atrUsed: number | null;
