@@ -69,20 +69,49 @@ describe('decideTickExit', () => {
     if (decision.type === 'EXIT') expect(decision.reason).toBe('PREMIUM_STOP');
   });
 
-  it('scratches a trade under +2% once the clock runs out', () => {
+  const clock = {
+    exit,
+    useScaleOut: false,
+    scaledOut: false,
+    quantity: 1,
+    entryPremium: 7,
+    useTimeStop: true,
+    openedAt: 0,
+    timeStopSeconds: 180,
+  };
+
+  it('scratches a red trade once the clock runs out', () => {
     const decision = decideTickExit({
-      lock: { ...lock, optionBid: 7.05, peakBid: 7.1, stopPremium: null },
-      exit,
-      useScaleOut: false,
-      scaledOut: false,
-      quantity: 1,
-      entryPremium: 7,
-      useTimeStop: true,
-      openedAt: 0,
+      ...clock,
+      lock: { ...lock, optionBid: 6.9, peakBid: 7.1, stopPremium: null },
       now: 181_000,
-      timeStopSeconds: 180,
     });
     expect(decision.type).toBe('EXIT');
     if (decision.type === 'EXIT') expect(decision.reason).toBe('TIME_STOP');
+  });
+
+  it('scratches a trade that has not covered its fees once the clock runs out', () => {
+    // Breakeven on one lot is 7.013; 7.01 is still a loss after the round trip.
+    const decision = decideTickExit({
+      ...clock,
+      lock: { ...lock, optionBid: 7.01, peakBid: 7.1, stopPremium: null },
+      now: 181_000,
+    });
+    expect(decision.type).toBe('EXIT');
+    if (decision.type === 'EXIT') expect(decision.reason).toBe('TIME_STOP');
+  });
+
+  it('gives a green trade under +2% until twice the clock', () => {
+    const green = { ...lock, optionBid: 7.05, peakBid: 7.1, stopPremium: null };
+    expect(decideTickExit({ ...clock, lock: green, now: 181_000 }).type).toBe('HOLD');
+    expect(decideTickExit({ ...clock, lock: green, now: 359_000 }).type).toBe('HOLD');
+    const late = decideTickExit({ ...clock, lock: green, now: 361_000 });
+    expect(late.type).toBe('EXIT');
+    if (late.type === 'EXIT') expect(late.reason).toBe('TIME_STOP');
+  });
+
+  it('never clocks out a trade that is up +2% or more', () => {
+    const going = { ...lock, optionBid: 7.15, peakBid: 7.15, stopPremium: null };
+    expect(decideTickExit({ ...clock, lock: going, now: 10 * 60_000 }).type).toBe('HOLD');
   });
 });

@@ -31,11 +31,31 @@ export interface TickExitInput {
   scaledOut: boolean;
   quantity: number;
   entryPremium: number;
-  /** Scratch a trade that is still under +2% after this many seconds. */
+  /**
+   * Scratch a trade that has not got going. After this many seconds a bid
+   * under breakeven (fees covered) sells at once; a bid that is green but
+   * still under +2% gets a second look at twice the clock.
+   */
   useTimeStop?: boolean;
   openedAt?: number;
   now?: number;
   timeStopSeconds?: number;
+}
+
+/** Gain on the premium the clock still counts as "not working". */
+export const TIME_STOP_GOING_MULT = 1.02;
+
+export function timeStopDue(input: TickExitInput): boolean {
+  if (!input.useTimeStop || input.openedAt == null || input.now == null) return false;
+  const limitMs = (input.timeStopSeconds ?? 180) * 1000;
+  const heldMs = input.now - input.openedAt;
+  if (heldMs <= limitMs) return false;
+  const bid = input.lock.optionBid;
+  const breakevenBid =
+    input.entryPremium +
+    input.lock.commissionRoundTrip / (100 * Math.max(1, input.lock.quantity));
+  if (bid < breakevenBid) return true;
+  return heldMs > limitMs * 2 && bid < input.entryPremium * TIME_STOP_GOING_MULT;
 }
 
 /**
@@ -45,14 +65,7 @@ export interface TickExitInput {
  */
 export function decideTickExit(input: TickExitInput): TickExitDecision {
   const ratchet = ratchetProfitLock(input.lock);
-  const limitMs = (input.timeStopSeconds ?? 180) * 1000;
-  if (
-    input.useTimeStop &&
-    input.openedAt != null &&
-    input.now != null &&
-    input.now - input.openedAt > limitMs &&
-    input.lock.optionBid < input.entryPremium * 1.02
-  ) {
+  if (timeStopDue(input)) {
     return {
       type: 'EXIT',
       reason: 'TIME_STOP',

@@ -1725,6 +1725,8 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
 
 ## Changelog
 
+- **2026-10-07 (time stop gives a green trade a second look)**: With `useTimeStop` on, after `timeStopSeconds` a trainer trade whose bid is under breakeven (fill plus the round-trip commission) still exits `TIME_STOP` at once. A bid that is above breakeven but under fill × 1.02 is now held and only scratched after twice `timeStopSeconds` if it is still under +2%. A bid at +2% or more is never clocked out. No new fields.
+
 - **2026-10-07 (trainer profit lock, no cooldown)**: Trainer trades exit on a fixed return-on-cost ladder, measured off the bid net of the $1.30 round trip: stop at −12% until the trade has been up +8%, then the stop locks +2% and follows the peak 6 points behind (4 points behind above +20%). No fixed target; `PREMIUM_TARGET` is off for the trainer. Exit reasons stay `PREMIUM_STOP` (ladder floor) and `TRAIL_STOP` (locked stop). The trainer ignores `premiumStopPct`, `premiumTargetPct`, and the `trail*` settings; those still drive the personal bot. `GET /bot-v2/status` `levels.stopPremium` is the live ladder stop and `position.peakBid` is the peak it follows. The owner's trainer `cooldownMins` is 0. After a losing `PREMIUM_STOP` the same direction waits 60 seconds; three losing stops in a row pause entries for 10 minutes and log a `SKIP` event with reason `STOP_STREAK_PAUSE`. Both brakes are in memory and reset on a dyno restart. No new fields.
 
 - **2026-10-06 (supervisor retries a missed arm)**: If the 9:45 ET arm stands back down because the Schwab quote stream is not connected, the supervisor tries again on the next minute instead of treating the day as already armed. Not a new field.
