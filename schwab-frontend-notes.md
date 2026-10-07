@@ -1725,6 +1725,8 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
 
 ## Changelog
 
+- **2026-10-07 (trainer profit lock, no cooldown)**: Trainer trades exit on a fixed return-on-cost ladder, measured off the bid net of the $1.30 round trip: stop at −12% until the trade has been up +8%, then the stop locks +2% and follows the peak 6 points behind (4 points behind above +20%). No fixed target; `PREMIUM_TARGET` is off for the trainer. Exit reasons stay `PREMIUM_STOP` (ladder floor) and `TRAIL_STOP` (locked stop). The trainer ignores `premiumStopPct`, `premiumTargetPct`, and the `trail*` settings; those still drive the personal bot. `GET /bot-v2/status` `levels.stopPremium` is the live ladder stop and `position.peakBid` is the peak it follows. The owner's trainer `cooldownMins` is 0. After a losing `PREMIUM_STOP` the same direction waits 60 seconds; three losing stops in a row pause entries for 10 minutes and log a `SKIP` event with reason `STOP_STREAK_PAUSE`. Both brakes are in memory and reset on a dyno restart. No new fields.
+
 - **2026-10-06 (supervisor retries a missed arm)**: If the 9:45 ET arm stands back down because the Schwab quote stream is not connected, the supervisor tries again on the next minute instead of treating the day as already armed. Not a new field.
 
 - **2026-10-05 (trainer exits on the option, one contract)**: New trainer trades do not set an index stop or index target. They exit on the premium stop, the premium target, the trail, or the time stop. The trainer buys at most one contract. The personal bot's index exits are unchanged. Not a new field.

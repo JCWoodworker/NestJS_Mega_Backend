@@ -10,8 +10,6 @@ import { Repository } from 'typeorm';
 import { commissionForLeg, commissionForRoundTrip } from '@schwab/bot/bot-fees.const';
 import {
   breakevenBidFor,
-  computeExitLevels,
-  minLockBidFor,
   shouldForceFlattenForSocketLoss,
 } from '@schwab/bot/bot-exit.util';
 import { BotRecordingService } from '@schwab/bot/bot-recording.service';
@@ -47,6 +45,7 @@ import { SchwabStreamerPool } from '@schwab/streaming/schwab-streamer-pool.servi
 
 import { expandCompletedMinutes, pushPriceBar } from './bot-v2-bars.util';
 import { sameTrainerUnderlying, v2ConfigVersion } from './bot-v2-config.util';
+import { disasterStopBid } from './bot-v2-profit-lock.util';
 import { BotV2SettingsService } from './bot-v2-settings.service';
 import { sizeAtRisk } from './bot-v2-sizing.util';
 import { BotV2StateService } from './bot-v2-state.service';
@@ -60,6 +59,14 @@ const HEARTBEAT_MS = 7_000;
 const QUOTE_FRESHNESS_MS = 2_000;
 const SOCKET_LOSS_GRACE_MS = 15_000;
 const SESSION_CAP = 500;
+/**
+ * Re-entry brakes for the rapid scalp. A win or a scratch may be followed at
+ * once; a stop-loss blocks the same direction briefly so the same twitch is
+ * not bought back, and a run of stops pauses the book.
+ */
+export const SAME_DIRECTION_BLOCK_MS = 60_000;
+export const STOP_STREAK_LIMIT = 3;
+export const STOP_STREAK_PAUSE_MS = 10 * 60_000;
 
 interface Book {
   minute: BotCandle[];
@@ -75,6 +82,10 @@ interface Book {
   lastTapeAt: number;
   lastTapeBid: number | null;
   lastTapeAsk: number | null;
+  /** Direction and time of the last stop-loss close. */
+  lastStop: { direction: BotDirection; at: number } | null;
+  stopStreak: number;
+  pauseUntil: number;
 }
 
 @Injectable()
@@ -216,27 +227,19 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
     }
 
     const decision = decideTickExit({
-      ratchet: {
+      lock: {
         entryPremium: position.entryPrice,
         optionBid: tick.bid,
         peakBid: position.peakBid ?? null,
         stopPremium: position.stopPremium ?? null,
-        trailArmed: settings.useTrailStop ? position.trailArmed : false,
-        trailArmPct: settings.useTrailStop ? Number(settings.trailArmPct) : 10_000,
-        trailPct: Number(settings.trailPct),
-        breakevenBid: breakevenBidFor(
-          position.entryPrice,
-          commissionForRoundTrip(1),
-        ),
-        minLockBid: minLockBidFor(
-          position.entryPrice,
-          Number(settings.trailMinLockPct),
-        ),
+        quantity: position.quantity,
+        commissionRoundTrip: commissionForRoundTrip(position.quantity),
       },
       exit: {
         direction: position.direction,
         spot: book.spot ?? 0,
-        targetPremium: position.targetPremium,
+        // The ladder has no fixed cap; a runner is taken by the lock behind it.
+        targetPremium: null,
         stopUnderlying: book.spot == null ? null : position.stopUnderlying,
         targetUnderlying: book.spot == null ? null : position.targetUnderlying,
       },
@@ -353,12 +356,14 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
       if (!isWithinWindow(nowHhMm, settings.tradeWindowStart, settings.tradeWindowEnd)) {
         return;
       }
+      const now = Date.now();
       if (
         row.lastTradeAt &&
-        Date.now() - row.lastTradeAt.getTime() < settings.cooldownMins * 60_000
+        now - row.lastTradeAt.getTime() < settings.cooldownMins * 60_000
       ) {
         return;
       }
+      if (now < book.pauseUntil) return;
       const session = this.pool.peek(userId);
       const lastFrameAt = session?.getLastFrameAt() ?? null;
       if (
@@ -392,6 +397,13 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
         canBuyPuts: settings.canBuyPuts,
       });
       if (!allowed) return;
+      if (
+        book.lastStop &&
+        book.lastStop.direction === direction &&
+        now - book.lastStop.at < SAME_DIRECTION_BLOCK_MS
+      ) {
+        return;
+      }
 
       const chain = await this.marketData.getOptionChain({
         symbol: settings.botUnderlying,
@@ -410,23 +422,14 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      const levels = computeExitLevels({
-        entryPremium: contract.ask,
-        spot: book.spot,
-        atr: ctx.atr,
-        direction,
-        usePremiumStop: settings.usePremiumStop,
-        premiumStopPct: Number(settings.premiumStopPct),
-        usePremiumTarget: settings.usePremiumTarget,
-        premiumTargetPct: Number(settings.premiumTargetPct),
-        stopAtrMult: Number(settings.stopAtrMult),
-        targetAtrMult: Number(settings.targetAtrMult),
-      });
+      // Trainer exits are the fixed return-on-cost ladder, not the saved
+      // premium stop / target / trail percents. Those stay for the personal bot.
+      const initialStop = disasterStopBid(contract.ask, 1, commissionForRoundTrip(1));
       const sized = sizeAtRisk({
         useRiskAtStop: settings.useRiskAtStop,
         maxRiskUsd: Number(settings.maxRiskUsd),
         ask: contract.ask,
-        stopPremium: levels.stopPremium,
+        stopPremium: initialStop,
         settledCash: Number(row.paperSettledCash),
         equity: Number(row.paperEquity),
         riskPct: Number(settings.riskPct),
@@ -455,13 +458,13 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
         // they were closing the trade before the premium stop, target, and trail.
         stopUnderlying: null,
         targetUnderlying: null,
-        stopPremium: levels.stopPremium,
-        targetPremium: levels.targetPremium,
-        initialStopPremium: levels.stopPremium,
+        stopPremium: disasterStopBid(fill, sized.qty, commissionForRoundTrip(sized.qty)),
+        targetPremium: null,
+        initialStopPremium: disasterStopBid(fill, sized.qty, commissionForRoundTrip(sized.qty)),
         peakBid: contract.bid,
         trailArmed: false,
         stopPremiumSource: 'INITIAL',
-        atrUsed: levels.atrUsed,
+        atrUsed: ctx.atr ?? null,
         scaledOut: false,
         signalBarSeconds: settings.signalBarSeconds,
         strategies: combined.strategies,
@@ -637,6 +640,7 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
       if (this.pool.peek(userId)) {
         this.pool.peek(userId)?.unpinOptionSymbol(position.symbol);
       }
+      this.noteClose(book, position.direction, reason, pnl.netPnl);
     }
     row.paperEquity = row.paperSettledCash;
     row.lastTradeAt = new Date();
@@ -648,6 +652,35 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
       latencyMs,
       configVersion: position.configVersion,
     });
+    if (book.pauseUntil > Date.now() && book.stopStreak === STOP_STREAK_LIMIT) {
+      await this.record(userId, 'SKIP', 'STOP_STREAK_PAUSE', {
+        streak: book.stopStreak,
+        pauseUntil: book.pauseUntil,
+      });
+    }
+  }
+
+  /**
+   * A stop-loss close blocks the same direction for a minute and counts
+   * toward the streak pause. Any other full close clears the streak.
+   */
+  private noteClose(
+    book: Book,
+    direction: BotDirection,
+    reason: string,
+    netPnl: number,
+  ): void {
+    const now = Date.now();
+    if (reason === 'PREMIUM_STOP' && netPnl < 0) {
+      book.lastStop = { direction, at: now };
+      book.stopStreak += 1;
+      if (book.stopStreak >= STOP_STREAK_LIMIT) {
+        book.pauseUntil = now + STOP_STREAK_PAUSE_MS;
+        book.stopStreak = STOP_STREAK_LIMIT;
+      }
+      return;
+    }
+    book.stopStreak = 0;
   }
 
   private async persistPosition(userId: string, book: Book): Promise<void> {
@@ -713,6 +746,9 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
       lastTapeAt: 0,
       lastTapeBid: null,
       lastTapeAsk: null,
+      lastStop: null,
+      stopStreak: 0,
+      pauseUntil: 0,
     };
     this.books.set(userId, fresh);
     return fresh;

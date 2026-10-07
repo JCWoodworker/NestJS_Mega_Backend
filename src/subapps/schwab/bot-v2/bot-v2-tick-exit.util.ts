@@ -1,12 +1,11 @@
 import {
-  RatchetStopInput,
   RatchetStopResult,
   SoftExitCheckInput,
   SoftExitReason,
   decideSoftExit,
-  ratchetPremiumStop,
 } from '@schwab/bot/bot-exit.util';
 
+import { ProfitLockInput, ratchetProfitLock } from './bot-v2-profit-lock.util';
 import { scaleOutQuantity, shouldScaleOut } from './bot-v2-scale.util';
 
 export type V2ExitReason = SoftExitReason | 'SCALE_OUT' | 'TIME_STOP';
@@ -26,7 +25,7 @@ export type TickExitDecision =
     };
 
 export interface TickExitInput {
-  ratchet: RatchetStopInput;
+  lock: ProfitLockInput;
   exit: Omit<SoftExitCheckInput, 'optionBid' | 'stopPremium' | 'stopPremiumSource'>;
   useScaleOut: boolean;
   scaledOut: boolean;
@@ -40,19 +39,19 @@ export interface TickExitInput {
 }
 
 /**
- * One option tick: raise the trail, then leave, then take a partial.
+ * One option tick: step the profit lock, then leave, then take a partial.
  * A stop that is already through beats the scale so a winner is not
  * half-sold into a level that should flatten the whole position.
  */
 export function decideTickExit(input: TickExitInput): TickExitDecision {
-  const ratchet = ratchetPremiumStop(input.ratchet);
+  const ratchet = ratchetProfitLock(input.lock);
   const limitMs = (input.timeStopSeconds ?? 180) * 1000;
   if (
     input.useTimeStop &&
     input.openedAt != null &&
     input.now != null &&
     input.now - input.openedAt > limitMs &&
-    input.ratchet.optionBid < input.entryPremium * 1.02
+    input.lock.optionBid < input.entryPremium * 1.02
   ) {
     return {
       type: 'EXIT',
@@ -63,7 +62,7 @@ export function decideTickExit(input: TickExitInput): TickExitDecision {
   }
   const fullExit = decideSoftExit({
     ...input.exit,
-    optionBid: input.ratchet.optionBid,
+    optionBid: input.lock.optionBid,
     stopPremium: ratchet.stopPremium,
     stopPremiumSource: ratchet.source,
   });
@@ -81,7 +80,7 @@ export function decideTickExit(input: TickExitInput): TickExitDecision {
       scaledOut: input.scaledOut,
       quantity: input.quantity,
       entryPremium: input.entryPremium,
-      bid: input.ratchet.optionBid,
+      bid: input.lock.optionBid,
     })
   ) {
     return {
