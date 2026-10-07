@@ -46,7 +46,11 @@ import { SchwabStreamerPool } from '@schwab/streaming/schwab-streamer-pool.servi
 import { expandCompletedMinutes, pushPriceBar } from './bot-v2-bars.util';
 import { sameTrainerUnderlying, v2ConfigVersion } from './bot-v2-config.util';
 import { disasterStopBid } from './bot-v2-profit-lock.util';
-import { directionMatchesTrend, trendBias } from './bot-v2-trend-gate.util';
+import {
+  directionMatchesTrend,
+  sessionVwap,
+  trendBias,
+} from './bot-v2-trend-gate.util';
 import { BotV2SettingsService } from './bot-v2-settings.service';
 import { sizeAtRisk } from './bot-v2-sizing.util';
 import { BotV2StateService } from './bot-v2-state.service';
@@ -403,13 +407,17 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
         canBuyPuts: settings.canBuyPuts,
       });
       if (!allowed) return;
-      const bias = trendBias(candles, settings.signalBarSeconds);
+      const sessionStart = etSessionStartMs();
+      const vwap = sessionVwap(book.minute, sessionStart);
+      const bias = trendBias(book.minute, sessionStart, book.spot);
       if (!directionMatchesTrend(direction, bias)) {
         if (now - book.lastTrendSkipAt >= 60_000) {
           book.lastTrendSkipAt = now;
           await this.record(userId, 'SKIP', 'AGAINST_TREND', {
             direction,
             bias,
+            vwap,
+            spot: book.spot,
             strategies: combined.strategies,
           });
         }
