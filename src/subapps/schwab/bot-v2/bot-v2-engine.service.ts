@@ -388,7 +388,9 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
       }
       if (candles.length < 6 || book.spot == null) return;
 
-      const ctx = buildStrategyContext(candles, etSessionStartMs(), settings.atrPeriod);
+      const sessionStart = etSessionStartMs();
+      const ctx = buildStrategyContext(candles, sessionStart, settings.atrPeriod);
+      ctx.sessionVwap = sessionVwap(book.minute, sessionStart);
       const enabled = settings.strategiesEnabled;
       const results = evaluateEnabled(enabled, ctx);
       const agreement =
@@ -409,8 +411,7 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
         canBuyPuts: settings.canBuyPuts,
       });
       if (!allowed) return;
-      const sessionStart = etSessionStartMs();
-      const vwap = sessionVwap(book.minute, sessionStart);
+      const vwap = ctx.sessionVwap;
       const bias = trendBias(book.minute, sessionStart, book.spot);
       if (!directionMatchesTrend(direction, bias)) {
         if (now - book.lastTrendSkipAt >= 60_000) {

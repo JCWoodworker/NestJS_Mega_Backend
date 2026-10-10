@@ -1,11 +1,12 @@
 import {
   BotCandle,
+  SESSION_VWAP_MIN_MINUTES,
   SignalDirection,
-  computeVwap,
+  sessionVwapFromCandles,
 } from '@schwab/bot/bot-strategy.util';
 
 /** Fewer session minutes than this and the gate stays open. */
-export const TREND_MIN_MINUTES = 10;
+export const TREND_MIN_MINUTES = SESSION_VWAP_MIN_MINUTES;
 
 export type TrendBias = 'UP' | 'DOWN' | null;
 
@@ -17,15 +18,7 @@ export function sessionVwap(
   candles: BotCandle[],
   sessionStartMs: number,
 ): number | null {
-  const fromSession = candles.filter((c) => c.chartTime >= sessionStartMs);
-  if (fromSession.length < TREND_MIN_MINUTES) return null;
-  const weighted = computeVwap(fromSession, sessionStartMs);
-  if (weighted != null) return weighted;
-  let sum = 0;
-  for (const c of fromSession) {
-    sum += (c.high + c.low + c.close) / 3;
-  }
-  return sum / fromSession.length;
+  return sessionVwapFromCandles(candles, sessionStartMs);
 }
 
 /**

@@ -258,12 +258,40 @@ export function etSessionStartMs(now: Date = new Date()): number {
 
 /** Current HH:MM in America/New_York. */
 export function etNowHhMm(now: Date = new Date()): string {
+  return etHhMmFromMs(now.getTime());
+}
+
+/** ET wall clock HH:MM for an epoch ms timestamp. */
+export function etHhMmFromMs(at: number): string {
   return new Intl.DateTimeFormat('en-GB', {
     timeZone: 'America/New_York',
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
-  }).format(now);
+  }).format(new Date(at));
+}
+
+/** Fewer session minutes than this and session VWAP is not ready. */
+export const SESSION_VWAP_MIN_MINUTES = 10;
+
+/**
+ * Session VWAP from 9:30 ET on. Index bars often have no volume, so those
+ * fall back to the mean of typical prices (H+L+C)/3 — same rule as the trainer
+ * trend gate.
+ */
+export function sessionVwapFromCandles(
+  candles: BotCandle[],
+  sessionStartMs: number,
+): number | null {
+  const fromSession = candles.filter((c) => c.chartTime >= sessionStartMs);
+  if (fromSession.length < SESSION_VWAP_MIN_MINUTES) return null;
+  const weighted = computeVwap(fromSession, sessionStartMs);
+  if (weighted != null) return weighted;
+  let sum = 0;
+  for (const c of fromSession) {
+    sum += (c.high + c.low + c.close) / 3;
+  }
+  return sum / fromSession.length;
 }
 
 /**
