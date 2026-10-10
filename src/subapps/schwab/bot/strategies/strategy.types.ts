@@ -11,6 +11,11 @@ export interface StrategyContext {
   candles: BotCandle[];
   sessionStartMs: number;
   vwap: number | null;
+  /**
+   * Session VWAP from 1-minute bars when the engine supplies it. Fade rules
+   * should anchor here; signal-bar VWAP on 15-second prints is too twitchy.
+   */
+  sessionVwap?: number | null;
   atr: number | null;
   orb: OrbRange | null;
   emaFast: number | null;
