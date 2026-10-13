@@ -246,6 +246,42 @@ export class UpdateBotSettingsDto {
   targetAtrMult?: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(80)
+  lossCutPct?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(80)
+  protectArmPct?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(80)
+  protectFloorPct?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(40)
+  givebackPct?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(100)
+  tightFromPct?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(40)
+  tightGivebackPct?: number;
+
+  @IsOptional()
   @IsInt()
   @Min(0)
   paperSlippageCents?: number;

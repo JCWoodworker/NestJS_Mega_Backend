@@ -65,6 +65,12 @@ export interface BotSettingsView {
   stopAtrMult: number;
   targetAtrMult: number;
   paperSlippageCents: number;
+  lossCutPct: number;
+  protectArmPct: number;
+  protectFloorPct: number;
+  givebackPct: number;
+  tightFromPct: number;
+  tightGivebackPct: number;
 }
 
 export interface BotSettingsSnapshotView {
@@ -410,6 +416,12 @@ export class BotSettingsService {
       stopAtrMult: Number(row.stopAtrMult),
       targetAtrMult: Number(row.targetAtrMult),
       paperSlippageCents: row.paperSlippageCents,
+      lossCutPct: Number(row.lossCutPct ?? 12),
+      protectArmPct: Number(row.protectArmPct ?? 8),
+      protectFloorPct: Number(row.protectFloorPct ?? 2),
+      givebackPct: Number(row.givebackPct ?? 6),
+      tightFromPct: Number(row.tightFromPct ?? 20),
+      tightGivebackPct: Number(row.tightGivebackPct ?? 4),
     };
   }
 }

@@ -240,6 +240,66 @@ export class BotV2Settings {
   @Column({ type: 'integer', name: 'time_stop_seconds', default: 180 })
   timeStopSeconds: number;
 
+  @Column({
+    type: 'decimal',
+    precision: 8,
+    scale: 4,
+    name: 'loss_cut_pct',
+    default: 12,
+    transformer: decimal,
+  })
+  lossCutPct: number;
+
+  @Column({
+    type: 'decimal',
+    precision: 8,
+    scale: 4,
+    name: 'protect_arm_pct',
+    default: 8,
+    transformer: decimal,
+  })
+  protectArmPct: number;
+
+  @Column({
+    type: 'decimal',
+    precision: 8,
+    scale: 4,
+    name: 'protect_floor_pct',
+    default: 2,
+    transformer: decimal,
+  })
+  protectFloorPct: number;
+
+  @Column({
+    type: 'decimal',
+    precision: 8,
+    scale: 4,
+    name: 'giveback_pct',
+    default: 6,
+    transformer: decimal,
+  })
+  givebackPct: number;
+
+  @Column({
+    type: 'decimal',
+    precision: 8,
+    scale: 4,
+    name: 'tight_from_pct',
+    default: 20,
+    transformer: decimal,
+  })
+  tightFromPct: number;
+
+  @Column({
+    type: 'decimal',
+    precision: 8,
+    scale: 4,
+    name: 'tight_giveback_pct',
+    default: 4,
+    transformer: decimal,
+  })
+  tightGivebackPct: number;
+
   /** Set once the 4 PM SPXW profile job has written this row. */
   @Column({ type: 'timestamptz', name: 'rapid_profile_applied_at', nullable: true })
   rapidProfileAppliedAt: Date | null;

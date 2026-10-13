@@ -18,6 +18,25 @@ export const TRAINER_GIVEBACK_PCT = 6;
 export const TRAINER_TIGHT_FROM_PCT = 20;
 export const TRAINER_TIGHT_GIVEBACK_PCT = 4;
 
+/** The sell rule both bots share. Defaults match the trainer ladder. */
+export interface ProfitLockLadder {
+  stopPct: number;
+  armPct: number;
+  floorPct: number;
+  givebackPct: number;
+  tightFromPct: number;
+  tightGivebackPct: number;
+}
+
+export const DEFAULT_PROFIT_LOCK: ProfitLockLadder = {
+  stopPct: TRAINER_STOP_PCT,
+  armPct: TRAINER_ARM_PCT,
+  floorPct: TRAINER_FLOOR_PCT,
+  givebackPct: TRAINER_GIVEBACK_PCT,
+  tightFromPct: TRAINER_TIGHT_FROM_PCT,
+  tightGivebackPct: TRAINER_TIGHT_GIVEBACK_PCT,
+};
+
 export interface ProfitLockInput {
   entryPremium: number;
   optionBid: number;
@@ -26,6 +45,7 @@ export interface ProfitLockInput {
   quantity: number;
   /** Dollars for the whole position, both legs. */
   commissionRoundTrip: number;
+  ladder?: ProfitLockLadder;
 }
 
 /** Net unrealized dollars as a percent of what the position cost. */
@@ -54,22 +74,26 @@ export function bidForReturnPct(
 }
 
 /** Return percent the stop should guarantee for a given peak return, or null below the arm. */
-export function lockedReturnFor(peakReturnPct: number): number | null {
-  if (peakReturnPct < TRAINER_ARM_PCT) return null;
+export function lockedReturnFor(
+  peakReturnPct: number,
+  ladder: ProfitLockLadder = DEFAULT_PROFIT_LOCK,
+): number | null {
+  if (peakReturnPct < ladder.armPct) return null;
   const giveback =
-    peakReturnPct >= TRAINER_TIGHT_FROM_PCT
-      ? TRAINER_TIGHT_GIVEBACK_PCT
-      : TRAINER_GIVEBACK_PCT;
-  return Math.max(TRAINER_FLOOR_PCT, peakReturnPct - giveback);
+    peakReturnPct >= ladder.tightFromPct
+      ? ladder.tightGivebackPct
+      : ladder.givebackPct;
+  return Math.max(ladder.floorPct, peakReturnPct - giveback);
 }
 
 export function disasterStopBid(
   entryPremium: number,
   quantity: number,
   commissionRoundTrip: number,
+  ladder: ProfitLockLadder = DEFAULT_PROFIT_LOCK,
 ): number {
   return round2(
-    bidForReturnPct(-TRAINER_STOP_PCT, entryPremium, quantity, commissionRoundTrip),
+    bidForReturnPct(-ladder.stopPct, entryPremium, quantity, commissionRoundTrip),
   );
 }
 
@@ -80,11 +104,13 @@ export function disasterStopBid(
  * high cannot flatten itself.
  */
 export function ratchetProfitLock(input: ProfitLockInput): RatchetStopResult {
+  const ladder = input.ladder ?? DEFAULT_PROFIT_LOCK;
   const peakBid = Math.max(input.peakBid ?? input.entryPremium, input.optionBid);
   const floor = disasterStopBid(
     input.entryPremium,
     input.quantity,
     input.commissionRoundTrip,
+    ladder,
   );
   const peakReturn = returnOnCostPct(
     peakBid,
@@ -92,7 +118,7 @@ export function ratchetProfitLock(input: ProfitLockInput): RatchetStopResult {
     input.quantity,
     input.commissionRoundTrip,
   );
-  const locked = lockedReturnFor(peakReturn);
+  const locked = lockedReturnFor(peakReturn, ladder);
 
   if (locked == null) {
     const stopPremium =
@@ -129,4 +155,25 @@ export function ratchetProfitLock(input: ProfitLockInput): RatchetStopResult {
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+/** Read the shared sell rule off either bot's settings row. */
+export function profitLockFromSettings(row: {
+  lossCutPct?: number | null;
+  protectArmPct?: number | null;
+  protectFloorPct?: number | null;
+  givebackPct?: number | null;
+  tightFromPct?: number | null;
+  tightGivebackPct?: number | null;
+}): ProfitLockLadder {
+  const n = (value: number | null | undefined, fallback: number) =>
+    value == null || !Number.isFinite(Number(value)) ? fallback : Number(value);
+  return {
+    stopPct: n(row.lossCutPct, DEFAULT_PROFIT_LOCK.stopPct),
+    armPct: n(row.protectArmPct, DEFAULT_PROFIT_LOCK.armPct),
+    floorPct: n(row.protectFloorPct, DEFAULT_PROFIT_LOCK.floorPct),
+    givebackPct: n(row.givebackPct, DEFAULT_PROFIT_LOCK.givebackPct),
+    tightFromPct: n(row.tightFromPct, DEFAULT_PROFIT_LOCK.tightFromPct),
+    tightGivebackPct: n(row.tightGivebackPct, DEFAULT_PROFIT_LOCK.tightGivebackPct),
+  };
 }

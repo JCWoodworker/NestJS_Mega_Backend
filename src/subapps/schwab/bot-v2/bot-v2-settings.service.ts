@@ -75,6 +75,12 @@ export class BotV2SettingsService {
     row.stopAtrMult = num(champion.stopAtrMult, 1.5);
     row.targetAtrMult = num(champion.targetAtrMult, 1.8);
     row.paperSlippageCents = champion.paperSlippageCents;
+    row.lossCutPct = num(champion.lossCutPct, 12);
+    row.protectArmPct = num(champion.protectArmPct, 8);
+    row.protectFloorPct = num(champion.protectFloorPct, 2);
+    row.givebackPct = num(champion.givebackPct, 6);
+    row.tightFromPct = num(champion.tightFromPct, 20);
+    row.tightGivebackPct = num(champion.tightGivebackPct, 4);
     const arm = num(champion.trailArmPct, 8);
     const lock = num(champion.trailMinLockPct, 5);
     const giveback = num(champion.trailPct, 15);
@@ -117,6 +123,11 @@ export class BotV2SettingsService {
     const arm = Number(patch.trailArmPct ?? row.trailArmPct);
     const lock = Number(patch.trailMinLockPct ?? row.trailMinLockPct);
     if (lock >= arm) {
+      throw new BadRequestException('LOCK_MUST_BE_BELOW_ARM');
+    }
+    const protectArm = Number(patch.protectArmPct ?? row.protectArmPct);
+    const protectFloor = Number(patch.protectFloorPct ?? row.protectFloorPct);
+    if (protectFloor >= protectArm) {
       throw new BadRequestException('LOCK_MUST_BE_BELOW_ARM');
     }
     Object.assign(row, patch);
@@ -176,6 +187,12 @@ export class BotV2SettingsService {
       expirationMode: row.expirationMode === '1DTE' ? '1DTE' : '0DTE',
       useTimeStop: row.useTimeStop,
       timeStopSeconds: row.timeStopSeconds,
+      lossCutPct: num(row.lossCutPct),
+      protectArmPct: num(row.protectArmPct),
+      protectFloorPct: num(row.protectFloorPct),
+      givebackPct: num(row.givebackPct),
+      tightFromPct: num(row.tightFromPct),
+      tightGivebackPct: num(row.tightGivebackPct),
     };
   }
 }

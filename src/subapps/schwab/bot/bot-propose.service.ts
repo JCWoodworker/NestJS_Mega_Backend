@@ -24,6 +24,7 @@ import { BotV2Event } from '../bot-v2/entities/bot-v2-event.entity';
 import { BotV2Settings } from '../bot-v2/entities/bot-v2-settings.entity';
 import { BotV2Trade } from '../bot-v2/entities/bot-v2-trade.entity';
 import { BotMarketDay } from './entities/bot-market-day.entity';
+import { BotSettings } from './entities/bot-settings.entity';
 import { BotProposal } from './entities/bot-proposal.entity';
 import { BotTradeTape } from './entities/bot-trade-tape.entity';
 import { computeTradeExcursion, tradeKeyFor } from './bot-trade-metrics.util';
@@ -45,6 +46,8 @@ export class BotProposeService {
     private readonly tapeRepository: Repository<BotTradeTape>,
     @InjectRepository(BotV2Settings)
     private readonly settingsRepository: Repository<BotV2Settings>,
+    @InjectRepository(BotSettings)
+    private readonly championSettings: Repository<BotSettings>,
     @InjectRepository(BotProposal)
     private readonly proposalRepository: Repository<BotProposal>,
     @InjectRepository(BotV2Event)
@@ -226,14 +229,26 @@ export class BotProposeService {
       if (proposal.appliedAt) continue;
       const patch = (proposal.packet as { patch?: Record<string, number> }).patch;
       if (!patch || !Object.keys(patch).length) continue;
+      const keys = [
+        'lossCutPct',
+        'protectArmPct',
+        'protectFloorPct',
+        'givebackPct',
+        'tightFromPct',
+        'tightGivebackPct',
+      ] as const;
       const row = await this.settingsRepository.findOneBy({ userId: ownerUserId });
+      const personal = await this.championSettings.findOneBy({ userId: ownerUserId });
       if (!row) continue;
-      for (const key of ['premiumTargetPct', 'premiumStopPct', 'trailPct', 'trailArmPct'] as const) {
+      for (const key of keys) {
         const value = patch[key];
-        if (typeof value === 'number' && Number.isFinite(value)) row[key] = value;
+        if (typeof value !== 'number' || !Number.isFinite(value)) continue;
+        row[key] = value;
+        if (personal) personal[key] = value;
       }
-      if (Number(row.trailMinLockPct) >= Number(row.trailArmPct)) continue;
+      if (Number(row.protectFloorPct) >= Number(row.protectArmPct)) continue;
       await this.settingsRepository.save(row);
+      if (personal) await this.championSettings.save(personal);
       proposal.appliedAt = new Date();
       proposal.status = 'applied';
       await this.proposalRepository.save(proposal);
@@ -277,10 +292,12 @@ function fridayOnOrBefore(now: Date): string {
 
 function toProposeSettings(row: BotV2Settings): ProposeSettings {
   return {
-    premiumTargetPct: Number(row.premiumTargetPct),
-    premiumStopPct: Number(row.premiumStopPct),
-    trailPct: Number(row.trailPct),
-    trailArmPct: Number(row.trailArmPct),
+    lossCutPct: Number(row.lossCutPct ?? 12),
+    protectArmPct: Number(row.protectArmPct ?? 8),
+    protectFloorPct: Number(row.protectFloorPct ?? 2),
+    givebackPct: Number(row.givebackPct ?? 6),
+    tightFromPct: Number(row.tightFromPct ?? 20),
+    tightGivebackPct: Number(row.tightGivebackPct ?? 4),
   };
 }
 

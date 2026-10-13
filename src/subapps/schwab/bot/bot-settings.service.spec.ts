@@ -53,6 +53,12 @@ function buildService() {
     stopAtrMult: 1.5,
     targetAtrMult: 2.5,
     paperSlippageCents: 1,
+    lossCutPct: 12,
+    protectArmPct: 8,
+    protectFloorPct: 2,
+    givebackPct: 6,
+    tightFromPct: 20,
+    tightGivebackPct: 4,
     updatedAt: new Date(),
   };
 

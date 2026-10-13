@@ -59,15 +59,17 @@ describe('bot propose gates', () => {
   it('caps a settings step at 20 percent and two keys', () => {
     const patch = capSettingsPatch(
       {
-        premiumTargetPct: 22,
-        premiumStopPct: 25,
-        trailPct: 15,
-        trailArmPct: 20,
+        lossCutPct: 12,
+        protectArmPct: 8,
+        protectFloorPct: 2,
+        givebackPct: 6,
+        tightFromPct: 20,
+        tightGivebackPct: 4,
       },
-      { premiumTargetPct: 80, premiumStopPct: 10, trailPct: 40 },
+      { lossCutPct: 6, protectArmPct: 16, givebackPct: 12 },
     );
     expect(Object.keys(patch).length).toBeLessThanOrEqual(2);
-    expect(patch.premiumTargetPct).toBeCloseTo(26.4, 1);
+    expect(patch.lossCutPct).toBeCloseTo(9.6, 1);
   });
 
   it('counts the most common winning signature', () => {
@@ -90,10 +92,12 @@ describe('bot propose gates', () => {
       tapeByTradeKey: new Map(),
       policies: [policy],
       current: {
-        premiumTargetPct: 22,
-        premiumStopPct: 25,
-        trailPct: 15,
-        trailArmPct: 20,
+        lossCutPct: 12,
+        protectArmPct: 8,
+        protectFloorPct: 2,
+        givebackPct: 6,
+        tightFromPct: 20,
+        tightGivebackPct: 4,
       },
       weekEndingEt: '2026-09-23',
     });

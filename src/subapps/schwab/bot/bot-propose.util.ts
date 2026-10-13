@@ -19,17 +19,21 @@ export const PROPOSE_MAX_KEYS = 2;
 export const PROPOSE_STEP_FRACTION = 0.2;
 
 const SETTING_BOUNDS: Record<string, { min: number; max: number }> = {
-  premiumTargetPct: { min: 1, max: 500 },
-  premiumStopPct: { min: 1, max: 90 },
-  trailPct: { min: 1, max: 90 },
-  trailArmPct: { min: 5, max: 200 },
+  lossCutPct: { min: 6, max: 25 },
+  protectArmPct: { min: 4, max: 20 },
+  protectFloorPct: { min: 0, max: 10 },
+  givebackPct: { min: 2, max: 12 },
+  tightFromPct: { min: 12, max: 40 },
+  tightGivebackPct: { min: 2, max: 8 },
 };
 
 export interface ProposeSettings {
-  premiumTargetPct: number;
-  premiumStopPct: number;
-  trailPct: number;
-  trailArmPct: number;
+  lossCutPct: number;
+  protectArmPct: number;
+  protectFloorPct: number;
+  givebackPct: number;
+  tightFromPct: number;
+  tightGivebackPct: number;
 }
 
 /**
@@ -152,10 +156,17 @@ export function capSettingsPatch(
 
 function policyToPercents(policy: ExitPolicy): Partial<ProposeSettings> {
   const patch: Partial<ProposeSettings> = {};
-  if (policy.targetPct != null) patch.premiumTargetPct = policy.targetPct * 100;
-  if (policy.stopPct != null) patch.premiumStopPct = policy.stopPct * 100;
-  if (policy.trailPct != null) patch.trailPct = policy.trailPct * 100;
-  if (policy.trailArmPct != null) patch.trailArmPct = policy.trailArmPct * 100;
+  // stopPct on the old grid is a fraction of the premium. The live sell rule
+  // is return on cost, so only a stop near the live 12% cut is a candidate.
+  if (policy.stopPct != null && policy.stopPct >= 0.08 && policy.stopPct <= 0.18) {
+    patch.lossCutPct = round2(policy.stopPct * 100);
+  }
+  if (policy.trailPct != null && policy.trailPct >= 0.03 && policy.trailPct <= 0.1) {
+    patch.givebackPct = round2(policy.trailPct * 100);
+  }
+  if (policy.trailArmPct != null && policy.trailArmPct >= 0.04 && policy.trailArmPct <= 0.16) {
+    patch.protectArmPct = round2(policy.trailArmPct * 100);
+  }
   return patch;
 }
 

@@ -46,7 +46,7 @@ import { SchwabStreamerPool } from '@schwab/streaming/schwab-streamer-pool.servi
 import { expandCompletedMinutes, pushPriceBar } from './bot-v2-bars.util';
 import { sameTrainerUnderlying, v2ConfigVersion } from './bot-v2-config.util';
 import { resolveTrainerExpiration } from './bot-v2-expiration.util';
-import { disasterStopBid } from './bot-v2-profit-lock.util';
+import { disasterStopBid, profitLockFromSettings } from './bot-v2-profit-lock.util';
 import {
   directionMatchesTrend,
   sessionVwap,
@@ -136,15 +136,17 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
     const userId = requireUserId();
     await this.champion.releaseFeedForTrainer();
     const settings = await this.settingsService.get(userId);
-    const row = await this.stateService.get(userId);
-    row.mode = 'BOT';
-    row.running = true;
-    row.lockout = false;
-    row.lockoutReason = null;
-    await this.stateService.save(row);
     const session = this.pool.acquireForBackgroundWork(userId);
     this.held.add(userId);
     session.setFeedLock(settings.botUnderlying);
+    // The socket starts logged out. Switching to SPXW before LOGIN finishes
+    // used to stand the trainer down and close the socket, so the 9:45 arm
+    // never stuck until a browser tab happened to hold the connection.
+    if (!(await this.waitForStream(session, 20_000))) {
+      this.logger.warn('V2 quote unavailable: Streamer not connected to Schwab yet');
+      await this.standDown(userId, 'QUOTE_UNAVAILABLE', { keepFeed: true });
+      return;
+    }
     if (session.getUnderlyingSymbol() !== settings.botUnderlying) {
       const switched = await session.switchUnderlying(settings.botUnderlying, {
         force: true,
@@ -152,10 +154,16 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
       });
       if (switched.status === 'error') {
         this.logger.warn(`V2 quote unavailable: ${switched.message}`);
-        await this.standDown(userId, 'QUOTE_UNAVAILABLE');
+        await this.standDown(userId, 'QUOTE_UNAVAILABLE', { keepFeed: true });
         return;
       }
     }
+    const row = await this.stateService.get(userId);
+    row.mode = 'BOT';
+    row.running = true;
+    row.lockout = false;
+    row.lockoutReason = null;
+    await this.stateService.save(row);
     const book = this.book(userId);
     book.settings = settings;
     book.position = row.openPosition;
@@ -245,6 +253,7 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
         stopPremium: position.stopPremium ?? null,
         quantity: position.quantity,
         commissionRoundTrip: commissionForRoundTrip(position.quantity),
+        ladder: profitLockFromSettings(settings),
       },
       exit: {
         direction: position.direction,
@@ -473,9 +482,9 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      // Trainer exits are the fixed return-on-cost ladder, not the saved
-      // premium stop / target / trail percents. Those stay for the personal bot.
-      const initialStop = disasterStopBid(contract.ask, 1, commissionForRoundTrip(1));
+      // Both bots sell on this return-on-cost ladder. The numbers are settings.
+      const ladder = profitLockFromSettings(settings);
+      const initialStop = disasterStopBid(contract.ask, 1, commissionForRoundTrip(1), ladder);
       const sized = sizeAtRisk({
         useRiskAtStop: settings.useRiskAtStop,
         maxRiskUsd: Number(settings.maxRiskUsd),
@@ -509,9 +518,9 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
         // they were closing the trade before the premium stop, target, and trail.
         stopUnderlying: null,
         targetUnderlying: null,
-        stopPremium: disasterStopBid(fill, sized.qty, commissionForRoundTrip(sized.qty)),
+        stopPremium: disasterStopBid(fill, sized.qty, commissionForRoundTrip(sized.qty), ladder),
         targetPremium: null,
-        initialStopPremium: disasterStopBid(fill, sized.qty, commissionForRoundTrip(sized.qty)),
+        initialStopPremium: disasterStopBid(fill, sized.qty, commissionForRoundTrip(sized.qty), ladder),
         peakBid: contract.bid,
         peakAt: Date.now(),
         trailArmed: false,
@@ -602,7 +611,27 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async standDown(userId: string, reason: string): Promise<void> {
+  /**
+   * Poll until Schwab's streamer LOGIN succeeds. `arm` calls this before
+   * switching to SPXW so the first minute of the session can hold.
+   */
+  private async waitForStream(
+    session: { isStreamConnected(): boolean },
+    timeoutMs: number,
+  ): Promise<boolean> {
+    const started = Date.now();
+    while (!session.isStreamConnected()) {
+      if (Date.now() - started >= timeoutMs) return false;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    return true;
+  }
+
+  private async standDown(
+    userId: string,
+    reason: string,
+    opts?: { keepFeed?: boolean },
+  ): Promise<void> {
     const book = this.book(userId);
     if (book.position) await this.flattenBook(userId, 'STAND_DOWN');
     const row = await this.stateService.get(userId);
@@ -615,11 +644,15 @@ export class BotV2EngineService implements OnModuleInit, OnModuleDestroy {
     book.running = false;
     book.position = null;
     const champion = await this.champion.getRow(userId);
-    if (champion.mode !== BotMode.BOT && this.held.has(userId)) {
+    // A quote that is still logging in must stay open. Closing it here is
+    // what made every 9:45 retry start from zero.
+    if (!opts?.keepFeed && champion.mode !== BotMode.BOT && this.held.has(userId)) {
       this.pool.peek(userId)?.setFeedLock(null);
       this.pool.releaseBackgroundWork(userId);
+      this.held.delete(userId);
+    } else if (!opts?.keepFeed) {
+      this.held.delete(userId);
     }
-    this.held.delete(userId);
     await this.record(userId, 'STAND_DOWN', reason, null);
   }
 

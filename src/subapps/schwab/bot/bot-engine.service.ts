@@ -24,14 +24,16 @@ import { SchwabStreamerSession } from '@schwab/streaming/schwab-streamer-session
 import { BotEventService } from './bot-event.service';
 import { BotExecutionService } from './bot-execution.service';
 import {
-  breakevenBidFor,
-  computeExitLevels,
   decideSoftExit,
-  minLockBidFor,
-  ratchetPremiumStop,
   shouldForceFlattenForSocketLoss,
   StopPremiumSource,
 } from './bot-exit.util';
+import {
+  disasterStopBid,
+  profitLockFromSettings,
+  ProfitLockLadder,
+  ratchetProfitLock,
+} from '../bot-v2/bot-v2-profit-lock.util';
 import { commissionForLeg, commissionForRoundTrip } from './bot-fees.const';
 import { BotMarketDataService } from './bot-market-data.service';
 import { BotRecordingService, configVersionOf } from './bot-recording.service';
@@ -108,10 +110,9 @@ const SOCKET_LOSS_GRACE_MS = 15_000;
 interface TrailState {
   symbol: string;
   entryPremium: number;
-  breakevenBid: number;
-  minLockBid: number;
-  trailArmPct: number;
-  trailPct: number;
+  quantity: number;
+  commissionRoundTrip: number;
+  ladder: ProfitLockLadder;
   peakBid: number;
   trailArmed: boolean;
   stopPremium: number | null;
@@ -660,23 +661,7 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     }
 
     const spot = this.streamerSession?.getLastKnownSpotPrice() ?? null;
-    // Provisional levels from ask; recomputed with fill price after entry.
-    const provisionalLevels = computeExitLevels({
-      entryPremium: contract.ask,
-      spot: spot ?? 0,
-      atr,
-      direction,
-      usePremiumStop: settings.usePremiumStop,
-      premiumStopPct: settings.premiumStopPct,
-      usePremiumTarget: settings.usePremiumTarget,
-      premiumTargetPct: settings.premiumTargetPct,
-      stopAtrMult: settings.stopAtrMult,
-      targetAtrMult: settings.targetAtrMult,
-    });
-    const stopUnderlying =
-      spot != null ? provisionalLevels.stopUnderlying : null;
-    const targetUnderlying =
-      spot != null ? provisionalLevels.targetUnderlying : null;
+    const ladder = profitLockFromSettings(settings);
 
     await this.botEventService.record({
       lane: row.lane,
@@ -698,8 +683,8 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         referenceAsk: contract.ask,
         referenceBid: contract.bid,
         paperSlippageCents: settings.paperSlippageCents,
-        stopUnderlying,
-        targetUnderlying,
+        stopUnderlying: null,
+        targetUnderlying: null,
       });
     } finally {
       this.stateFor().transientPhase = null;
@@ -716,18 +701,12 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const levels = computeExitLevels({
-      entryPremium: result.fillPrice,
-      spot: spot ?? 0,
-      atr,
-      direction,
-      usePremiumStop: settings.usePremiumStop,
-      premiumStopPct: settings.premiumStopPct,
-      usePremiumTarget: settings.usePremiumTarget,
-      premiumTargetPct: settings.premiumTargetPct,
-      stopAtrMult: settings.stopAtrMult,
-      targetAtrMult: settings.targetAtrMult,
-    });
+    const stopPremium = disasterStopBid(
+      result.fillPrice,
+      qty,
+      commissionForRoundTrip(qty),
+      ladder,
+    );
 
     row.openPosition = {
       symbol: contract.symbol,
@@ -736,12 +715,12 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       openedAt: Date.now(),
       entryUnderlying: spot ?? null,
       direction: direction as BotDirection,
-      atrUsed: levels.atrUsed,
-      stopUnderlying: spot != null ? levels.stopUnderlying : null,
-      targetUnderlying: spot != null ? levels.targetUnderlying : null,
-      stopPremium: levels.stopPremium,
-      targetPremium: levels.targetPremium,
-      initialStopPremium: levels.stopPremium,
+      atrUsed: atr,
+      stopUnderlying: null,
+      targetUnderlying: null,
+      stopPremium,
+      targetPremium: null,
+      initialStopPremium: stopPremium,
       peakBid: result.fillPrice,
       trailArmed: false,
       stopPremiumSource: 'INITIAL',
@@ -780,24 +759,14 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       underlyingPrice: spot ?? undefined,
       orderId: result.orderId ?? undefined,
       payload: {
-        atr: levels.atrUsed,
-        stopPremium: levels.stopPremium,
-        targetPremium: levels.targetPremium,
-        stopUnderlying: row.openPosition.stopUnderlying,
-        targetUnderlying: row.openPosition.targetUnderlying,
-        premiumStopPct: settings.usePremiumStop
-          ? settings.premiumStopPct
-          : null,
-        premiumTargetPct: settings.usePremiumTarget
-          ? settings.premiumTargetPct
-          : null,
-        stopAtrMult: settings.stopAtrMult,
-        targetAtrMult: settings.targetAtrMult,
-        trailArmPct: settings.useTrailStop ? settings.trailArmPct : null,
-        trailPct: settings.useTrailStop ? settings.trailPct : null,
-        trailMinLockPct: settings.useTrailStop
-          ? settings.trailMinLockPct
-          : null,
+        atr,
+        stopPremium,
+        lossCutPct: ladder.stopPct,
+        protectArmPct: ladder.armPct,
+        protectFloorPct: ladder.floorPct,
+        givebackPct: ladder.givebackPct,
+        tightFromPct: ladder.tightFromPct,
+        tightGivebackPct: ladder.tightGivebackPct,
       },
     });
     await this.emitStatus(true);
@@ -876,16 +845,14 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
       // trail exits on this same tick. The peak is advanced with this bid
       // first, which is what stops a new high from triggering its own trail.
       if (trail && optionBid != null) {
-        const ratcheted = ratchetPremiumStop({
+        const ratcheted = ratchetProfitLock({
           entryPremium: trail.entryPremium,
           optionBid,
           peakBid: trail.peakBid,
           stopPremium: trail.stopPremium,
-          trailArmed: trail.trailArmed,
-          trailArmPct: trail.trailArmPct,
-          trailPct: trail.trailPct,
-          breakevenBid: trail.breakevenBid,
-          minLockBid: trail.minLockBid,
+          quantity: trail.quantity,
+          commissionRoundTrip: trail.commissionRoundTrip,
+          ladder: trail.ladder,
         });
         trail.peakBid = ratcheted.peakBid;
         trail.trailArmed = ratcheted.trailArmed;
@@ -899,9 +866,9 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
         spot,
         optionBid,
         stopPremium: trail ? trail.stopPremium : pos.stopPremium ?? null,
-        targetPremium: pos.targetPremium ?? null,
-        stopUnderlying: pos.stopUnderlying,
-        targetUnderlying: pos.targetUnderlying,
+        targetPremium: null,
+        stopUnderlying: null,
+        targetUnderlying: null,
         stopPremiumSource: trail?.source ?? pos.stopPremiumSource,
       });
       if (!reason) return;
@@ -934,24 +901,14 @@ export class BotEngineService implements OnModuleInit, OnModuleDestroy {
     settings: Awaited<ReturnType<BotSettingsService['getSettings']>>,
   ): TrailState | null {
     const st = this.stateFor();
-    if (!settings.useTrailStop) {
-      st.trail = null;
-      return null;
-    }
     if (st.trail?.symbol === position.symbol) return st.trail;
 
     st.trail = {
       symbol: position.symbol,
       entryPremium: position.entryPrice,
-      // Per-contract round trip: commission scales with size, so the premium
-      // a single contract must recover does not depend on quantity.
-      breakevenBid: breakevenBidFor(
-        position.entryPrice,
-        commissionForRoundTrip(1),
-      ),
-      minLockBid: minLockBidFor(position.entryPrice, settings.trailMinLockPct),
-      trailArmPct: settings.trailArmPct,
-      trailPct: settings.trailPct,
+      quantity: position.quantity,
+      commissionRoundTrip: commissionForRoundTrip(position.quantity),
+      ladder: profitLockFromSettings(settings),
       peakBid: position.peakBid ?? position.entryPrice,
       trailArmed: position.trailArmed ?? false,
       stopPremium: position.stopPremium ?? null,

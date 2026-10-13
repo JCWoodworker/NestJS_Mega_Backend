@@ -169,6 +169,48 @@ export class UpdateBotV2SettingsDto {
 
   @IsOptional()
   @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(80)
+  lossCutPct?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(80)
+  protectArmPct?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(80)
+  protectFloorPct?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(40)
+  givebackPct?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(100)
+  tightFromPct?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(40)
+  tightGivebackPct?: number;
+
+  @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(0)
   paperSlippageCents?: number;

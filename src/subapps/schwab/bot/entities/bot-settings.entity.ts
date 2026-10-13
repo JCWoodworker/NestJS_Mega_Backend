@@ -293,6 +293,30 @@ export class BotSettings {
   @Column({ type: 'integer', name: 'paper_slippage_cents', default: 1 })
   paperSlippageCents: number;
 
+  /** Shared sell rule. Loss is cut at this return-on-cost percent. */
+  @Column({ type: 'decimal', precision: 8, scale: 4, name: 'loss_cut_pct', default: 12 })
+  lossCutPct: number;
+
+  /** Peak return that starts protecting the gain. */
+  @Column({ type: 'decimal', precision: 8, scale: 4, name: 'protect_arm_pct', default: 8 })
+  protectArmPct: number;
+
+  /** Minimum locked return once protection is on. */
+  @Column({ type: 'decimal', precision: 8, scale: 4, name: 'protect_floor_pct', default: 2 })
+  protectFloorPct: number;
+
+  /** How far the stop sits behind the peak, in return points. */
+  @Column({ type: 'decimal', precision: 8, scale: 4, name: 'giveback_pct', default: 6 })
+  givebackPct: number;
+
+  /** Peak return where the stop starts following more tightly. */
+  @Column({ type: 'decimal', precision: 8, scale: 4, name: 'tight_from_pct', default: 20 })
+  tightFromPct: number;
+
+  /** Give-back once the peak is past tightFromPct. */
+  @Column({ type: 'decimal', precision: 8, scale: 4, name: 'tight_giveback_pct', default: 4 })
+  tightGivebackPct: number;
+
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }
