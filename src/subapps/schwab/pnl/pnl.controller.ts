@@ -16,12 +16,15 @@ import {
   CreateManualTransactionDto,
   UpdateManualTransactionDto,
 } from './dto/manual-transaction.dto';
+import { SavePaperFillsDto } from './dto/paper-fill.dto';
+import { requireUserId } from '@schwab/shared/schwab-user-context';
 import {
   PnlDateRangeQueryDto,
   PnlOrdersQueryDto,
   PnlTradesQueryDto,
   PnlTransactionsQueryDto,
 } from './dto/pnl-query.dto';
+import { PaperFillService } from './paper-fill.service';
 import { PnlService } from './pnl.service';
 
 /**
@@ -31,7 +34,22 @@ import { PnlService } from './pnl.service';
 @Throttle({ default: { limit: 60, ttl: 60000 } })
 @Controller('pnl')
 export class PnlController {
-  constructor(private readonly pnlService: PnlService) {}
+  constructor(
+    private readonly pnlService: PnlService,
+    private readonly paperFills: PaperFillService,
+  ) {}
+
+  /** Desk sim tape. Same user on another browser reads it back. Idempotent on fill id. */
+  @Get('paper-fills')
+  listPaperFills() {
+    return this.paperFills.list(requireUserId());
+  }
+
+  @Post('paper-fills')
+  @HttpCode(HttpStatus.OK)
+  savePaperFills(@Body() dto: SavePaperFillsDto) {
+    return this.paperFills.save(requireUserId(), dto.fills);
+  }
 
   @Get('daily')
   async getDaily(@Query() query: PnlDateRangeQueryDto) {

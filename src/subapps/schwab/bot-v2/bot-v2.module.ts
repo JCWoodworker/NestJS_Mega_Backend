@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import schwabConfig from '@schwab/config/schwab.config';
 
 import { BotModule } from '@schwab/bot/bot.module';
+import { PnlModule } from '@schwab/pnl/pnl.module';
 import { MarketDataModule } from '@schwab/market-data/market-data.module';
 import { SchwabStreamingModule } from '@schwab/streaming/schwab-streaming.module';
 
@@ -24,6 +25,7 @@ import { CalendarNote } from './entities/calendar-note.entity';
 @Module({
   imports: [
     ConfigModule.forFeature(schwabConfig),
+    PnlModule,
     TypeOrmModule.forFeature([
       BotV2Settings,
       BotV2State,

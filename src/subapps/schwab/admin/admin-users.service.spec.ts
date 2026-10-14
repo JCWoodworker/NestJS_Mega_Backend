@@ -129,6 +129,7 @@ function build(options: {
     emptyRepo() as never,
     emptyRepo() as never,
     emptyRepo() as never,
+    emptyRepo() as never,
     emptyRepo({ delete: jest.fn().mockResolvedValue({ affected: 2 }) }) as never,
     emailService as never,
     jwtService as never,

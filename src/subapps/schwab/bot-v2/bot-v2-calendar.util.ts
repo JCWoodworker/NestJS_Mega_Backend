@@ -236,3 +236,48 @@ function monthWeeks(month: string): string[][] {
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
+
+export interface PaperCalendarSlice {
+  book: string;
+  pnl: number | null;
+  startEquity: number | null;
+  added: number;
+  percent: number | null;
+}
+
+/** Add one day's sim dollars onto a calendar cell. `extra` is already that day's total. */
+export function paintPaperOntoDay<
+  T extends {
+    date: string;
+    empty: boolean;
+    pnl: number | null;
+    percent: number | null;
+    books?: PaperCalendarSlice[];
+  },
+>(day: T, extra: number | undefined, withSlice: boolean): T {
+  if (extra == null) return day;
+  const pnl = round2((day.pnl ?? 0) + extra);
+  let books = day.books;
+  if (withSlice) {
+    const slice: PaperCalendarSlice = {
+      book: 'manual_paper',
+      pnl: round2(extra),
+      startEquity: null,
+      added: 0,
+      percent: null,
+    };
+    const next = books ? [...books] : [];
+    const index = next.findIndex((item) => item.book === 'manual_paper');
+    if (index >= 0) {
+      const current = next[index];
+      next[index] = {
+        ...current,
+        pnl: round2((current?.pnl ?? 0) + extra),
+      };
+    } else {
+      next.push(slice);
+    }
+    books = next;
+  }
+  return { ...day, empty: false, pnl, percent: null, books };
+}

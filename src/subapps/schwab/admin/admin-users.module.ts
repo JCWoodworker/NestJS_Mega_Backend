@@ -21,6 +21,7 @@ import { BotTradeTape } from '@schwab/bot/entities/bot-trade-tape.entity';
 import { SchwabDailyPnl } from '@schwab/pnl/entities/schwab-daily-pnl.entity';
 import { SchwabOrderHistory } from '@schwab/pnl/entities/schwab-order-history.entity';
 import { SchwabOrderSourceTag } from '@schwab/pnl/entities/schwab-order-source-tag.entity';
+import { SchwabPaperFill } from '@schwab/pnl/entities/schwab-paper-fill.entity';
 import { SchwabRealizedTrade } from '@schwab/pnl/entities/schwab-realized-trade.entity';
 import { SchwabTradeFill } from '@schwab/pnl/entities/schwab-trade-fill.entity';
 import { SchwabTransaction } from '@schwab/pnl/entities/schwab-transaction.entity';
@@ -49,6 +50,7 @@ import { AdminUsersService } from './admin-users.service';
       SchwabDailyPnl,
       SchwabOrderHistory,
       SchwabOrderSourceTag,
+      SchwabPaperFill,
       RefreshTokens,
     ]),
   ],

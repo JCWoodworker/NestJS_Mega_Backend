@@ -112,6 +112,13 @@ export class AccountSnapshotService implements OnModuleInit, OnModuleDestroy {
         ...snapshot,
         asOf: Date.now(),
       });
+      // A live manual contract has to stay on the option stream after the
+      // ladder recenters, the same way the bot pins its own position.
+      this.streamerPool.peek(userId)?.syncAccountOptionPins(
+        snapshot.positions
+          .filter((position) => position.assetType === 'OPTION' && position.quantity > 0)
+          .map((position) => position.symbol),
+      );
       void this.dailyPnlService.recordEquitySample(
         accountHash,
         snapshot.equity,

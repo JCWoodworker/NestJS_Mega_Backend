@@ -20,6 +20,7 @@ import { SchwabAccountResolver } from '@schwab/shared/schwab-account-resolver.se
 import { requireUserId } from '@schwab/shared/schwab-user-context';
 
 import { DailyPnlService } from './daily-pnl.service';
+import { PaperFillService } from './paper-fill.service';
 import {
   CreateManualTransactionDto,
   UpdateManualTransactionDto,
@@ -63,6 +64,7 @@ export class PnlService {
     private readonly orderHistoryRepository: Repository<SchwabOrderHistory>,
     @InjectRepository(SchwabToken)
     private readonly tokenRepository: Repository<SchwabToken>,
+    private readonly paperFills: PaperFillService,
   ) {}
 
   async getDaily(query: PnlDateRangeQueryDto) {
@@ -253,8 +255,10 @@ export class PnlService {
   }
 
   async getTrades(query: PnlTradesQueryDto) {
+    const userId = requireUserId();
+    const paper = await this.paperFills.trades(userId, query);
     const accountHash = await this.resolveOwnedAccountHash(query.accountHash);
-    if (!accountHash) return [];
+    if (!accountHash) return paper.slice(0, 500);
     const where: FindOptionsWhere<SchwabRealizedTrade> = { accountHash };
     if (query.symbol) where.symbol = query.symbol;
     if (query.source?.length) where.source = In(query.source) as any;
@@ -268,7 +272,7 @@ export class PnlService {
       take: 500,
     });
 
-    return rows.map((row) => ({
+    const schwab = rows.map((row) => ({
       id: row.id,
       symbol: row.symbol,
       direction: row.direction,
@@ -281,6 +285,10 @@ export class PnlService {
       holdingMs: row.closedAt.getTime() - row.openedAt.getTime(),
       source: row.source,
     }));
+    const seen = new Set(schwab.map((row) => row.id));
+    return [...schwab, ...paper.filter((row) => !seen.has(row.id))]
+      .sort((a, b) => (a.closedAt < b.closedAt ? 1 : -1))
+      .slice(0, 500);
   }
 
   /**
@@ -293,8 +301,10 @@ export class PnlService {
    * way to tell, which defeats the entire purpose of the endpoint.
    */
   async getInsight(query: PnlTradesQueryDto) {
+    const userId = requireUserId();
+    const paper = await this.paperFills.insightRows(userId, query);
     const accountHash = await this.resolveOwnedAccountHash(query.accountHash);
-    if (!accountHash) return aggregateRealizedTrades([]);
+    if (!accountHash) return aggregateRealizedTrades(paper);
     const where: FindOptionsWhere<SchwabRealizedTrade> = { accountHash };
     if (query.symbol) where.symbol = query.symbol;
     if (query.source?.length) where.source = In(query.source) as any;
@@ -304,8 +314,8 @@ export class PnlService {
 
     const rows = await this.realizedRepository.find({ where });
 
-    return aggregateRealizedTrades(
-      rows.map((row) => ({
+    return aggregateRealizedTrades([
+      ...rows.map((row) => ({
         symbol: row.symbol,
         direction: row.direction,
         quantity: Number(row.quantity),
@@ -316,12 +326,15 @@ export class PnlService {
         realizedPnl: Number(row.realizedPnl),
         source: row.source,
       })),
-    );
+      ...paper,
+    ]);
   }
 
   async getOrders(query: PnlOrdersQueryDto) {
+    const userId = requireUserId();
+    const paper = await this.paperFills.orders(userId, query);
     const accountHash = await this.resolveOwnedAccountHash(query.accountHash);
-    if (!accountHash) return [];
+    if (!accountHash) return paper.slice(0, 500);
     const where: FindOptionsWhere<SchwabOrderHistory> = { accountHash };
     if (query.symbol) where.symbol = query.symbol;
     if (query.status) where.status = query.status;
@@ -336,7 +349,7 @@ export class PnlService {
       take: 500,
     });
 
-    return rows.map((row) => ({
+    const schwab = rows.map((row) => ({
       id: row.id,
       orderId: row.orderId,
       symbol: row.symbol,
@@ -354,6 +367,10 @@ export class PnlService {
       source: row.source,
       statusDescription: row.statusDescription ?? null,
     }));
+    const seen = new Set(schwab.map((row) => row.id));
+    return [...schwab, ...paper.filter((row) => !seen.has(row.id))]
+      .sort((a, b) => ((a.enteredTime ?? '') < (b.enteredTime ?? '') ? 1 : -1))
+      .slice(0, 500);
   }
 
   /** Manual trigger for ops / after reconnect. */

@@ -34,6 +34,8 @@ import { BotMode } from '@schwab/bot/enums/bot-mode.enum';
 import { SchwabDailyPnl } from '@schwab/pnl/entities/schwab-daily-pnl.entity';
 import { SchwabOrderHistory } from '@schwab/pnl/entities/schwab-order-history.entity';
 import { SchwabOrderSourceTag } from '@schwab/pnl/entities/schwab-order-source-tag.entity';
+import { SchwabPaperFill } from '@schwab/pnl/entities/schwab-paper-fill.entity';
+import { etDateKey } from '@schwab/pnl/et-date.util';
 import { SchwabRealizedTrade } from '@schwab/pnl/entities/schwab-realized-trade.entity';
 import { SchwabTradeFill } from '@schwab/pnl/entities/schwab-trade-fill.entity';
 import { SchwabTransaction } from '@schwab/pnl/entities/schwab-transaction.entity';
@@ -63,7 +65,7 @@ export interface AdminUserOverviewRow {
    * which is a "not yet" state, not an error. */
   accountHashResolved: boolean;
   usesBot: boolean;
-  /** Null when not connected or not yet resolved. */
+  /** Null until this user has a resolved Schwab account or a sim close. */
   insight: PnlInsight | null;
 }
 
@@ -127,6 +129,8 @@ export class AdminUsersService {
     private readonly orderHistoryRepository: Repository<SchwabOrderHistory>,
     @InjectRepository(SchwabOrderSourceTag)
     private readonly orderSourceTagRepository: Repository<SchwabOrderSourceTag>,
+    @InjectRepository(SchwabPaperFill)
+    private readonly paperFillRepository: Repository<SchwabPaperFill>,
     @InjectRepository(RefreshTokens)
     private readonly refreshTokensRepository: Repository<RefreshTokens>,
     private readonly emailService: EmailService,
@@ -156,7 +160,7 @@ export class AdminUsersService {
       users.map(async (user) => {
         const token = tokenByUser.get(user.id);
         const botState = botStateByUser.get(user.id);
-        const insight = await this.insightFor(token, closedAtRange);
+        const insight = await this.insightFor(user.id, token, query.from, query.to);
 
         return {
           id: user.id,
@@ -487,6 +491,7 @@ export class AdminUsersService {
       events,
       capital,
       reports,
+      paperFills,
     ] = await Promise.all([
       this.botSettingsRepository.find({ where: { userId: user.id } }),
       this.botStateRepository.find({ where: { userId: user.id } }),
@@ -495,6 +500,7 @@ export class AdminUsersService {
       this.botEventRepository.find({ where: { userId: user.id } }),
       this.botCapitalEventRepository.find({ where: { userId: user.id } }),
       this.botDailyReportRepository.find({ where: { userId: user.id } }),
+      this.paperFillRepository.find({ where: { userId: user.id } }),
     ]);
 
     pushIf('bot_settings.csv', settings);
@@ -504,6 +510,7 @@ export class AdminUsersService {
     pushIf('bot_events.csv', events);
     pushIf('bot_capital_events.csv', capital);
     pushIf('bot_daily_reports.csv', reports);
+    pushIf('schwab_paper_fills.csv', paperFills);
 
     if (accountHash) {
       const [tx, fills, realized, daily, orders, tags] = await Promise.all([
@@ -526,20 +533,34 @@ export class AdminUsersService {
   }
 
   private async insightFor(
+    userId: string,
     token: SchwabToken | undefined,
-    closedAtRange: ReturnType<AdminUsersService['dateRange']>,
+    from?: string,
+    to?: string,
   ): Promise<PnlInsight | null> {
-    if (!token?.accountHash) return null;
-
-    const rows = await this.realizedRepository.find({
-      where: {
-        accountHash: token.accountHash,
-        ...(closedAtRange ? { closedAt: closedAtRange } : {}),
-      },
+    const closedAtRange = this.dateRange(from, to);
+    const rows = token?.accountHash
+      ? await this.realizedRepository.find({
+          where: {
+            accountHash: token.accountHash,
+            ...(closedAtRange ? { closedAt: closedAtRange } : {}),
+          },
+        })
+      : [];
+    const paper = await this.paperFillRepository.find({
+      where: { userId, side: 'CLOSE' },
     });
+    const paperRows = paper.filter((row) => {
+      if (row.realizedPnl == null) return false;
+      const day = etDateKey(row.at);
+      if (from && day < from.slice(0, 10)) return false;
+      if (to && day > to.slice(0, 10)) return false;
+      return true;
+    });
+    if (!token?.accountHash && paperRows.length === 0) return null;
 
-    return aggregateRealizedTrades(
-      rows.map((row) => ({
+    return aggregateRealizedTrades([
+      ...rows.map((row) => ({
         symbol: row.symbol,
         direction: row.direction,
         quantity: Number(row.quantity),
@@ -550,7 +571,21 @@ export class AdminUsersService {
         realizedPnl: Number(row.realizedPnl),
         source: row.source,
       })),
-    );
+      ...paperRows.map((row) => {
+        const opened = row.openedAt ?? row.at;
+        return {
+          symbol: row.symbol,
+          direction: 'LONG',
+          quantity: Number(row.quantity),
+          openPrice: Number(row.openPrice ?? row.price),
+          closePrice: Number(row.price),
+          openedAt: opened.getTime(),
+          closedAt: row.at.getTime(),
+          realizedPnl: Number(row.realizedPnl),
+          source: 'MANUAL_PAPER',
+        };
+      }),
+    ]);
   }
 
   private dateRange(from?: string, to?: string) {

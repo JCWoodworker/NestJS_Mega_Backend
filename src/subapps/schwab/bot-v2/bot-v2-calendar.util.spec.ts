@@ -1,5 +1,6 @@
 import {
   buildTrainerMonth,
+  paintPaperOntoDay,
   percentOf,
   topUpAmount,
   normalizeNote,
@@ -54,5 +55,23 @@ describe('trainer calendar', () => {
     expect(normalizeNote('  ')).toBeNull();
     expect(normalizeNote(' choppy ')).toBe('choppy');
     expect(weekdayMon0('2026-10-14')).toBe(2);
+  });
+
+  it('paints a sim close onto an empty day and keeps the paper slice', () => {
+    const painted = paintPaperOntoDay(
+      {
+        date: '2026-10-14',
+        empty: true,
+        pnl: null,
+        percent: null,
+        books: undefined,
+      },
+      42.5,
+      true,
+    );
+    expect(painted.empty).toBe(false);
+    expect(painted.pnl).toBe(42.5);
+    expect(painted.books?.[0]?.book).toBe('manual_paper');
+    expect(painted.books?.[0]?.pnl).toBe(42.5);
   });
 });

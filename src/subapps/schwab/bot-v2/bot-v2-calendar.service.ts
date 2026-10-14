@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { etDateKey } from '@schwab/pnl/et-date.util';
+import { PaperFillService } from '@schwab/pnl/paper-fill.service';
 
 import {
   CalendarBook,
@@ -13,6 +14,7 @@ import {
   CalendarMonthView,
   buildTrainerMonth,
   isCalendarBook,
+  paintPaperOntoDay,
   isDayKey,
   isMonday,
   isMonthKey,
@@ -37,13 +39,20 @@ export class BotV2CalendarService {
     private readonly capital: Repository<CalendarCapitalEvent>,
     @InjectRepository(CalendarNote)
     private readonly notes: Repository<CalendarNote>,
+    private readonly paperFills: PaperFillService,
   ) {}
 
   async month(userId: string, month: string, book: string, withTrainer = false) {
     const parsedBook = this.parseBook(book);
     if (!isMonthKey(month)) throw new BadRequestException('month must be YYYY-MM');
     const today = etDateKey();
-    if (!withTrainer) return this.emptyMonth(userId, month, parsedBook, today);
+    if (!withTrainer) {
+      return this.overlayPaperMonth(
+        userId,
+        parsedBook,
+        await this.emptyMonth(userId, month, parsedBook, today),
+      );
+    }
     await this.ensureBaseline(userId);
     const [closes, marks, noteRows] = await Promise.all([
       this.trainerCloses(userId),
@@ -53,7 +62,7 @@ export class BotV2CalendarService {
     const view = buildTrainerMonth({ month, today, closes, marks });
     const noteFor = (grain: CalendarNote['grain'], key: string) =>
       noteRows.find((row) => row.grain === grain && row.periodKey === key)?.body ?? null;
-    return {
+    return this.overlayPaperMonth(userId, parsedBook, {
       month,
       book: parsedBook,
       wired: true,
@@ -74,7 +83,7 @@ export class BotV2CalendarService {
         note: noteFor('week', week.monday),
         days: week.days.map((day) => this.dayPayload(day, parsedBook, noteFor('day', day.date))),
       })),
-    };
+    });
   }
 
   async day(userId: string, date: string, book: string, withTrainer = false) {
@@ -82,7 +91,7 @@ export class BotV2CalendarService {
     if (!isDayKey(date)) throw new BadRequestException('date must be YYYY-MM-DD');
     if (!withTrainer) {
       const note = await this.notes.findOne({ where: { userId, grain: 'day', periodKey: date } });
-      return {
+      return this.overlayPaperDay(userId, parsedBook, {
         date,
         book: parsedBook,
         wired: false,
@@ -92,7 +101,7 @@ export class BotV2CalendarService {
         startEquity: null,
         added: 0,
         percent: null,
-      };
+      });
     }
     await this.ensureBaseline(userId);
     const [rows, marks, note] = await Promise.all([
@@ -118,7 +127,7 @@ export class BotV2CalendarService {
         netPnl: Number(row.netPnl),
         closedAt: Number(row.closedAt),
       }));
-    return {
+    return this.overlayPaperDay(userId, parsedBook, {
       date,
       book: parsedBook,
       wired: true,
@@ -128,7 +137,7 @@ export class BotV2CalendarService {
       percent: day?.percent ?? null,
       note: note?.body ?? null,
       trades,
-    };
+    });
   }
 
   async saveNote(userId: string, grain: string, periodKey: string, text: string | null) {
@@ -232,6 +241,104 @@ export class BotV2CalendarService {
       ...day,
       note,
       books: book === 'all' && !day.empty ? [slice] : undefined,
+    };
+  }
+
+  private async overlayPaperMonth<
+    T extends {
+      book: CalendarBookQuery;
+      wired: boolean;
+      summary: { pnl: number | null; percent: number | null };
+      weeks: Array<{
+        pnl: number | null;
+        percent: number | null;
+        days: Array<{
+          date: string;
+          outside: boolean;
+          empty: boolean;
+          pnl: number | null;
+          percent: number | null;
+          books?: Array<{
+            book: string;
+            pnl: number | null;
+            startEquity: number | null;
+            added: number;
+            percent: number | null;
+          }>;
+        }>;
+      }>;
+    },
+  >(userId: string, book: CalendarBookQuery, payload: T): Promise<T> {
+    if (book !== 'manual_paper' && book !== 'all') return payload;
+    const closes = await this.paperFills.calendarCloses(userId);
+    if (!closes.length) return payload;
+    const byDate = new Map<string, number>();
+    for (const close of closes) {
+      byDate.set(close.etDate, (byDate.get(close.etDate) ?? 0) + close.netPnl);
+    }
+    let painted = false;
+    const weeks = payload.weeks.map((week) => {
+      let weekTouched = false;
+      const days = week.days.map((day) => {
+        const extra = byDate.get(day.date);
+        if (extra == null) return day;
+        painted = true;
+        weekTouched = true;
+        return paintPaperOntoDay(day, extra, book === 'all');
+      });
+      const lived = days.filter((day) => !day.empty && day.pnl != null);
+      return {
+        ...week,
+        days,
+        pnl: lived.length
+          ? Math.round(lived.reduce((sum, day) => sum + (day.pnl ?? 0), 0) * 100) / 100
+          : week.pnl,
+        percent: weekTouched ? null : week.percent,
+      };
+    });
+    const inMonth = weeks
+      .flatMap((week) => week.days)
+      .filter((day) => !day.outside && !day.empty && day.pnl != null);
+    return {
+      ...payload,
+      wired: payload.wired || painted,
+      summary: {
+        ...payload.summary,
+        pnl: inMonth.length
+          ? Math.round(inMonth.reduce((sum, day) => sum + (day.pnl ?? 0), 0) * 100) / 100
+          : payload.summary.pnl,
+        percent: painted ? null : payload.summary.percent,
+      },
+      weeks,
+    };
+  }
+
+  private async overlayPaperDay<
+    T extends {
+      date: string;
+      wired: boolean;
+      pnl: number | null;
+      percent: number | null;
+      trades: Array<{ id: string }>;
+    },
+  >(userId: string, book: CalendarBookQuery, payload: T): Promise<T> {
+    if (book !== 'manual_paper' && book !== 'all') return payload;
+    const closes = (await this.paperFills.calendarCloses(userId)).filter(
+      (close) => close.etDate === payload.date,
+    );
+    if (!closes.length) return payload;
+    const extra = closes.reduce((sum, close) => sum + close.netPnl, 0);
+    const seen = new Set(payload.trades.map((trade) => trade.id));
+    return {
+      ...payload,
+      wired: true,
+      pnl:
+        Math.round(((payload.pnl ?? 0) + extra) * 100) / 100,
+      percent: null,
+      trades: [
+        ...payload.trades,
+        ...closes.map((close) => close.trade).filter((trade) => !seen.has(trade.id)),
+      ],
     };
   }
 

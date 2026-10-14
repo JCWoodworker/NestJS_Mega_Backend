@@ -166,6 +166,8 @@ export class SchwabStreamerSession {
    * position is independent of whichever chain the operator is looking at.
    */
   private pinnedOptionSymbols = new Set<string>();
+  /** Who asked for each pin. A manual flatten must not drop the bot's pin. */
+  private pinOwners = new Map<string, Set<string>>();
   private pendingOptionTicks: OptionTick[] = [];
   private pendingUnderlyingPrice: number | null = null;
   /** Last merged LEVELONE bid/ask per OSI — bot soft-exits read this instead of REST. */
@@ -257,20 +259,52 @@ export class SchwabStreamerSession {
    * Idempotent, so the bot can re-assert its open position's symbol on every
    * heartbeat without churning the subscription.
    */
-  pinOptionSymbol(symbol: string): void {
-    if (!symbol || this.pinnedOptionSymbols.has(symbol)) return;
-    this.pinnedOptionSymbols.add(symbol);
+  pinOptionSymbol(symbol: string, owner = 'bot'): void {
+    const trimmed = symbol?.trim();
+    if (!trimmed) return;
+    let owners = this.pinOwners.get(trimmed);
+    if (!owners) {
+      owners = new Set();
+      this.pinOwners.set(trimmed, owners);
+    }
+    owners.add(owner);
+    if (this.pinnedOptionSymbols.has(trimmed)) return;
+    this.pinnedOptionSymbols.add(trimmed);
     // Already streaming as part of the current window — the pin only has to
     // prevent a future UNSUBS, not start anything.
-    if (this.currentWindowSymbols.has(symbol)) return;
-    if (this.loggedIn) this.addOptionSubscriptions([symbol]);
+    if (this.currentWindowSymbols.has(trimmed)) return;
+    if (this.loggedIn) this.addOptionSubscriptions([trimmed]);
   }
 
-  /** Drops the pin, unsubscribing only if the ladder does not want `symbol`. */
-  unpinOptionSymbol(symbol: string): void {
-    if (!this.pinnedOptionSymbols.delete(symbol)) return;
-    if (this.currentWindowSymbols.has(symbol)) return;
-    if (this.loggedIn) this.unsubscribeOptions([symbol]);
+  /**
+   * Drops one owner's pin. The contract stays subscribed while the bot or
+   * the account still holds it, and while the ladder window still wants it.
+   */
+  unpinOptionSymbol(symbol: string, owner = 'bot'): void {
+    const trimmed = symbol?.trim();
+    if (!trimmed) return;
+    const owners = this.pinOwners.get(trimmed);
+    if (owners) {
+      owners.delete(owner);
+      if (owners.size > 0) return;
+      this.pinOwners.delete(trimmed);
+    }
+    if (!this.pinnedOptionSymbols.delete(trimmed)) return;
+    if (this.currentWindowSymbols.has(trimmed)) return;
+    if (this.loggedIn) this.unsubscribeOptions([trimmed]);
+  }
+
+  /** Pin the long options on this user's account. Flat contracts lose only the account pin. */
+  syncAccountOptionPins(symbols: string[]): void {
+    const next = new Set(
+      symbols.map((symbol) => symbol.trim()).filter((symbol) => symbol.length > 0),
+    );
+    for (const symbol of next) this.pinOptionSymbol(symbol, 'account');
+    for (const symbol of [...this.pinOwners.keys()]) {
+      if (this.pinOwners.get(symbol)?.has('account') && !next.has(symbol)) {
+        this.unpinOptionSymbol(symbol, 'account');
+      }
+    }
   }
 
   isStreamConnected(): boolean {

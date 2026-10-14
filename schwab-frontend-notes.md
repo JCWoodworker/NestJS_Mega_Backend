@@ -1521,6 +1521,25 @@ GET /api/v1/subapps/schwab/pnl/trades?source=BOT_LIVE
 Omitting `source` returns everything (backward compatible — no frontend change required unless you
 want to add bot filters to the existing History page from section 13).
 
+Desk sim (manual paper, not the house trainer) is stored per signed-in user, with or
+without a Schwab account:
+
+```
+POST /api/v1/subapps/schwab/pnl/paper-fills
+{ fills: PaperFill[] }          // max 200; the same id updates the row
+GET  /api/v1/subapps/schwab/pnl/paper-fills
+```
+
+`PaperFill`: `id`, `symbol`, `quantity`, `price`, `at` (epoch ms), `side` (`OPEN`|`CLOSE`),
+`orderType` (`MARKET`|`STOP`), and on a close optional `openPrice`, `openedAt`,
+`realizedPnl`, `exitReason` (`SELL`|`FLATTEN`|`STOP`).
+
+`GET /pnl/orders`, `GET /pnl/trades`, and `GET /pnl/insight` include these rows tagged
+`MANUAL_PAPER` even when the caller has no Schwab account. They are not mixed into
+Schwab equity, daily P&L, or deposits. Calendar books `manual_paper` and `all` add the
+closes. The browser still shows a fill immediately and posts it. Closes from before
+this table existed are not recoverable.
+
 ### Manual acceptance pass (2026-09-03, code-level — not yet run against live Schwab)
 
 1. **`BOT_PAPER` loop never hits Schwab order placement** — ✅ traced: `BotExecutionService.enter`/
@@ -1725,6 +1744,10 @@ Basic (and admin) users can request deletion; admins fulfill with the same purge
 Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Settings → Delete account; Admin → Deletions tab.
 
 ## Changelog
+
+- **2026-10-14 (manual quote pin)**: No new route. A watching user's long options are pinned on that user's streamer session, so a ladder recenter does not drop the bid. The pin goes away when the position is flat, and it does not unpin a contract the bot still holds.
+
+- **2026-10-14 (desk sim on the server)**: `POST /pnl/paper-fills` and `GET /pnl/paper-fills` store the desk sim tape per user (no Schwab account required). Idempotent on the client fill id. `GET /pnl/orders`, `/pnl/trades`, and `/pnl/insight` include `MANUAL_PAPER` rows. Calendar books `manual_paper` and `all` add those closes. Not mixed into Schwab equity or deposits. Exit is `SELL`, `FLATTEN`, or `STOP`.
 
 - **2026-10-14 (user calendar, trainer stays admin)**: History opens the same calendar for the signed-in user. `book=trainer` is refused unless that user is `SCHWAB_OWNER_USER_ID`. `includeTrainer=1` adds the trainer square to `book=all` for that owner only. Every other account, and History, omits the trainer. Other books still return `wired: false`. Notes stay one journal per user.
 

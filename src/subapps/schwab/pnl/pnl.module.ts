@@ -14,8 +14,10 @@ import { SchwabOrderHistory } from './entities/schwab-order-history.entity';
 import { SchwabOrderSourceTag } from './entities/schwab-order-source-tag.entity';
 import { SchwabRealizedTrade } from './entities/schwab-realized-trade.entity';
 import { SchwabTradeFill } from './entities/schwab-trade-fill.entity';
+import { SchwabPaperFill } from './entities/schwab-paper-fill.entity';
 import { SchwabTransaction } from './entities/schwab-transaction.entity';
 import { OrderHistoryService } from './order-history.service';
+import { PaperFillService } from './paper-fill.service';
 import { OrderSourceTagService } from './order-source-tag.service';
 import { PnlController } from './pnl.controller';
 import { PnlService } from './pnl.service';
@@ -32,6 +34,7 @@ import { TransactionSyncService } from './transaction-sync.service';
       SchwabDailyPnl,
       SchwabOrderHistory,
       SchwabOrderSourceTag,
+      SchwabPaperFill,
       // The 15-minute sync iterates every connected user, so it reads the
       // token table directly rather than going through the auth module
       // (which would reintroduce a cycle).
@@ -49,6 +52,7 @@ import { TransactionSyncService } from './transaction-sync.service';
     DailyPnlService,
     OrderHistoryService,
     OrderSourceTagService,
+    PaperFillService,
   ],
   exports: [
     DailyPnlService,
@@ -56,6 +60,7 @@ import { TransactionSyncService } from './transaction-sync.service';
     TransactionSyncService,
     OrderSourceTagService,
     RealizedPnlService,
+    PaperFillService,
   ],
 })
 export class PnlModule {}
