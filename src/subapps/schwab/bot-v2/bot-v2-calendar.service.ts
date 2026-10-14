@@ -39,13 +39,11 @@ export class BotV2CalendarService {
     private readonly notes: Repository<CalendarNote>,
   ) {}
 
-  async month(userId: string, month: string, book: string) {
+  async month(userId: string, month: string, book: string, withTrainer = false) {
     const parsedBook = this.parseBook(book);
     if (!isMonthKey(month)) throw new BadRequestException('month must be YYYY-MM');
     const today = etDateKey();
-    if (parsedBook !== 'all' && parsedBook !== TRAINER_BOOK) {
-      return this.emptyMonth(month, parsedBook, today);
-    }
+    if (!withTrainer) return this.emptyMonth(userId, month, parsedBook, today);
     await this.ensureBaseline(userId);
     const [closes, marks, noteRows] = await Promise.all([
       this.trainerCloses(userId),
@@ -79,11 +77,22 @@ export class BotV2CalendarService {
     };
   }
 
-  async day(userId: string, date: string, book: string) {
+  async day(userId: string, date: string, book: string, withTrainer = false) {
     const parsedBook = this.parseBook(book);
     if (!isDayKey(date)) throw new BadRequestException('date must be YYYY-MM-DD');
-    if (parsedBook !== 'all' && parsedBook !== TRAINER_BOOK) {
-      return { date, book: parsedBook, wired: false, trades: [], note: null, pnl: null, added: 0, percent: null };
+    if (!withTrainer) {
+      const note = await this.notes.findOne({ where: { userId, grain: 'day', periodKey: date } });
+      return {
+        date,
+        book: parsedBook,
+        wired: false,
+        trades: [],
+        note: note?.body ?? null,
+        pnl: null,
+        startEquity: null,
+        added: 0,
+        percent: null,
+      };
     }
     await this.ensureBaseline(userId);
     const [rows, marks, note] = await Promise.all([
@@ -226,23 +235,26 @@ export class BotV2CalendarService {
     };
   }
 
-  private emptyMonth(month: string, book: CalendarBook, today: string) {
+  private async emptyMonth(userId: string, month: string, book: CalendarBookQuery, today: string) {
     const view: CalendarMonthView = buildTrainerMonth({
       month,
       today,
       closes: [],
       marks: [],
     });
+    const noteRows = await this.notes.find({ where: { userId } });
+    const noteFor = (grain: CalendarNote['grain'], key: string) =>
+      noteRows.find((row) => row.grain === grain && row.periodKey === key)?.body ?? null;
     return {
       month,
       book,
       wired: false,
       today,
-      summary: { pnl: null, startEquity: null, added: 0, percent: null, note: null },
+      summary: { pnl: null, startEquity: null, added: 0, percent: null, note: noteFor('month', month) },
       weeks: view.weeks.map((week) => ({
         ...week,
-        note: null,
-        days: week.days.map((day) => ({ ...day, note: null })),
+        note: noteFor('week', week.monday),
+        days: week.days.map((day) => ({ ...day, note: noteFor('day', day.date) })),
       })),
     };
   }

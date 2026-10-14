@@ -1,5 +1,8 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+
+import schwabConfig from '@schwab/config/schwab.config';
 
 import { BotModule } from '@schwab/bot/bot.module';
 import { MarketDataModule } from '@schwab/market-data/market-data.module';
@@ -20,6 +23,7 @@ import { CalendarNote } from './entities/calendar-note.entity';
 
 @Module({
   imports: [
+    ConfigModule.forFeature(schwabConfig),
     TypeOrmModule.forFeature([
       BotV2Settings,
       BotV2State,

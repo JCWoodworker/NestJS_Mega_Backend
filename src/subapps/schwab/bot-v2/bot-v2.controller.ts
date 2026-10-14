@@ -2,15 +2,19 @@ import {
   Body,
   ConflictException,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
+  Inject,
   Post,
   Put,
   Query,
 } from '@nestjs/common';
+import { ConfigType } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
 
 import { BotStateService } from '@schwab/bot/bot-state.service';
+import schwabConfig from '@schwab/config/schwab.config';
 import { etDateKey, etDayBounds } from '@schwab/pnl/et-date.util';
 import { requireUserId } from '@schwab/shared/schwab-user-context';
 
@@ -37,6 +41,8 @@ export class BotV2Controller {
     @InjectRepository(BotV2Event)
     private readonly events: Repository<BotV2Event>,
     private readonly calendar: BotV2CalendarService,
+    @Inject(schwabConfig.KEY)
+    private readonly schwab: ConfigType<typeof schwabConfig>,
   ) {}
 
   @Get('status')
@@ -122,13 +128,35 @@ export class BotV2Controller {
   }
 
   @Get('calendar')
-  calendarMonth(@Query('month') month?: string, @Query('book') book?: string) {
-    return this.calendar.month(requireUserId(), month ?? '', book ?? 'trainer');
+  calendarMonth(
+    @Query('month') month?: string,
+    @Query('book') book?: string,
+    @Query('includeTrainer') includeTrainer?: string,
+  ) {
+    const userId = requireUserId();
+    const requested = book || 'all';
+    return this.calendar.month(
+      userId,
+      month ?? '',
+      requested,
+      this.withTrainer(userId, requested, includeTrainer),
+    );
   }
 
   @Get('calendar/day')
-  calendarDay(@Query('date') date?: string, @Query('book') book?: string) {
-    return this.calendar.day(requireUserId(), date ?? '', book ?? 'trainer');
+  calendarDay(
+    @Query('date') date?: string,
+    @Query('book') book?: string,
+    @Query('includeTrainer') includeTrainer?: string,
+  ) {
+    const userId = requireUserId();
+    const requested = book || 'all';
+    return this.calendar.day(
+      userId,
+      date ?? '',
+      requested,
+      this.withTrainer(userId, requested, includeTrainer),
+    );
   }
 
   @Put('calendar/notes')
@@ -176,6 +204,17 @@ export class BotV2Controller {
       hasMoreOlder: items.length === take,
       hasMoreNewer: false,
     };
+  }
+
+  /** Trainer dollars belong to the owner account. Everyone else's calendar is their own books. */
+  private withTrainer(userId: string, book: string, includeTrainer?: string): boolean {
+    const owner = this.schwab.ownerUserId;
+    const isOwner = Boolean(owner) && userId === owner;
+    if (book === 'trainer' && !isOwner) {
+      throw new ForbiddenException('Trainer results stay on the admin account');
+    }
+    if (book === 'trainer') return true;
+    return book === 'all' && isOwner && includeTrainer === '1';
   }
 
   /** Realized net and close count for the current America/New_York calendar day. */
