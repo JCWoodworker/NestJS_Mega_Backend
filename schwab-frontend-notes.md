@@ -1214,6 +1214,7 @@ frontend already has `/options` open.
     entryUnderlying?: number | null // SPY spot at entry
     direction?: 'CALL' | 'PUT'      // side the soft-exit logic evaluates
     atrUsed?: number | null
+    strategies?: string[]           // rules that agreed on this entry
     source: 'BOT_PAPER' | 'BOT_LIVE'
   }
   lastSignal: null | {
@@ -1724,6 +1725,10 @@ Basic (and admin) users can request deletion; admins fulfill with the same purge
 Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Settings → Delete account; Admin → Deletions tab.
 
 ## Changelog
+
+- **2026-10-14 (trainer calendar)**: `GET /bot-v2/calendar?month=YYYY-MM&book=trainer|manual_live|manual_paper|bot_live|bot_paper|all` returns a Monday–Friday month. Each day, week, and the month carry `pnl`, `startEquity`, `added`, and `percent` (null when the starting balance is not known). `empty` days are before the first trainer close, or in the future, and are not $0. `GET /bot-v2/calendar/day?date=YYYY-MM-DD&book=...` returns that day's closes. `PUT /bot-v2/calendar/notes` body `{ grain: day|week|month, periodKey, text }` saves one note per user per period (blank text deletes it). Week keys are the Monday `YYYY-MM-DD`. Books other than `trainer` return `wired: false` and no fills. The first calendar read while the trainer is flat writes one `BASELINE` row (`amount` 0, not cash added). `POST /bot-v2/reset` writes a `TOP_UP` for the gap to $10,000 when that gap is not zero. Past days stay in dollars until the session after that baseline. An open trade's unrealized dollars are added on the screen only.
+
+- **2026-10-14 (entry strategy on the open trade)**: `openPosition.strategies` is the list of rules that agreed on the fill. Both bots already store it on the position. The progress bar labels it while a trade is open. Not a new field.
 
 - **2026-10-10 (shared sell rule)**: Both bots sell on the same return-on-cost ladder. `GET` and `PUT` for `/bot/settings` and `/bot-v2/settings` include `lossCutPct` (default 12), `protectArmPct` (8), `protectFloorPct` (2), `givebackPct` (6), `tightFromPct` (20), and `tightGivebackPct` (4). The old premium stop, premium target, and trail percents stay stored and are no longer what either bot sells on. Saturday's merged settings patch copies those six numbers onto both the trainer row and the desk bot row.
 

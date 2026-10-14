@@ -14,6 +14,7 @@ import { BotStateService } from '@schwab/bot/bot-state.service';
 import { etDateKey, etDayBounds } from '@schwab/pnl/et-date.util';
 import { requireUserId } from '@schwab/shared/schwab-user-context';
 
+import { BotV2CalendarService } from './bot-v2-calendar.service';
 import { BotV2EngineService } from './bot-v2-engine.service';
 import { BotV2SettingsService } from './bot-v2-settings.service';
 import { BotV2StateService } from './bot-v2-state.service';
@@ -35,6 +36,7 @@ export class BotV2Controller {
     private readonly trades: Repository<BotV2Trade>,
     @InjectRepository(BotV2Event)
     private readonly events: Repository<BotV2Event>,
+    private readonly calendar: BotV2CalendarService,
   ) {}
 
   @Get('status')
@@ -111,10 +113,34 @@ export class BotV2Controller {
         'Flatten the open position before resetting paper capital',
       );
     }
+    const before = Number(row.paperEquity);
+    await this.calendar.recordTopUp(userId, before);
     row.paperEquity = 10000;
     row.paperSettledCash = 10000;
     await this.stateService.save(row);
     return this.status();
+  }
+
+  @Get('calendar')
+  calendarMonth(@Query('month') month?: string, @Query('book') book?: string) {
+    return this.calendar.month(requireUserId(), month ?? '', book ?? 'trainer');
+  }
+
+  @Get('calendar/day')
+  calendarDay(@Query('date') date?: string, @Query('book') book?: string) {
+    return this.calendar.day(requireUserId(), date ?? '', book ?? 'trainer');
+  }
+
+  @Put('calendar/notes')
+  saveCalendarNote(
+    @Body() body: { grain?: string; periodKey?: string; text?: string | null },
+  ) {
+    return this.calendar.saveNote(
+      requireUserId(),
+      body.grain ?? '',
+      body.periodKey ?? '',
+      body.text ?? null,
+    );
   }
 
   @Get('events')

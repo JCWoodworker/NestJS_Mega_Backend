@@ -10,14 +10,24 @@ import { BotV2EngineService } from './bot-v2-engine.service';
 import { BotV2RapidProfileService } from './bot-v2-rapid-profile.service';
 import { BotV2SettingsService } from './bot-v2-settings.service';
 import { BotV2StateService } from './bot-v2-state.service';
+import { BotV2CalendarService } from './bot-v2-calendar.service';
 import { BotV2Event } from './entities/bot-v2-event.entity';
 import { BotV2Settings } from './entities/bot-v2-settings.entity';
 import { BotV2State } from './entities/bot-v2-state.entity';
 import { BotV2Trade } from './entities/bot-v2-trade.entity';
+import { CalendarCapitalEvent } from './entities/calendar-capital-event.entity';
+import { CalendarNote } from './entities/calendar-note.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([BotV2Settings, BotV2State, BotV2Trade, BotV2Event]),
+    TypeOrmModule.forFeature([
+      BotV2Settings,
+      BotV2State,
+      BotV2Trade,
+      BotV2Event,
+      CalendarCapitalEvent,
+      CalendarNote,
+    ]),
     forwardRef(() => BotModule),
     MarketDataModule,
     forwardRef(() => SchwabStreamingModule),
@@ -28,6 +38,7 @@ import { BotV2Trade } from './entities/bot-v2-trade.entity';
     BotV2StateService,
     BotV2EngineService,
     BotV2RapidProfileService,
+    BotV2CalendarService,
   ],
   exports: [
     BotV2SettingsService,
