@@ -19,6 +19,7 @@ import { BotStrategy } from './enums/strategy.enum';
 import {
   combineSignals,
   isDirectionAllowed,
+  sessionVwapFromCandles,
   type BotCandle,
   type SignalAgreement,
   type SignalDirection,
@@ -255,6 +256,7 @@ function replaySession(
       sessionStartMs,
       config.atrPeriod,
     );
+    ctx.sessionVwap = sessionVwapFromCandles(seen, sessionStartMs);
     const agreement: SignalAgreement =
       (config.minStrategyAgreement ?? 1) > 1
         ? (config.minStrategyAgreement as number)

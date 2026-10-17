@@ -1,0 +1,33 @@
+{
+  "strategies": [
+    "VWAP_PULLBACK",
+    "ORB_5M",
+    "ORB_5M_CROSS",
+    "VWAP_REVERSION",
+    "EMA_MOMENTUM",
+    "VWAP_ROLLING_100"
+  ],
+  "combineMode": "ANY",
+  "cooldownMins": 2,
+  "tradeWindowStart": "09:30",
+  "tradeWindowEnd": "14:45",
+  "usePremiumStop": true,
+  "premiumStopPct": 25,
+  "usePremiumTarget": false,
+  "premiumTargetPct": 22,
+  "useTrailStop": true,
+  "trailArmPct": 8,
+  "trailPct": 15,
+  "trailMinLockPct": 2,
+  "stopAtrMult": 1.5,
+  "targetAtrMult": 1.8,
+  "riskPct": 10,
+  "equity": 6000,
+  "filters": {
+    "deltaMin": 0.4,
+    "deltaMax": 0.6,
+    "minPremium": 0.6,
+    "maxPremium": 2.5,
+    "maxSpreadPct": 5
+  }
+}

@@ -1745,6 +1745,8 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
 
 ## Changelog
 
+- **2026-10-16 (weekly entry quality — session VWAP fades, lunch/late EMA, ORB delay)**: `VWAP_REVERSION` fades anchor on session VWAP from 1-minute bars (passed as `sessionVwap` in strategy context), require **1.5× ATR** stretch with a wick through the band. `EMA_MOMENTUM` skips **11:30–13:00 ET** and skips **CALL** signals **14:00–14:45 ET**. `ORB_5M_CROSS` does not fire before **09:45 ET**. Migration sets existing `bot_v2_settings` rows with `botUnderlying=SPXW` and `tradeWindowEnd=15:00` to **14:45**. Shared strategy code; personal bots only see this if they enable those rules.
+
 - **2026-10-14 (manual quote pin)**: No new route. A watching user's long options are pinned on that user's streamer session, so a ladder recenter does not drop the bid. The pin goes away when the position is flat, and it does not unpin a contract the bot still holds.
 
 - **2026-10-14 (desk sim on the server)**: `POST /pnl/paper-fills` and `GET /pnl/paper-fills` store the desk sim tape per user (no Schwab account required). Idempotent on the client fill id. `GET /pnl/orders`, `/pnl/trades`, and `/pnl/insight` include `MANUAL_PAPER` rows. Calendar books `manual_paper` and `all` add those closes. Not mixed into Schwab equity or deposits. Exit is `SELL`, `FLATTEN`, or `STOP`.
