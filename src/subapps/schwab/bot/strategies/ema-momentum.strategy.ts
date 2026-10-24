@@ -1,6 +1,9 @@
 import { BotStrategy } from '../enums/strategy.enum';
 import { StrategyDefinition } from './strategy.types';
 
+/** Do not fire before 12:30 ET — dossier lunch chop was the main EMA leak. */
+const EMA_MIN_MINUTES_FROM_OPEN = 180;
+
 /**
  * Afternoon trend rule: fast EMA above slow EMA, price above the fast EMA,
  * and the last bar still pushing that way. The reverse for puts.
@@ -13,6 +16,9 @@ export const emaMomentumStrategy: StrategyDefinition = {
     if (ctx.emaFast == null || ctx.emaSlow == null) return null;
     if (ctx.candles.length < 2) return null;
     const last = ctx.candles[ctx.candles.length - 1];
+    const minutesFromOpen =
+      (last.chartTime - ctx.sessionStartMs) / 60_000;
+    if (minutesFromOpen < EMA_MIN_MINUTES_FROM_OPEN) return null;
     const prev = ctx.candles[ctx.candles.length - 2];
     if (
       ctx.emaFast > ctx.emaSlow &&
