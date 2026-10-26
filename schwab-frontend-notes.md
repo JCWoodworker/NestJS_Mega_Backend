@@ -1745,6 +1745,8 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
 
 ## Changelog
 
+- **2026-10-26 (manual desk follows its own underlying)**: The symbol in Settings is the manual chart and option chain. While the house trainer holds the shared socket, the desk does not send `subscribe-underlying` for a different ticker. It loads that chart with `GET /market-data/price-history` and that chain with `GET /market-data/chain`. The trainer's feed is unchanged. No new route.
+
 - **2026-10-26 (trainer replay)**: `GET /bot/fixture` accepts `underlying=SPY|SPX|SPXW` and returns that chain only. Each snapshot includes `underlying`. `yarn bot:backtest` replays the trainer: SPXW chain, 15-second bars built from that chain's spot, and the shared profit-lock ladder. The stored 1-minute bars stay SPY and are not the trainer's signal. No desk route change.
 
 - **2026-10-14 (manual quote pin)**: No new route. A watching user's long options are pinned on that user's streamer session, so a ladder recenter does not drop the bid. The pin goes away when the position is flat, and it does not unpin a contract the bot still holds.
