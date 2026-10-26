@@ -130,6 +130,7 @@ export class BotArchiveService {
         spot: row.spot == null ? null : Number(row.spot),
         quotes: row.quotes ?? [],
         expiration: row.expiration ?? null,
+        underlying: row.underlyingSymbol,
       })),
     };
 

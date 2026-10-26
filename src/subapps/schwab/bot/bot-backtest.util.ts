@@ -1,5 +1,18 @@
 import { OptionChainQuote } from '@schwab/market-data/option-chain.mapper';
 
+import { pushPriceBar } from '../bot-v2/bot-v2-bars.util';
+import { sameTrainerUnderlying } from '../bot-v2/bot-v2-config.util';
+import {
+  DEFAULT_PROFIT_LOCK,
+  disasterStopBid,
+  type ProfitLockLadder,
+} from '../bot-v2/bot-v2-profit-lock.util';
+import { sizeAtRisk } from '../bot-v2/bot-v2-sizing.util';
+import { decideTickExit } from '../bot-v2/bot-v2-tick-exit.util';
+import {
+  directionMatchesTrend,
+  trendBias,
+} from '../bot-v2/bot-v2-trend-gate.util';
 import { commissionForRoundTrip } from './bot-fees.const';
 import {
   breakevenBidFor,
@@ -18,6 +31,7 @@ import {
 import { BotStrategy } from './enums/strategy.enum';
 import {
   combineSignals,
+  etSessionStartMs,
   isDirectionAllowed,
   type BotCandle,
   type SignalAgreement,
@@ -29,10 +43,17 @@ import { buildStrategyContext, evaluateEnabled } from './strategies/registry';
  * Replay a session against recorded bars and chain snapshots.
  *
  * Every decision here is made by the same function production uses —
- * `combineSignals`, `selectContractDetailed`, `sizePosition`,
- * `computeExitLevels`, `ratchetPremiumStop`, `decideSoftExit`. A replay that
+ * `combineSignals`, `selectContractDetailed`, `sizeAtRisk` / `sizePosition`,
+ * `decideTickExit` (the profit-lock ladder) or the older
+ * `computeExitLevels` / `ratchetPremiumStop` / `decideSoftExit`. A replay that
  * reimplemented any of them would be measuring a bot we do not run, and would
  * be most confident exactly where it had drifted.
+ *
+ * The trainer path keeps one product's chain. SPY and SPX prints share a
+ * session in the recorder, and treating the next print as the same underlying
+ * flattens every trade at the entry price. Fifteen-second signal bars are
+ * built from that chain's spot with `pushPriceBar`, the function the trainer
+ * uses live. The SPY minute bars on the session are a different product.
  *
  * What it cannot reproduce: the live loop evaluates exits on every underlying
  * tick, while this sees the chain only as often as the recorder sampled it.
@@ -47,6 +68,8 @@ export interface BacktestSnapshot {
   spot: number | null;
   quotes: ChainSnapshotQuote[];
   expiration: string | null;
+  /** Product this chain belongs to. Absent on archives written before the split. */
+  underlying?: string | null;
 }
 
 export interface BacktestSession {
@@ -85,6 +108,25 @@ export interface BacktestConfig {
   targetAtrMult: number;
   riskPct: number;
   equity: number;
+  /**
+   * Replay this product's chain only. SPXW also keeps snapshots tagged SPX.
+   * Fifteen-second bars are built from that chain's spot, not from the SPY
+   * minute bars stored on the session.
+   */
+  underlying?: 'SPY' | 'SPXW';
+  /** 15 matches the trainer. 60 keeps the recorded minute bars. */
+  signalBarSeconds?: 15 | 60;
+  /** Set on the trainer path. The old premium target and ATR stops stay off. */
+  profitLock?: ProfitLockLadder | null;
+  useTimeStop?: boolean;
+  timeStopSeconds?: number;
+  useScaleOut?: boolean;
+  paperSlippageCents?: number;
+  useRiskAtStop?: boolean;
+  maxRiskUsd?: number;
+  settledCash?: number;
+  /** Session VWAP gate the trainer applies before it buys. */
+  trendGate?: boolean;
 }
 
 export interface BacktestTrade {
@@ -101,7 +143,12 @@ export interface BacktestTrade {
   grossPnl: number;
   fees: number;
   netPnl: number;
-  exitReason: SoftExitReason | 'HARD_FLATTEN_EOD' | 'SESSION_END';
+  exitReason:
+    | SoftExitReason
+    | 'TIME_STOP'
+    | 'SCALE_OUT'
+    | 'HARD_FLATTEN_EOD'
+    | 'SESSION_END';
 }
 
 export interface BacktestResult {
@@ -148,15 +195,86 @@ function isRegularHours(at: number): boolean {
   return hhmm >= '09:30' && hhmm < '16:00';
 }
 
+/**
+ * SPX and SPY cannot share a tape. A spot at the index is thousands; SPY is
+ * not. Used only when an older archive row has no product tag.
+ */
+export function inferUnderlying(
+  spot: number | null | undefined,
+): 'SPY' | 'SPXW' | null {
+  if (spot == null || !Number.isFinite(spot) || spot <= 0) return null;
+  return spot >= 2_000 ? 'SPXW' : 'SPY';
+}
+
+export function snapshotMatchesUnderlying(
+  snapshot: { underlying?: string | null; spot?: number | null },
+  wanted: string,
+): boolean {
+  const tag = snapshot.underlying ?? inferUnderlying(snapshot.spot);
+  if (!tag) return false;
+  if (wanted === 'SPY') return tag === 'SPY';
+  return sameTrainerUnderlying('SPXW', tag);
+}
+
+/** OSI root, six characters, space padded. SPX weeklies list as SPXW. */
+export function osiRoot(underlying?: string | null): string {
+  if (underlying === 'SPXW' || underlying === 'SPX') return 'SPXW  ';
+  return 'SPY   ';
+}
+
+/** The chain the replay is allowed to see. */
+export function chainSnapshots(
+  session: BacktestSession,
+  config: Pick<BacktestConfig, 'underlying' | 'signalBarSeconds'>,
+): BacktestSnapshot[] {
+  const tagged = [...session.snapshots]
+    .map((snapshot) => ({
+      ...snapshot,
+      underlying:
+        snapshot.underlying ?? inferUnderlying(snapshot.spot) ?? undefined,
+    }))
+    .sort((a, b) => a.at - b.at);
+  const wanted =
+    config.underlying ?? (config.signalBarSeconds === 15 ? 'SPXW' : undefined);
+  if (!wanted) return tagged;
+  return tagged.filter((snapshot) => snapshotMatchesUnderlying(snapshot, wanted));
+}
+
+/**
+ * Fixed bars from spot prints. Volume is the print count, the same rule the
+ * trainer uses when the index stream has no share volume. The bar still
+ * forming is left off: the live book only signals on a bar that has closed.
+ */
+export function barsFromSpots(
+  snapshots: BacktestSnapshot[],
+  barSeconds: number,
+): BotCandle[] {
+  let current: BotCandle | null = null;
+  const closed: BotCandle[] = [];
+  for (const snapshot of snapshots) {
+    if (snapshot.spot == null || !Number.isFinite(snapshot.spot)) continue;
+    const step = pushPriceBar(current, snapshot.spot, snapshot.at, barSeconds);
+    if (step.closed) closed.push(step.closed);
+    current = step.current;
+  }
+  return closed;
+}
+
+function usesSpotBars(config: BacktestConfig): boolean {
+  return config.underlying != null || config.signalBarSeconds === 15;
+}
+
 /** Rebuild chain quotes from the snapshot's positional tuples. */
 export function quotesFromSnapshot(
   snapshot: BacktestSnapshot,
   expiration: string,
+  underlying?: string | null,
 ): OptionChainQuote[] {
+  const root = osiRoot(underlying ?? snapshot.underlying);
   return snapshot.quotes.map(([strike, right, delta, bid, ask]) => {
     const strikeThousandths = String(Math.round(strike * 1000)).padStart(8, '0');
     return {
-      symbol: `SPY   ${expiration}${right === 0 ? 'C' : 'P'}${strikeThousandths}`,
+      symbol: `${root}${expiration}${right === 0 ? 'C' : 'P'}${strikeThousandths}`,
       bid,
       ask,
       last: null,
@@ -206,24 +324,77 @@ function strikeOf(symbol: string): number {
   return Number(symbol.slice(13, 21)) / 1000;
 }
 
+function recordTrade(
+  trades: BacktestTrade[],
+  input: {
+    session: BacktestSession;
+    contractSymbol: string;
+    direction: SignalDirection;
+    strategies: string[];
+    quantity: number;
+    entryPremium: number;
+    exitPremium: number;
+    openedAt: number;
+    closedAt: number;
+    exitReason: BacktestTrade['exitReason'];
+  },
+): void {
+  const grossPnl =
+    (input.exitPremium - input.entryPremium) * input.quantity * 100;
+  const fees = commissionForRoundTrip(input.quantity);
+  trades.push({
+    etDateKey: input.session.etDateKey,
+    symbol: input.contractSymbol,
+    direction: input.direction,
+    strategies: input.strategies,
+    quantity: input.quantity,
+    entryPremium: input.entryPremium,
+    exitPremium: input.exitPremium,
+    openedAt: input.openedAt,
+    closedAt: input.closedAt,
+    holdMs: input.closedAt - input.openedAt,
+    grossPnl: round2(grossPnl),
+    fees,
+    netPnl: round2(grossPnl - fees),
+    exitReason: input.exitReason,
+  });
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 function replaySession(
   session: BacktestSession,
   config: BacktestConfig,
   skipped: Record<string, number>,
 ): BacktestTrade[] {
   const trades: BacktestTrade[] = [];
-  const bars = session.bars
+  const snapshots = chainSnapshots(session, config);
+  const built = usesSpotBars(config);
+  const barSeconds = config.signalBarSeconds ?? (built ? 15 : 60);
+  const barMs = barSeconds * 1000;
+  const bars = (built ? barsFromSpots(snapshots, barSeconds) : session.bars)
     .filter((bar) => isRegularHours(bar.chartTime))
     .sort((a, b) => a.chartTime - b.chartTime);
-  const snapshots = [...session.snapshots].sort((a, b) => a.at - b.at);
   if (!bars.length || !snapshots.length) return trades;
 
-  const sessionStartMs = bars[0].chartTime;
+  const sessionStartMs = built
+    ? etSessionStartMs(new Date(bars[0].chartTime))
+    : bars[0].chartTime;
+  const minutes = (
+    built ? barsFromSpots(snapshots, 60) : session.bars
+  )
+    .filter((bar) => isRegularHours(bar.chartTime))
+    .sort((a, b) => a.chartTime - b.chartTime);
   // Prefer the expiration the recorder saw; fall back to 0DTE for the session,
   // which is the only expiry this bot trades.
   const expiration =
     snapshots.find((snapshot) => snapshot.expiration)?.expiration ??
     osiExpiration(session.etDateKey);
+  const product =
+    config.underlying ??
+    snapshots.find((snapshot) => snapshot.underlying)?.underlying;
   let lastExitAt: number | null = null;
   let barIndex = 0;
 
@@ -282,15 +453,30 @@ function replaySession(
       continue;
     }
 
+    if (config.trendGate) {
+      const closedBefore = bar.chartTime + (built ? barMs : 60_000);
+      const bias = trendBias(
+        minutes.filter((minute) => minute.chartTime + 60_000 <= closedBefore),
+        sessionStartMs,
+        bar.close,
+      );
+      if (!directionMatchesTrend(signal.direction, bias)) {
+        skipped.AGAINST_TREND = (skipped.AGAINST_TREND ?? 0) + 1;
+        barIndex += 1;
+        continue;
+      }
+    }
+
     // The chain as of the bar's close is the one the live bot would have seen.
+    // Built bars close on the first print of the next bucket.
     const entrySnapshotIndex = snapshots.findIndex(
-      (snapshot) => snapshot.at >= bar.chartTime,
+      (snapshot) => snapshot.at >= bar.chartTime + (built ? barMs : 0),
     );
     if (entrySnapshotIndex === -1) break;
     const entrySnapshot = snapshots[entrySnapshotIndex];
 
     const { contract } = selectContractDetailed(
-      quotesFromSnapshot(entrySnapshot, expiration),
+      quotesFromSnapshot(entrySnapshot, expiration, product),
       signal.direction,
       config.filters,
     );
@@ -300,40 +486,84 @@ function replaySession(
       continue;
     }
 
-    // Entries pay the ask, as the live walk-limit does in practice.
-    const entryPremium = contract.ask;
-    const quantity = sizePosition(
-      computeBudget(config.equity, config.equity, config.riskPct),
-      entryPremium,
+    // Entries pay the ask, plus the trainer's paper slippage when it is set.
+    const entryPremium = round2(
+      contract.ask + (config.paperSlippageCents ?? 0) / 100,
     );
-    if (quantity < 1) {
-      skipped.SKIP_BUDGET = (skipped.SKIP_BUDGET ?? 0) + 1;
-      barIndex += 1;
-      continue;
+    const ladder = config.profitLock ?? null;
+    let quantity = 0;
+    if (ladder) {
+      const sized = sizeAtRisk({
+        useRiskAtStop: config.useRiskAtStop ?? false,
+        maxRiskUsd: config.maxRiskUsd ?? 0,
+        ask: entryPremium,
+        stopPremium: disasterStopBid(
+          entryPremium,
+          1,
+          commissionForRoundTrip(1),
+          ladder,
+        ),
+        settledCash: config.settledCash ?? config.equity,
+        equity: config.equity,
+        riskPct: config.riskPct,
+      });
+      quantity = sized.qty;
+      if (quantity < 1) {
+        const reason = sized.reason === 'OK' ? 'NO_BUDGET' : sized.reason;
+        skipped[reason] = (skipped[reason] ?? 0) + 1;
+        barIndex += 1;
+        continue;
+      }
+    } else {
+      quantity = sizePosition(
+        computeBudget(config.equity, config.equity, config.riskPct),
+        entryPremium,
+      );
+      if (quantity < 1) {
+        skipped.SKIP_BUDGET = (skipped.SKIP_BUDGET ?? 0) + 1;
+        barIndex += 1;
+        continue;
+      }
     }
 
-    const levels = computeExitLevels({
-      entryPremium,
-      spot: entrySnapshot.spot ?? bar.close,
-      atr: ctx.atr,
-      direction: signal.direction,
-      usePremiumStop: config.usePremiumStop,
-      premiumStopPct: config.premiumStopPct,
-      usePremiumTarget: config.usePremiumTarget,
-      premiumTargetPct: config.premiumTargetPct,
-      stopAtrMult: config.stopAtrMult,
-      targetAtrMult: config.targetAtrMult,
-    });
+    const levels = ladder
+      ? {
+          stopPremium: disasterStopBid(
+            entryPremium,
+            quantity,
+            commissionForRoundTrip(quantity),
+            ladder,
+          ),
+          targetPremium: null as number | null,
+          stopUnderlying: null as number | null,
+          targetUnderlying: null as number | null,
+        }
+      : computeExitLevels({
+          entryPremium,
+          spot: entrySnapshot.spot ?? bar.close,
+          atr: ctx.atr,
+          direction: signal.direction,
+          usePremiumStop: config.usePremiumStop,
+          premiumStopPct: config.premiumStopPct,
+          usePremiumTarget: config.usePremiumTarget,
+          premiumTargetPct: config.premiumTargetPct,
+          stopAtrMult: config.stopAtrMult,
+          targetAtrMult: config.targetAtrMult,
+        });
 
     let stopPremium = levels.stopPremium;
     let stopSource: 'INITIAL' | 'TRAIL' = 'INITIAL';
-    let peakBid: number | null = null;
+    let peakBid: number | null = ladder ? contract.bid : null;
+    let peakAt = entrySnapshot.at;
     let trailArmed = false;
+    let scaledOut = false;
+    let openQuantity = quantity;
     const breakevenBid = breakevenBidFor(entryPremium, quantity);
 
     let exitPremium: number | null = null;
     let exitAt: number | null = null;
     let exitReason: BacktestTrade['exitReason'] = 'SESSION_END';
+    let lastBid: number | null = contract.bid;
 
     const heldStrike = strikeOf(contract.symbol);
     const heldRight: 0 | 1 = signal.direction === 'CALL' ? 0 : 1;
@@ -344,13 +574,72 @@ function replaySession(
       const spot = snapshot.spot;
 
       if (etHhMm(snapshot.at) >= config.hardFlattenTime) {
-        exitPremium = optionBid ?? entryPremium;
+        exitPremium = optionBid ?? lastBid ?? entryPremium;
         exitAt = snapshot.at;
         exitReason = 'HARD_FLATTEN_EOD';
         break;
       }
 
-      if (config.useTrailStop && optionBid != null) {
+      // A print from a chain that no longer lists the strike is not a fill.
+      if (optionBid == null) continue;
+      lastBid = optionBid;
+
+      if (ladder) {
+        if (peakBid == null || optionBid > peakBid) peakAt = snapshot.at;
+        const decision = decideTickExit({
+          lock: {
+            entryPremium,
+            optionBid,
+            peakBid,
+            stopPremium,
+            quantity: openQuantity,
+            commissionRoundTrip: commissionForRoundTrip(openQuantity),
+            ladder,
+          },
+          exit: {
+            direction: signal.direction,
+            spot: spot ?? bar.close,
+            targetPremium: null,
+            stopUnderlying: null,
+            targetUnderlying: null,
+          },
+          useScaleOut: config.useScaleOut ?? false,
+          scaledOut,
+          quantity: openQuantity,
+          entryPremium,
+          useTimeStop: config.useTimeStop ?? false,
+          openedAt: entrySnapshot.at,
+          peakAt,
+          now: snapshot.at,
+          timeStopSeconds: config.timeStopSeconds,
+        });
+        peakBid = decision.ratchet.peakBid;
+        stopPremium = decision.ratchet.stopPremium;
+        if (decision.type === 'HOLD') continue;
+        if (decision.type === 'SCALE_OUT') {
+          recordTrade(trades, {
+            session,
+            contractSymbol: contract.symbol,
+            direction: signal.direction,
+            strategies: signal.strategies,
+            quantity: decision.quantity,
+            entryPremium,
+            exitPremium: optionBid,
+            openedAt: entrySnapshot.at,
+            closedAt: snapshot.at,
+            exitReason: 'SCALE_OUT',
+          });
+          openQuantity -= decision.quantity;
+          scaledOut = true;
+          continue;
+        }
+        exitPremium = optionBid;
+        exitAt = snapshot.at;
+        exitReason = decision.reason;
+        break;
+      }
+
+      if (config.useTrailStop) {
         const ratcheted = ratchetPremiumStop({
           entryPremium,
           optionBid,
@@ -381,7 +670,7 @@ function replaySession(
 
       if (reason) {
         // Exits hit the bid, matching the marketable STC the live path sends.
-        exitPremium = optionBid ?? entryPremium;
+        exitPremium = optionBid;
         exitAt = snapshot.at;
         exitReason = reason;
         break;
@@ -390,27 +679,21 @@ function replaySession(
 
     if (exitPremium == null || exitAt == null) {
       const last = snapshots[snapshots.length - 1];
-      exitPremium = bidFor(last, heldStrike, heldRight) ?? entryPremium;
+      exitPremium = bidFor(last, heldStrike, heldRight) ?? lastBid ?? entryPremium;
       exitAt = last.at;
       exitReason = 'SESSION_END';
     }
 
-    const grossPnl = (exitPremium - entryPremium) * quantity * 100;
-    const fees = commissionForRoundTrip(quantity);
-    trades.push({
-      etDateKey: session.etDateKey,
-      symbol: contract.symbol,
+    recordTrade(trades, {
+      session,
+      contractSymbol: contract.symbol,
       direction: signal.direction,
       strategies: signal.strategies,
-      quantity,
+      quantity: openQuantity,
       entryPremium,
       exitPremium,
       openedAt: entrySnapshot.at,
       closedAt: exitAt,
-      holdMs: exitAt - entrySnapshot.at,
-      grossPnl: Math.round(grossPnl * 100) / 100,
-      fees,
-      netPnl: Math.round((grossPnl - fees) * 100) / 100,
       exitReason,
     });
 
@@ -439,7 +722,7 @@ export function runBacktest(
   const grossPnl = trades.reduce((sum, trade) => sum + trade.grossPnl, 0);
   const fees = trades.reduce((sum, trade) => sum + trade.fees, 0);
   const intervals = sessions
-    .map((session) => medianIntervalSec(session.snapshots))
+    .map((session) => medianIntervalSec(chainSnapshots(session, config)))
     .filter((value): value is number => value != null)
     .sort((a, b) => a - b);
   // Worst session governs: one coarse day is enough to make a pooled result

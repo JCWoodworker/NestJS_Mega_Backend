@@ -2,8 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
+import { sameTrainerUnderlying } from '../bot-v2/bot-v2-config.util';
 import { BotArchiveService } from './bot-archive.service';
-import { type BacktestSession } from './bot-backtest.util';
+import {
+  inferUnderlying,
+  type BacktestSession,
+  type BacktestSnapshot,
+} from './bot-backtest.util';
 import { BotChainSnapshot } from './entities/bot-chain-snapshot.entity';
 import { BotMarketDay } from './entities/bot-market-day.entity';
 
@@ -39,12 +44,15 @@ export class BotFixtureService {
   async getFixture(range: {
     from?: string;
     to?: string;
+    /** `SPY`, `SPX`, or `SPXW`. Anything else is ignored. */
+    underlying?: string;
   }): Promise<FixtureResponse> {
+    const wanted = wantedUnderlying(range.underlying);
     const days = await this.marketDayRepository.find({
       order: { etDateKey: 'ASC' },
     });
 
-    const wanted = days
+    const daysWanted = days
       .filter((day) => !range.from || day.etDateKey >= range.from)
       .filter((day) => !range.to || day.etDateKey <= range.to)
       .slice(-MAX_SESSIONS);
@@ -52,7 +60,7 @@ export class BotFixtureService {
     const sessions: BacktestSession[] = [];
     const incomplete: string[] = [];
 
-    for (const day of wanted) {
+    for (const day of daysWanted) {
       const rows = await this.snapshotRepository.find({
         where: { etDateKey: day.etDateKey },
         order: { at: 'ASC' },
@@ -60,15 +68,25 @@ export class BotFixtureService {
 
       // Sessions past the hot window live in S3. Bars stay in Postgres — one
       // row a day is nothing — so only the chain has to be fetched back.
-      const snapshots = rows.length
-        ? rows.map((row) => ({
-            at: Number(row.at),
-            spot: row.spot == null ? null : Number(row.spot),
-            quotes: row.quotes ?? [],
-            expiration: row.expiration ?? null,
-          }))
-        : ((await this.archiveService.readSession(day.etDateKey))?.snapshots ??
-          []);
+      const recorded = rows.length
+        ? rows.map((row) =>
+            tagSnapshot(
+              {
+                at: Number(row.at),
+                spot: row.spot == null ? null : Number(row.spot),
+                quotes: row.quotes ?? [],
+                expiration: row.expiration ?? null,
+              },
+              row.underlyingSymbol,
+            ),
+          )
+        : (
+            (await this.archiveService.readSession(day.etDateKey))?.snapshots ??
+            []
+          ).map((snapshot) => tagSnapshot(snapshot));
+      const snapshots = recorded.filter((snapshot) =>
+        snapshotMatches(snapshot, wanted),
+      );
 
       if (!snapshots.length) {
         incomplete.push(day.etDateKey);
@@ -97,4 +115,33 @@ export class BotFixtureService {
 
     return { sessions, incomplete };
   }
+}
+
+function wantedUnderlying(value?: string): 'SPY' | 'SPXW' | undefined {
+  const upper = value?.trim().toUpperCase();
+  if (upper === 'SPY') return 'SPY';
+  if (upper === 'SPX' || upper === 'SPXW') return 'SPXW';
+  return undefined;
+}
+
+function tagSnapshot(
+  snapshot: BacktestSnapshot,
+  explicit?: string | null,
+): BacktestSnapshot {
+  return {
+    ...snapshot,
+    underlying:
+      explicit ?? snapshot.underlying ?? inferUnderlying(snapshot.spot) ?? null,
+  };
+}
+
+function snapshotMatches(
+  snapshot: BacktestSnapshot,
+  wanted: 'SPY' | 'SPXW' | undefined,
+): boolean {
+  if (!wanted) return true;
+  const tag = snapshot.underlying ?? inferUnderlying(snapshot.spot);
+  if (!tag) return false;
+  if (wanted === 'SPY') return tag === 'SPY';
+  return sameTrainerUnderlying('SPXW', tag);
 }

@@ -20,8 +20,10 @@ import { BotFixtureService } from './bot-fixture.service';
  *
  * Deliberately not behind the admin JWT like the rest of the lab: the caller
  * is a Cursor cloud agent on a throwaway VM with no user session, holding only
- * a token passed to it for that run. What it can read is SPY bars and option
- * chain snapshots — public market data we happened to record. No account,
+ * a token passed to it for that run. What it can read is recorded bars and
+ * option chain snapshots — public market data we happened to record. Pass
+ * `underlying=SPXW` (or `SPY`) to take one product; the recorder stores both
+ * in the same session. No account,
  * position, order or P&L data is reachable here.
  *
  * Disabled entirely unless `BOT_FIXTURE_TOKEN` is set, so an app that never
@@ -38,9 +40,10 @@ export class BotFixtureController {
     @Headers('authorization') authorization: string | undefined,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('underlying') underlying?: string,
   ) {
     this.assertToken(authorization);
-    return this.fixtureService.getFixture({ from, to });
+    return this.fixtureService.getFixture({ from, to, underlying });
   }
 
   private assertToken(authorization: string | undefined): void {

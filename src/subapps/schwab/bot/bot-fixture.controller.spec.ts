@@ -24,6 +24,7 @@ describe('BotFixtureController access', () => {
     expect(fixtureService.getFixture).toHaveBeenCalledWith({
       from: '2026-09-21',
       to: undefined,
+      underlying: undefined,
     });
   });
 

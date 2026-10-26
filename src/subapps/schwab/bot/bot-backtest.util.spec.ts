@@ -1,5 +1,9 @@
+import { DEFAULT_PROFIT_LOCK } from '../bot-v2/bot-v2-profit-lock.util';
 import {
   LOW_FIDELITY_INTERVAL_SEC,
+  barsFromSpots,
+  chainSnapshots,
+  inferUnderlying,
   quotesFromSnapshot,
   runBacktest,
   type BacktestConfig,
@@ -253,6 +257,113 @@ describe('runBacktest fidelity', () => {
       LOW_FIDELITY_INTERVAL_SEC,
     );
     expect(result.lowFidelity).toBe(true);
+  });
+
+  it('sells on the profit-lock loss cut while the bid is still inside a 25% stop', () => {
+    const result = runBacktest(
+      [session({ snapshots: snapshots(40, (i) => (i > 8 ? 0.85 : 1)) })],
+      config({ profitLock: DEFAULT_PROFIT_LOCK }),
+    );
+
+    expect(result.trades[0].exitReason).toBe('PREMIUM_STOP');
+    expect(result.trades[0].exitPremium).toBe(0.85);
+    expect(result.trades[0].quantity).toBe(1);
+  });
+
+  it('scratches a trade that has not moved after the time stop', () => {
+    const result = runBacktest(
+      [session()],
+      config({
+        profitLock: DEFAULT_PROFIT_LOCK,
+        useTimeStop: true,
+        timeStopSeconds: 180,
+      }),
+    );
+
+    expect(result.trades[0].exitReason).toBe('TIME_STOP');
+  });
+
+  it('builds fifteen-second bars from prints and leaves the open bar off', () => {
+    const built = barsFromSpots(
+      [
+        { at: OPEN_ET, spot: 6000, quotes: [], expiration: null },
+        { at: OPEN_ET + 5_000, spot: 6002, quotes: [], expiration: null },
+        { at: OPEN_ET + 15_000, spot: 5990, quotes: [], expiration: null },
+      ],
+      15,
+    );
+
+    expect(built).toEqual([
+      {
+        chartTime: OPEN_ET,
+        open: 6000,
+        high: 6002,
+        low: 6000,
+        close: 6002,
+        volume: 2,
+      },
+    ]);
+  });
+
+  it('reads an untagged index print as SPX and a share print as SPY', () => {
+    expect(inferUnderlying(6734)).toBe('SPXW');
+    expect(inferUnderlying(670)).toBe('SPY');
+    const chain = chainSnapshots(
+      {
+        etDateKey: '2026-09-24',
+        bars: [],
+        snapshots: [
+          { at: 1, spot: 670, quotes: [], expiration: null },
+          { at: 2, spot: 6700, quotes: [], expiration: null },
+        ],
+      },
+      { underlying: 'SPXW' },
+    );
+
+    expect(chain.map((snapshot) => snapshot.spot)).toEqual([6700]);
+  });
+
+  /**
+   * The recorder stores both chains in one session. The print after an SPX
+   * fill is often SPY, and using it as the mark flattens the trade at entry.
+   */
+  it('replays the SPX chain through fifteen-second bars and the profit lock', () => {
+    const snaps: BacktestSnapshot[] = [];
+    for (let i = 0; i < 80; i += 1) {
+      const at = OPEN_ET + i * 15_000;
+      const minute = (i * 15) / 60;
+      const bid = minute < 8 ? 1 : 0.85;
+      snaps.push({
+        at,
+        spot: minute < 5 ? 6000 : 6010,
+        expiration: '260924',
+        underlying: 'SPXW',
+        quotes: [[6000, 0, 0.5, bid, bid + 0.02]],
+      });
+    }
+    snaps.push({
+      at: OPEN_ET + 6 * 60_000,
+      spot: 100,
+      expiration: '260924',
+      underlying: 'SPY',
+      quotes: [[6000, 0, 0.5, 0.01, 0.02]],
+    });
+
+    const result = runBacktest(
+      [{ etDateKey: '2026-09-24', bars: [], snapshots: snaps }],
+      config({
+        underlying: 'SPXW',
+        signalBarSeconds: 15,
+        profitLock: DEFAULT_PROFIT_LOCK,
+        trendGate: true,
+      }),
+    );
+
+    expect(result.trades[0]).toMatchObject({
+      symbol: 'SPXW  260924C06000000',
+      exitReason: 'PREMIUM_STOP',
+      exitPremium: 0.85,
+    });
   });
 
   it('reports low fidelity when there is nothing to measure', () => {

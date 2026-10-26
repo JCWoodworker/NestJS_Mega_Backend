@@ -1745,6 +1745,8 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
 
 ## Changelog
 
+- **2026-10-26 (trainer replay)**: `GET /bot/fixture` accepts `underlying=SPY|SPX|SPXW` and returns that chain only. Each snapshot includes `underlying`. `yarn bot:backtest` replays the trainer: SPXW chain, 15-second bars built from that chain's spot, and the shared profit-lock ladder. The stored 1-minute bars stay SPY and are not the trainer's signal. No desk route change.
+
 - **2026-10-14 (manual quote pin)**: No new route. A watching user's long options are pinned on that user's streamer session, so a ladder recenter does not drop the bid. The pin goes away when the position is flat, and it does not unpin a contract the bot still holds.
 
 - **2026-10-14 (desk sim on the server)**: `POST /pnl/paper-fills` and `GET /pnl/paper-fills` store the desk sim tape per user (no Schwab account required). Idempotent on the client fill id. `GET /pnl/orders`, `/pnl/trades`, and `/pnl/insight` include `MANUAL_PAPER` rows. Calendar books `manual_paper` and `all` add those closes. Not mixed into Schwab equity or deposits. Exit is `SELL`, `FLATTEN`, or `STOP`.

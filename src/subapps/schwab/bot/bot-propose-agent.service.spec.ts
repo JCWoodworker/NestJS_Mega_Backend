@@ -140,6 +140,8 @@ describe('BotProposeAgentService prompt', () => {
   it('requires the replay to be run both ways', () => {
     expect(prompt()).toContain('yarn bot:backtest');
     expect(prompt()).toContain('baseline');
+    expect(prompt()).toContain('SPXW');
+    expect(prompt()).toContain('profit-lock');
   });
 
   it('requires the sampling caveat to be repeated in the PR', () => {
