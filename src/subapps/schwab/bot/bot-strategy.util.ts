@@ -35,6 +35,48 @@ export function computeVwap(
   return pv / vol;
 }
 
+/** Same minute buckets the trainer trend gate uses on 1-minute bars. */
+export function aggregateToMinuteBars(
+  candles: BotCandle[],
+  sessionStartMs: number,
+): BotCandle[] {
+  const buckets = new Map<number, BotCandle>();
+  for (const c of candles) {
+    if (c.chartTime < sessionStartMs) continue;
+    const minuteKey = Math.floor(c.chartTime / 60_000) * 60_000;
+    const existing = buckets.get(minuteKey);
+    if (!existing) {
+      buckets.set(minuteKey, { ...c, chartTime: minuteKey });
+      continue;
+    }
+    existing.high = Math.max(existing.high, c.high);
+    existing.low = Math.min(existing.low, c.low);
+    existing.close = c.close;
+    existing.volume += c.volume;
+  }
+  return [...buckets.values()].sort((a, b) => a.chartTime - b.chartTime);
+}
+
+/**
+ * Session VWAP on aggregated minute bars — matches `sessionVwap` in the
+ * trainer trend gate (volume-weighted, else mean typical price).
+ */
+export function computeSessionTypicalVwap(
+  candles: BotCandle[],
+  sessionStartMs: number,
+  minMinutes = 10,
+): number | null {
+  const minutes = aggregateToMinuteBars(candles, sessionStartMs);
+  if (minutes.length < minMinutes) return null;
+  const weighted = computeVwap(minutes, sessionStartMs);
+  if (weighted != null) return weighted;
+  let sum = 0;
+  for (const c of minutes) {
+    sum += (c.high + c.low + c.close) / 3;
+  }
+  return sum / minutes.length;
+}
+
 /** Wilder ATR(period) over the candle buffer. */
 export function computeAtr(
   candles: BotCandle[],
