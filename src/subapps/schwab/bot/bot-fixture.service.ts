@@ -2,13 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { sameTrainerUnderlying } from '../bot-v2/bot-v2-config.util';
 import { BotArchiveService } from './bot-archive.service';
 import {
   inferUnderlying,
   type BacktestSession,
   type BacktestSnapshot,
 } from './bot-backtest.util';
+import { sameTrainerUnderlying } from '../bot-v2/bot-v2-config.util';
 import { BotChainSnapshot } from './entities/bot-chain-snapshot.entity';
 import { BotMarketDay } from './entities/bot-market-day.entity';
 
@@ -61,50 +61,12 @@ export class BotFixtureService {
     const incomplete: string[] = [];
 
     for (const day of daysWanted) {
-      const rows = await this.snapshotRepository.find({
-        where: { etDateKey: day.etDateKey },
-        order: { at: 'ASC' },
-      });
-
-      // Sessions past the hot window live in S3. Bars stay in Postgres — one
-      // row a day is nothing — so only the chain has to be fetched back.
-      const recorded = rows.length
-        ? rows.map((row) =>
-            tagSnapshot(
-              {
-                at: Number(row.at),
-                spot: row.spot == null ? null : Number(row.spot),
-                quotes: row.quotes ?? [],
-                expiration: row.expiration ?? null,
-              },
-              row.underlyingSymbol,
-            ),
-          )
-        : (
-            (await this.archiveService.readSession(day.etDateKey))?.snapshots ??
-            []
-          ).map((snapshot) => tagSnapshot(snapshot));
-      const snapshots = recorded.filter((snapshot) =>
-        snapshotMatches(snapshot, wanted),
-      );
-
-      if (!snapshots.length) {
+      const session = await this.assembleSession(day, wanted);
+      if (!session) {
         incomplete.push(day.etDateKey);
         continue;
       }
-
-      sessions.push({
-        etDateKey: day.etDateKey,
-        bars: (day.bars ?? []).map(([chartTime, open, high, low, close, volume]) => ({
-          chartTime,
-          open,
-          high,
-          low,
-          close,
-          volume,
-        })),
-        snapshots,
-      });
+      sessions.push(session);
     }
 
     this.logger.log(
@@ -114,6 +76,67 @@ export class BotFixtureService {
     );
 
     return { sessions, incomplete };
+  }
+
+  /**
+   * One recorded session, or null when that day has no chain for the product.
+   * The Saturday search loads days this way so the dyno never holds the month.
+   */
+  async loadSession(
+    etDateKey: string,
+    underlying?: string,
+  ): Promise<BacktestSession | null> {
+    const day = await this.marketDayRepository.findOneBy({ etDateKey });
+    if (!day) return null;
+    return this.assembleSession(day, wantedUnderlying(underlying));
+  }
+
+  private async assembleSession(
+    day: BotMarketDay,
+    wanted: 'SPY' | 'SPXW' | undefined,
+  ): Promise<BacktestSession | null> {
+    const rows = await this.snapshotRepository.find({
+      where: { etDateKey: day.etDateKey },
+      order: { at: 'ASC' },
+    });
+
+    // Sessions past the hot window live in S3. Bars stay in Postgres — one
+    // row a day is nothing — so only the chain has to be fetched back.
+    const recorded = rows.length
+      ? rows.map((row) =>
+          tagSnapshot(
+            {
+              at: Number(row.at),
+              spot: row.spot == null ? null : Number(row.spot),
+              quotes: row.quotes ?? [],
+              expiration: row.expiration ?? null,
+            },
+            row.underlyingSymbol,
+          ),
+        )
+      : (
+          (await this.archiveService.readSession(day.etDateKey))?.snapshots ??
+          []
+        ).map((snapshot) => tagSnapshot(snapshot));
+    const snapshots = recorded.filter((snapshot) =>
+      snapshotMatches(snapshot, wanted),
+    );
+    if (!snapshots.length) return null;
+
+    return {
+      etDateKey: day.etDateKey,
+      bars: (day.bars ?? []).map(
+        ([chartTime, open, high, low, close, volume]) => ({
+          chartTime,
+          open,
+          high,
+          low,
+          close,
+          volume,
+        }),
+      ),
+      snapshots,
+    };
   }
 }
 

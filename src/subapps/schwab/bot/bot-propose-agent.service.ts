@@ -4,6 +4,7 @@ import { ConfigType } from '@nestjs/config';
 
 import schwabConfig from '@schwab/config/schwab.config';
 
+import { SearchWinner } from './bot-propose-search';
 import { ProposePacket } from './bot-propose.util';
 
 /**
@@ -54,11 +55,10 @@ export class BotProposeAgentService {
   ): Promise<{ status: string; detail?: string }> {
     if (!this.config.botProposeAgentEnabled) return { status: 'flag_off' };
 
-    // No trades means nothing to review. Note this is the only bar: a losing
-    // week is the *input* to the review, and the capped-settings gates in
-    // `packet.blockedReasons` are evidence the agent weighs, not a veto. The
-    // loop this replaced refused to look at exactly the weeks worth looking at.
-    if (!packet.dossier.sessions.length) return { status: 'no_sessions' };
+    // The search already ran inside this process. A week with no winner does
+    // not start an agent, so it cannot open a pull request.
+    const winner = packet.search?.winner ?? null;
+    if (!winner) return { status: 'no_winner' };
 
     const apiKey = process.env.CURSOR_API_KEY;
     if (!apiKey) return { status: 'no_api_key' };
@@ -70,24 +70,32 @@ export class BotProposeAgentService {
     const fixtureUrl = process.env.BOT_FIXTURE_URL;
 
     try {
-      const result = await Agent.prompt(this.buildPrompt(packet, fixtureUrl), {
-        apiKey,
-        model: { id: process.env.BOT_PROPOSE_MODEL ?? 'composer-2.5' },
-        cloud: {
-          repos: [{ url: nestRepo, startingRef: 'main' }],
-          autoCreatePR: true,
-          // Per-session, encrypted at rest, deleted with the agent. The token
-          // only reaches a read-only market-data endpoint.
-          envVars:
-            fixtureToken && fixtureUrl
-              ? { BOT_FIXTURE_TOKEN: fixtureToken, BOT_FIXTURE_URL: fixtureUrl }
-              : undefined,
+      const result = await Agent.prompt(
+        this.buildPrompt(packet, winner, fixtureUrl),
+        {
+          apiKey,
+          model: { id: process.env.BOT_PROPOSE_MODEL ?? 'composer-2.5' },
+          cloud: {
+            repos: [{ url: nestRepo, startingRef: 'main' }],
+            // Off. The prompt opens one pull request for the assignment below.
+            // A week the search lost never reaches this call.
+            autoCreatePR: false,
+            envVars:
+              fixtureToken && fixtureUrl
+                ? {
+                    BOT_FIXTURE_TOKEN: fixtureToken,
+                    BOT_FIXTURE_URL: fixtureUrl,
+                  }
+                : undefined,
+          },
         },
-      });
+      );
 
       const prUrl = result.git?.branches.find((branch) => branch.prUrl)?.prUrl;
       this.logger.log(
-        `propose agent ${result.status}: ${result.id}${prUrl ? ` ${prUrl}` : ''}`,
+        `propose agent ${result.status}: ${result.id}${
+          prUrl ? ` ${prUrl}` : ''
+        }`,
       );
       if (result.status === 'error') {
         return { status: 'error', detail: result.error?.message ?? result.id };
@@ -102,124 +110,115 @@ export class BotProposeAgentService {
     }
   }
 
-  private buildPrompt(packet: ProposePacket, fixtureUrl?: string): string {
+  private buildPrompt(
+    packet: ProposePacket,
+    winner: SearchWinner,
+    fixtureUrl?: string,
+  ): string {
+    const from =
+      packet.search?.searchSessions[0] ??
+      packet.dossier.sessions[0]?.etDateKey ??
+      packet.weekEndingEt;
     const backtest = fixtureUrl
-      ? `yarn bot:backtest --url "$BOT_FIXTURE_URL" --token "$BOT_FIXTURE_TOKEN" --from ${packet.dossier.sessions[0].etDateKey}`
+      ? `yarn bot:backtest --url "$BOT_FIXTURE_URL" --token "$BOT_FIXTURE_TOKEN" --from ${from}`
       : 'yarn bot:backtest --fixture <file>  # no fixture endpoint configured this run';
+    const codeChange = winner.kind === 'quiet-days';
 
     return [
       '# Weekly improvement review',
       '',
-      'You are reviewing the house paper trainer, the V2 book under bot-v2.',
-      `This packet is only the ${packet.book} book. Do not mix it with trades`,
-      'from another underlying or bar size.',
-      'It is not a user\'s personal bot. It runs the enabled entry rules',
-      'listed in the dossier, combined',
-      'with ANY (first to fire wins) or CONFIRMING (all must agree). It holds',
-      'one position at a time and sells with the shared return-on-cost ladder:',
-      'lossCutPct, protectArmPct, protectFloorPct, givebackPct, tightFromPct,',
-      'tightGivebackPct. The desk bot uses those same six numbers. Do not',
-      'tune premiumStopPct, premiumTargetPct, or the old trail percents.',
-      'A day that finishes with a profit is the score. Win rate is not.',
-      'Leave at least one change: a ladder tweak the tape says would have',
-      'made more days green, or a code change both bots share. If the sell',
-      'numbers are not the leak, change how often it buys.',
+      'You are writing up one change that already beat the house trainer on its own tape.',
+      `This packet is only the ${packet.book} book.`,
+      'The desk is a long single-leg premium buyer. Read bot-reports/research-brief.md',
+      'before you edit. A published parameter is not a setting. One assignment.',
+      'Do not add a second idea.',
       '',
-      '## Your job',
+      '## Assignment',
       '',
-      'Work out where the strategy is actually failing, then change it. The',
-      'failure may be in the entry rules, the strike filters, the exit levels,',
-      'the gating, or the position sizing — the evidence decides, not a',
-      'preference for whichever is easiest to edit.',
+      'The search already measured this. Do not pick a different change.',
       '',
-      'Research is part of the job. Search for how comparable intraday and 0DTE',
-      'approaches handle whatever failure you identify, and cite what you used.',
-      'Prefer sources that describe a mechanism over ones that assert a result.',
+      '```json',
+      JSON.stringify(winner),
+      '```',
+      '',
+      `Book on the fit sessions: net ${packet.search?.book.search.net}, green days ${packet.search?.book.search.greenDays}.`,
+      `Book on the held-out sessions: net ${packet.search?.book.holdout.net}.`,
+      'A day the book did not trade is not a green day. Win rate is not the score.',
+      '',
+      codeChange
+        ? [
+            'This assignment is the quiet-day filter. Add a trainer gate that refuses',
+            'new entries when the 09:30–10:30 ET high-minus-low of spot is at or below',
+            `quietCutoffPts (${
+              winner.quietCutoffPts ?? 'the value in the assignment'
+            }).`,
+            'The gate stays off unless that setting is set. Do not change the sell ladder.',
+            'Do not turn a rule off in code.',
+          ].join('\n')
+        : [
+            'This assignment is a settings change. Do not edit a strategy formula.',
+            'The patch is already on the proposal. Write the report. Merging the pull',
+            'request does not write the trainer row. The 09:20 job writes it after the',
+            'proposal status is merged. Ladder numbers apply to both bots. A rule list,',
+            'cooldown, or entry-window end applies to the trainer only.',
+          ].join('\n'),
       '',
       '## Evidence',
       '',
-      '`rapidScalpReplay` rescores those same entries with a fee-aware exit',
-      'of about 1% of the money in the trade, or the 25% premium stop if that',
-      'prints first. Read it as an exit question only. It does not include',
-      'trades a shorter cooldown would have opened, and it is not a reason to',
-      'add a live rapid-scalp mode or to change cooldown. Entry-rule edits',
-      'still need the rest of the dossier.',
+      '```json',
+      JSON.stringify({
+        searchSessions: packet.search?.searchSessions,
+        holdoutSessions: packet.search?.holdoutSessions,
+        shouldHave: packet.search?.shouldHave,
+        dropCandidates: packet.search?.dropCandidates,
+        rules: packet.search?.rules,
+      }),
+      '```',
       '',
-      'The dossier below covers the trainer book only. `strategyPerformance`',
-      'splits results by rule and direction. `timeOfDay` is the same split',
-      'inside each 30-minute ET entry window (`strategies` on each bucket),',
-      'plus `exits` so a window of targets and a window of premium stops stay',
-      'apart when the setup tag is the same. `skipCensus` counts setups the',
-      'gates refused, which is the half of the record outcomes alone cannot',
-      'show. `excursion` distinguishes entries that never worked from exits',
-      'that gave back a winner. `sessionContext` describes the tape each day,',
-      'so a rule losing on a chop day and on a trend day can be told apart.',
+      'The dossier is context for the report. It is not permission to change something else.',
       '',
       '```json',
       JSON.stringify(packet.dossier),
       '```',
       '',
-      'The capped-settings replay ran separately and reports:',
-      `actionable=${packet.actionable}, blocked=[${packet.blockedReasons.join(', ') || 'none'}],`,
-      `patch=${JSON.stringify(packet.patch)}, holdout delta/trade=${packet.holdoutDeltaPerTrade},`,
-      `bootstrap 95% lower bound=${packet.bootstrapLowerBound}, stable sessions=${packet.stableSessions}.`,
+      '## Confirm the assignment',
       '',
-      'Read that as evidence about one narrow question — whether a two-key,',
-      'capped settings nudge survives walk-forward and bootstrap — and not as',
-      'permission. `actionable=false` means that particular nudge did not clear',
-      'the bar. It says nothing about whether the strategy itself should change.',
-      '',
-      '## Validate before you claim anything',
-      '',
-      `Run the replay on \`main\` for a baseline, then again on your branch:`,
+      'The backtest command requests one session at a time. Do not put the whole',
+      'range in one URL.',
       '',
       '```',
       backtest,
       '```',
       '',
-      'It replays the trainer. The request asks for the SPXW chain only, so a',
-      'SPY print cannot flatten an SPX trade. Signal bars are 15 seconds, built',
-      'from that chain\'s spot with the same function the trainer uses. The SPY',
-      'minute bars in the file are not the signal. Sells use the profit-lock',
-      'ladder, the time stop, and the session VWAP trend gate, one contract.',
-      'Do not compare a run that sells with the old 25% stop and 40% target.',
-      'Two limits you must respect and repeat:',
-      '',
-      '- It reports `snapshotIntervalSec` and `lowFidelity`. The live exit loop',
-      '  runs on every tick, so a stop touched and recovered between two samples',
-      '  is invisible. That bias runs one way: coarse runs understate stop-outs',
-      '  and flatter any candidate. If `lowFidelity` is true, say so wherever',
-      '  you quote a number, and do not compare it against live P&L.',
-      '- Sessions before 2026-09-28 were sampled once a minute; later ones every',
-      '  five seconds. Do not pool them without saying which is which.',
+      'Replay the current book, then replay the assignment. A ladder percent maps',
+      'onto profitLock: lossCutPct is stopPct, protectArmPct is armPct,',
+      'protectFloorPct is floorPct, givebackPct is givebackPct, tightFromPct is',
+      'tightFromPct, tightGivebackPct is tightGivebackPct. strategiesEnabled is',
+      'the strategies list. It replays the trainer: SPXW chain, 15-second bars,',
+      'profit-lock ladder. Quote baseline versus the assignment.',
+      'If `lowFidelity` is true, say so wherever you quote a number. Coarse runs',
+      'understate stop-outs. If your replay does not beat the book on the fit',
+      'sessions without fewer green days, and is not worse on the held-out',
+      'sessions, commit nothing.',
       '',
       '## Rules',
       '',
-      `- Work on your own branch. Never commit to main, never merge.`,
+      '- Work on your own branch. Never commit to main, never merge.',
       `- You may edit: ${ALLOWED_PATHS.join(', ')}.`,
       `- You may never edit: ${FORBIDDEN_PATHS.join(', ')}.`,
       '- Never arm or enable BOT_LIVE, and never weaken the kill switch, the',
-      '  lockout, the socket-loss flatten, or the minimum-equity refusal. CI',
-      '  fails the build if you do.',
-      '- A new setting needs its column, its DTO bounds and its migration in the',
-      '  same change, or it cannot ship.',
-      '- Keep the bot 0DTE-only and paper-only.',
+      '  lockout, the socket-loss flatten, or the minimum-equity refusal.',
+      '- Keep the bot paper-only. No spreads, no overnight hold, no weekly.',
       '',
       '## Deliverable',
       '',
       `Write \`bot-reports/weekly/${packet.weekEndingEt}-week.md\` and open one pull`,
-      'request. The body must carry, in this order: the failure you identified',
-      'and the specific numbers that show it; what your research found and the',
-      'sources; the change you made and why it addresses that failure; baseline',
-      'versus candidate replay results with the fidelity caveat; and what would',
-      'falsify it.',
+      'request for this assignment only. The body carries the fit-session numbers,',
+      'the held-out numbers, the source, and what would falsify it.',
       '',
-      'If the evidence does not support a change, say that plainly and open a',
-      'pull request containing only the report. A week that does not justify a',
-      'change is a real finding. Inventing a plausible-looking patch to have',
-      'something to show is the one outcome that makes this loop worse than',
-      'useless, because it will be reviewed by someone trusting that the',
-      'numbers meant something.',
+      'If you cannot apply this assignment exactly, change no files and open no',
+      'pull request. Inventing a change is worse than reporting that the search',
+      'already finished.',
     ].join('\n');
   }
 }

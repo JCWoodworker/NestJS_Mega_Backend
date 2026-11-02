@@ -6,6 +6,7 @@ import {
   scorePolicies,
 } from './bot-analysis.util';
 import { WeeklyDossier } from './bot-dossier.util';
+import type { SearchSummary } from './bot-propose-search';
 import { TapeSample } from './bot-trade-metrics.util';
 
 /** Infrastructure flattens. Kept in daily totals, dropped from propose. */
@@ -48,6 +49,8 @@ export interface ProposePacket extends EvidencePacket {
   dossier: WeeklyDossier;
   /** `v2|SPY|60` or `v2|SPXW|15`. One book per review. */
   book: string;
+  /** Present once the Saturday search has run. Absent on older proposals. */
+  search?: SearchSummary;
 }
 
 export interface EvidencePacket {

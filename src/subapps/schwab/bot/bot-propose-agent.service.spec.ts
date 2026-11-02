@@ -21,10 +21,21 @@ function packet(overrides: Partial<ProposePacket> = {}): ProposePacket {
       weekEndingEt: '2026-09-25',
       generatedAt: 0,
       sessions: [
-        { etDateKey: '2026-09-21', trades: 10, wins: 6, netPnl: 627.5, winRate: 60 },
+        {
+          etDateKey: '2026-09-21',
+          trades: 10,
+          wins: 6,
+          netPnl: 627.5,
+          winRate: 60,
+        },
       ],
       strategyPerformance: [],
-      signalFunnel: { signals: 0, entrySubmits: 0, entryFills: 0, fillRate: null },
+      signalFunnel: {
+        signals: 0,
+        entrySubmits: 0,
+        entryFills: 0,
+        fillRate: null,
+      },
       skipCensus: [],
       contractMisses: [],
       excursion: {
@@ -75,27 +86,33 @@ describe('BotProposeAgentService gating', () => {
     });
   });
 
-  it('does nothing when the week recorded no sessions', async () => {
+  it('does nothing when the search has not named a winner', async () => {
     const result = await build().launch(
       packet({ dossier: { ...packet().dossier, sessions: [] } }),
     );
 
-    expect(result.status).toBe('no_sessions');
+    expect(result.status).toBe('no_winner');
   });
 
   /**
-   * The loop this replaced refused to review any week whose capped settings
-   * patch failed its gates — which is precisely the week worth reviewing,
-   * since a losing week is the input to the analysis and not a verdict on it.
+   * A losing week used to start an agent anyway. The search is the gate now.
    */
-  it('reviews a week whose capped settings patch failed its gates', async () => {
-    delete process.env.CURSOR_API_KEY;
+  it('does not start an agent when the search has no winner', async () => {
+    process.env.CURSOR_API_KEY = 'key';
+    process.env.BOT_PROPOSE_GITHUB_REPO = 'https://github.com/example/nest';
 
     const result = await build().launch(
       packet({ actionable: false, blockedReasons: ['BOOTSTRAP_FAIL'] }),
     );
 
-    // Got past the actionable check and stopped on missing credentials.
+    expect(result.status).toBe('no_winner');
+  });
+
+  it('stops a winning week when no API key is configured', async () => {
+    delete process.env.CURSOR_API_KEY;
+
+    const result = await build().launch(winning());
+
     expect(result.status).toBe('no_api_key');
   });
 
@@ -103,7 +120,7 @@ describe('BotProposeAgentService gating', () => {
     process.env.CURSOR_API_KEY = 'key';
     delete process.env.BOT_PROPOSE_GITHUB_REPO;
 
-    await expect(build().launch(packet())).resolves.toEqual({
+    await expect(build().launch(winning())).resolves.toEqual({
       status: 'no_repo',
     });
   });
@@ -111,7 +128,8 @@ describe('BotProposeAgentService gating', () => {
 
 describe('BotProposeAgentService prompt', () => {
   const service = build();
-  const prompt = (p = packet()) => service['buildPrompt'](p, 'https://x/fixture');
+  const prompt = (p = winning()) =>
+    service['buildPrompt'](p, p.search!.winner!, 'https://x/fixture');
 
   it('hands the agent the dossier', () => {
     expect(prompt()).toContain('"etDateKey":"2026-09-21"');
@@ -131,10 +149,11 @@ describe('BotProposeAgentService prompt', () => {
     expect(text).toContain('never weaken the kill switch');
   });
 
-  /** A settings gate failing says nothing about whether the strategy is fine. */
-  it('tells the agent not to read a failed settings gate as permission', () => {
-    expect(prompt()).toContain('not as');
-    expect(prompt()).toContain('says nothing about whether the strategy');
+  it('tells the agent the search assignment is the only change', () => {
+    const text = prompt();
+    expect(text).toContain('Do not pick a different change');
+    expect(text).toContain('Do not add a second idea');
+    expect(text).not.toContain('Leave at least one change');
   });
 
   it('requires the replay to be run both ways', () => {
@@ -150,13 +169,37 @@ describe('BotProposeAgentService prompt', () => {
     expect(text).toContain('understate stop-outs');
   });
 
-  /**
-   * The failure mode that would make this loop worse than not having it: a
-   * confident-looking patch built to have something to show.
-   */
-  it('makes "no change" an acceptable outcome', () => {
+  it('refuses a pull request that is not the measured assignment', () => {
     const text = prompt();
-    expect(text).toContain('does not support a change');
+    expect(text).toContain('open no');
     expect(text).toContain('worse than');
   });
 });
+
+function winning(): ProposePacket {
+  return packet({
+    search: {
+      tooFewSessions: false,
+      searchSessions: ['2026-09-21', '2026-09-22'],
+      holdoutSessions: ['2026-09-23', '2026-09-24'],
+      book: {
+        search: { trades: 4, net: -10, greenDays: 1, fees: 1 },
+        holdout: { trades: 2, net: -2, greenDays: 0, fees: 1 },
+      },
+      rules: [],
+      shouldHave: [],
+      dropCandidates: [],
+      quietCutoffPts: null,
+      ran: [],
+      winner: {
+        id: 'window:12:00',
+        kind: 'window',
+        label: 'New entries stop at 12:00',
+        source: 'bot-reports/research-brief.md',
+        search: { trades: 3, net: 4, greenDays: 1, fees: 1 },
+        holdout: { trades: 1, net: -1, greenDays: 0, fees: 1 },
+        patch: { tradeWindowEnd: '12:00' },
+      },
+    },
+  });
+}

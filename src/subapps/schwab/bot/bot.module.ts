@@ -15,13 +15,7 @@ import { SchwabStreamingModule } from '@schwab/streaming/schwab-streaming.module
 
 import { BotAdminController } from './bot-admin.controller';
 import { BotAnalyzerService } from './bot-analyzer.service';
-import { BotV2Module } from '../bot-v2/bot-v2.module';
-import { BotV2Event } from '../bot-v2/entities/bot-v2-event.entity';
-import { BotV2Settings } from '../bot-v2/entities/bot-v2-settings.entity';
-import { BotV2Trade } from '../bot-v2/entities/bot-v2-trade.entity';
 import { BotArchiveService } from './bot-archive.service';
-import { BotProposeAgentService } from './bot-propose-agent.service';
-import { BotProposeService } from './bot-propose.service';
 import { BotCorpusHealthService } from './bot-corpus-health.service';
 import { BotEngineService } from './bot-engine.service';
 import { BotEventService } from './bot-event.service';
@@ -29,22 +23,29 @@ import { BotExecutionService } from './bot-execution.service';
 import { BotFixtureController } from './bot-fixture.controller';
 import { BotFixtureService } from './bot-fixture.service';
 import { BotMarketDataService } from './bot-market-data.service';
+import { BotProposeAgentService } from './bot-propose-agent.service';
+import { BotProposeService } from './bot-propose.service';
 import { BotRecordingService } from './bot-recording.service';
 import { BotSettingsService } from './bot-settings.service';
 import { BotStateService } from './bot-state.service';
 import { BotSupervisorService } from './bot-supervisor.service';
 import { BotController } from './bot.controller';
+import { BotV2Module } from '../bot-v2/bot-v2.module';
 import { BotCapitalEvent } from './entities/bot-capital-event.entity';
 import { BotChainSnapshot } from './entities/bot-chain-snapshot.entity';
 import { BotDailyReport } from './entities/bot-daily-report.entity';
-import { BotProposal } from './entities/bot-proposal.entity';
 import { BotEvent } from './entities/bot-event.entity';
 import { BotMarketDay } from './entities/bot-market-day.entity';
+import { BotProposal } from './entities/bot-proposal.entity';
+import { BotSearchLedger } from './entities/bot-search-ledger.entity';
 import { BotSettingsSnapshot } from './entities/bot-settings-snapshot.entity';
 import { BotSettings } from './entities/bot-settings.entity';
 import { BotState } from './entities/bot-state.entity';
 import { BotTradeTape } from './entities/bot-trade-tape.entity';
 import { BotTrade } from './entities/bot-trade.entity';
+import { BotV2Event } from '../bot-v2/entities/bot-v2-event.entity';
+import { BotV2Settings } from '../bot-v2/entities/bot-v2-settings.entity';
+import { BotV2Trade } from '../bot-v2/entities/bot-v2-trade.entity';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { BotTrade } from './entities/bot-trade.entity';
       BotCapitalEvent,
       BotDailyReport,
       BotProposal,
+      BotSearchLedger,
       BotV2Trade,
       BotV2Event,
       BotV2Settings,
@@ -93,6 +95,11 @@ import { BotTrade } from './entities/bot-trade.entity';
     BotFixtureService,
     BotArchiveService,
   ],
-  exports: [BotStateService, BotSettingsService, BotEventService, BotRecordingService],
+  exports: [
+    BotStateService,
+    BotSettingsService,
+    BotEventService,
+    BotRecordingService,
+  ],
 })
 export class BotModule {}

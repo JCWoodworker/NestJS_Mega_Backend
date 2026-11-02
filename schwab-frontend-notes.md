@@ -1745,6 +1745,8 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
 
 ## Changelog
 
+- **2026-11-02 (Saturday search before a pull request)**: `yarn bot:backtest --from` requests one `etDateKey` at a time. A wide fixture URL was crashing the dyno. The Saturday job replays the trainer the same way, holds out the last two sessions, and writes `bot_search_ledger` even when nothing wins. It does not start the review agent on a week no candidate beat the book. A merged proposal still applies the six sell numbers to both bots. A winning rule list, cooldown, or entry-window end (`11:00`, `12:00`, `13:00`) is written to the trainer only. No new desk route.
+
 - **2026-10-26 (manual desk follows its own underlying)**: The symbol in Settings is the manual chart and option chain. While the house trainer holds the shared socket, the desk does not send `subscribe-underlying` for a different ticker. It loads that chart with `GET /market-data/price-history` and that chain with `GET /market-data/chain`. The trainer's feed is unchanged. No new route.
 
 - **2026-10-26 (trainer replay)**: `GET /bot/fixture` accepts `underlying=SPY|SPX|SPXW` and returns that chain only. Each snapshot includes `underlying`. `yarn bot:backtest` replays the trainer: SPXW chain, 15-second bars built from that chain's spot, and the shared profit-lock ladder. The stored 1-minute bars stay SPY and are not the trainer's signal. No desk route change.

@@ -8,26 +8,47 @@ import schwabConfig from '@schwab/config/schwab.config';
 import { etDateKey } from '@schwab/pnl/et-date.util';
 
 import { defaultPolicyGrid, type AnalyzedTrade } from './bot-analysis.util';
+import { runBacktest } from './bot-backtest.util';
 import {
   buildWeeklyDossier,
   type DossierEvent,
   type DossierSession,
 } from './bot-dossier.util';
+import { BotFixtureService } from './bot-fixture.service';
 import { BotProposeAgentService } from './bot-propose-agent.service';
+import {
+  applyCandidate,
+  applySearchPatch,
+  buildCandidates,
+  configFromTrainer,
+  firstHourRange,
+  isQuiet,
+  quietCutoff,
+  SEARCH_LOOKBACK_DAYS,
+  SEARCH_MAX_SESSIONS,
+  splitHoldout,
+  summarizeReplay,
+  type SearchSummary,
+  type TradeLite,
+} from './bot-propose-search';
 import {
   buildEvidencePacket,
   type ProposePacket,
   type ProposeSettings,
 } from './bot-propose.util';
-import { trainerBookKey, trainerBookKeyFromSettings } from '../bot-v2/bot-v2-config.util';
+import { computeTradeExcursion, tradeKeyFor } from './bot-trade-metrics.util';
+import {
+  trainerBookKey,
+  trainerBookKeyFromSettings,
+} from '../bot-v2/bot-v2-config.util';
+import { BotMarketDay } from './entities/bot-market-day.entity';
+import { BotProposal } from './entities/bot-proposal.entity';
+import { BotSearchLedger } from './entities/bot-search-ledger.entity';
+import { BotSettings } from './entities/bot-settings.entity';
+import { BotTradeTape } from './entities/bot-trade-tape.entity';
 import { BotV2Event } from '../bot-v2/entities/bot-v2-event.entity';
 import { BotV2Settings } from '../bot-v2/entities/bot-v2-settings.entity';
 import { BotV2Trade } from '../bot-v2/entities/bot-v2-trade.entity';
-import { BotMarketDay } from './entities/bot-market-day.entity';
-import { BotSettings } from './entities/bot-settings.entity';
-import { BotProposal } from './entities/bot-proposal.entity';
-import { BotTradeTape } from './entities/bot-trade-tape.entity';
-import { computeTradeExcursion, tradeKeyFor } from './bot-trade-metrics.util';
 
 /**
  * Saturday evaluation of the house paper trainer.
@@ -50,6 +71,8 @@ export class BotProposeService {
     private readonly championSettings: Repository<BotSettings>,
     @InjectRepository(BotProposal)
     private readonly proposalRepository: Repository<BotProposal>,
+    @InjectRepository(BotSearchLedger)
+    private readonly ledgerRepository: Repository<BotSearchLedger>,
     @InjectRepository(BotV2Event)
     private readonly eventRepository: Repository<BotV2Event>,
     @InjectRepository(BotMarketDay)
@@ -57,6 +80,7 @@ export class BotProposeService {
     @Inject(schwabConfig.KEY)
     private readonly config: ConfigType<typeof schwabConfig>,
     private readonly agent: BotProposeAgentService,
+    private readonly fixture: BotFixtureService,
   ) {}
 
   /** Saturday 12:00 UTC. No-ops unless propose is explicitly enabled. */
@@ -118,9 +142,13 @@ export class BotProposeService {
     }
     const currentBook = trainerBookKeyFromSettings(settingsRow);
     const currentTrades = byBook.get(currentBook) ?? [];
-    const largest = [...byBook.entries()].sort((a, b) => b[1].length - a[1].length)[0];
-    const book = currentTrades.length ? currentBook : (largest?.[0] ?? currentBook);
-    const trades = currentTrades.length ? currentTrades : (largest?.[1] ?? []);
+    const largest = [...byBook.entries()].sort(
+      (a, b) => b[1].length - a[1].length,
+    )[0];
+    const book = currentTrades.length
+      ? currentBook
+      : largest?.[0] ?? currentBook;
+    const trades = currentTrades.length ? currentTrades : largest?.[1] ?? [];
 
     const tapeByTradeKey = await this.loadTape(ownerUserId, trades);
     const reviewed = trades.map((trade) =>
@@ -139,37 +167,53 @@ export class BotProposeService {
       trades: reviewed.map((trade) => ({
         ...trade,
         configVersion:
-          rows.find((row) => tradeKeyFor(row.symbol, Number(row.openedAt)) === trade.tradeKey)
-            ?.configVersion ?? null,
+          rows.find(
+            (row) =>
+              tradeKeyFor(row.symbol, Number(row.openedAt)) === trade.tradeKey,
+          )?.configVersion ?? null,
       })),
       events,
       sessions: await this.loadSessions(weekEndingEt),
       tapeByTradeKey,
     });
 
-    // Spread rather than nest so `packet.patch` stays where the 09:20 apply
-    // path already looks for it.
-    const packet: ProposePacket = { ...evidence, dossier, book };
+    const search = await this.runSaturdaySearch(
+      settingsRow,
+      weekEndingEt,
+      ownerUserId,
+    );
+    const packet: ProposePacket = {
+      ...evidence,
+      dossier,
+      book,
+      search,
+      actionable: Boolean(
+        search.winner && Object.keys(search.winner.patch).length,
+      ),
+      patch: {},
+    };
 
     const saved = await this.proposalRepository.save({
       userId: ownerUserId,
       weekEndingEt,
-      actionable: evidence.actionable,
+      actionable: packet.actionable,
       packet: packet as unknown as Record<string, unknown>,
       status: 'draft',
       appliedAt: null,
     });
+    await this.saveLedger(ownerUserId, weekEndingEt, search);
 
-    const launch = await this.agent.launch(packet);
+    const launch = search.winner
+      ? await this.agent.launch(packet)
+      : { status: 'no_winner' as const };
     if (launch.status === 'launched') {
       saved.status = 'pr_open';
       await this.proposalRepository.save(saved);
     }
     this.logger.log(
-      `Propose ${weekEndingEt}: ${dossier.sessions.length} session(s), ` +
-        `${evidence.strategyTradeCount} strategy trades, ` +
-        `capped-patch actionable=${evidence.actionable} ` +
-        `(${evidence.blockedReasons.join(',') || 'no blockers'}), ` +
+      `Propose ${weekEndingEt}: ${search.searchSessions.length} search session(s), ` +
+        `${search.holdoutSessions.length} held out, ` +
+        `winner=${search.winner?.label ?? 'none'}, ` +
         `agent=${launch.status}`,
     );
     return saved;
@@ -194,7 +238,7 @@ export class BotProposeService {
       return {
         at: row.createdAt.getTime(),
         type: String(row.type),
-        reason: noContract ? 'NO_CONTRACT_MATCH' : (row.reason ?? null),
+        reason: noContract ? 'NO_CONTRACT_MATCH' : row.reason ?? null,
         strategies: strategiesFromReason(row.reason, payload),
         direction: null,
         payload: noContract
@@ -227,33 +271,179 @@ export class BotProposeService {
     });
     for (const proposal of pending) {
       if (proposal.appliedAt) continue;
-      const patch = (proposal.packet as { patch?: Record<string, number> }).patch;
-      if (!patch || !Object.keys(patch).length) continue;
-      const keys = [
-        'lossCutPct',
-        'protectArmPct',
-        'protectFloorPct',
-        'givebackPct',
-        'tightFromPct',
-        'tightGivebackPct',
-      ] as const;
-      const row = await this.settingsRepository.findOneBy({ userId: ownerUserId });
-      const personal = await this.championSettings.findOneBy({ userId: ownerUserId });
-      if (!row) continue;
-      for (const key of keys) {
-        const value = patch[key];
-        if (typeof value !== 'number' || !Number.isFinite(value)) continue;
-        row[key] = value;
-        if (personal) personal[key] = value;
+      const body = proposal.packet as {
+        patch?: Record<string, number>;
+        search?: SearchSummary;
+      };
+      const winnerPatch = body.search?.winner?.patch;
+      if (body.search) {
+        if (!winnerPatch || !Object.keys(winnerPatch).length) {
+          proposal.appliedAt = new Date();
+          proposal.status = 'applied';
+          await this.proposalRepository.save(proposal);
+          continue;
+        }
+        const row = await this.settingsRepository.findOneBy({
+          userId: ownerUserId,
+        });
+        const personal = await this.championSettings.findOneBy({
+          userId: ownerUserId,
+        });
+        if (!row) continue;
+        if (!applySearchPatch(row, personal, winnerPatch)) continue;
+        await this.settingsRepository.save(row);
+        if (personal) await this.championSettings.save(personal);
+      } else {
+        const patch = body.patch;
+        if (!patch || !Object.keys(patch).length) continue;
+        const keys = [
+          'lossCutPct',
+          'protectArmPct',
+          'protectFloorPct',
+          'givebackPct',
+          'tightFromPct',
+          'tightGivebackPct',
+        ] as const;
+        const row = await this.settingsRepository.findOneBy({
+          userId: ownerUserId,
+        });
+        const personal = await this.championSettings.findOneBy({
+          userId: ownerUserId,
+        });
+        if (!row) continue;
+        for (const key of keys) {
+          const value = patch[key];
+          if (typeof value !== 'number' || !Number.isFinite(value)) continue;
+          row[key] = value;
+          if (personal) personal[key] = value;
+        }
+        if (Number(row.protectFloorPct) >= Number(row.protectArmPct)) continue;
+        await this.settingsRepository.save(row);
+        if (personal) await this.championSettings.save(personal);
       }
-      if (Number(row.protectFloorPct) >= Number(row.protectArmPct)) continue;
-      await this.settingsRepository.save(row);
-      if (personal) await this.championSettings.save(personal);
       proposal.appliedAt = new Date();
       proposal.status = 'applied';
       await this.proposalRepository.save(proposal);
       this.logger.log(`Applied proposal ${proposal.id} at the 09:20 ET window`);
     }
+  }
+
+  private async saveLedger(
+    userId: string,
+    weekEndingEt: string,
+    body: SearchSummary,
+  ): Promise<void> {
+    const existing = await this.ledgerRepository.findOneBy({
+      userId,
+      weekEndingEt,
+    });
+    if (existing) {
+      existing.body = body;
+      await this.ledgerRepository.save(existing);
+      return;
+    }
+    await this.ledgerRepository.save({ userId, weekEndingEt, body });
+  }
+
+  /**
+   * Replays the trainer one recorded day at a time. Snapshots for a day are
+   * dropped before the next day is loaded.
+   */
+  private async runSaturdaySearch(
+    settings: BotV2Settings,
+    weekEndingEt: string,
+    userId: string,
+  ): Promise<SearchSummary> {
+    const base = configFromTrainer(settings);
+    const candidates = buildCandidates({
+      rules: [...base.strategies],
+      cooldownMins: base.cooldownMins,
+      tradeWindowEnd: base.tradeWindowEnd,
+      ladder: toProposeSettings(settings),
+    });
+    const days = await this.marketDayRepository.find({
+      order: { etDateKey: 'ASC' },
+    });
+    const keys = days
+      .map((day) => day.etDateKey)
+      .filter((key) => key <= weekEndingEt)
+      .slice(-SEARCH_LOOKBACK_DAYS);
+
+    const ranges: Array<{ key: string; range: number | null }> = [];
+    for (
+      let index = keys.length - 1;
+      index >= 0 && ranges.length < SEARCH_MAX_SESSIONS;
+      index -= 1
+    ) {
+      const session = await this.fixture.loadSession(
+        keys[index],
+        base.underlying,
+      );
+      if (!session) continue;
+      ranges.push({
+        key: session.etDateKey,
+        range: firstHourRange(session.snapshots),
+      });
+    }
+    ranges.reverse();
+
+    const split = splitHoldout(ranges.map((item) => item.key));
+    const cutoff = quietCutoff(
+      ranges
+        .filter((item) => split.search.includes(item.key) && item.range != null)
+        .map((item) => item.range as number),
+    );
+    const quiet = new Set(
+      ranges
+        .filter((item) => isQuiet(item.range, cutoff))
+        .map((item) => item.key),
+    );
+    const tradesById = new Map<string, TradeLite[]>();
+    for (const candidate of candidates) tradesById.set(candidate.id, []);
+
+    for (const item of ranges) {
+      const session = await this.fixture.loadSession(item.key, base.underlying);
+      if (!session) continue;
+      for (const candidate of candidates) {
+        if (candidate.kind === 'quiet-days' && quiet.has(item.key)) continue;
+        const result = runBacktest([session], applyCandidate(base, candidate));
+        const bucket = tradesById.get(candidate.id) ?? [];
+        for (const trade of result.trades) {
+          bucket.push({
+            etDateKey: trade.etDateKey,
+            netPnl: trade.netPnl,
+            fees: trade.fees,
+          });
+        }
+        tradesById.set(candidate.id, bucket);
+      }
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+
+    const prior = await this.ledgerRepository.find({
+      where: { userId },
+      order: { weekEndingEt: 'DESC' },
+      take: 8,
+    });
+    const previous = prior.find((row) => row.weekEndingEt < weekEndingEt);
+    const summary = summarizeReplay({
+      sessionKeys: ranges.map((item) => item.key),
+      candidates,
+      tradesById,
+      priorRules:
+        previous?.body.rules.map((rule) => ({
+          rule: rule.rule,
+          searchNet: rule.search.net,
+        })) ?? null,
+      quietCutoffPts: cutoff,
+    });
+    this.logger.log(
+      `Search ${weekEndingEt}: ${summary.searchSessions.length} fit / ` +
+        `${summary.holdoutSessions.length} holdout, ` +
+        `${candidates.length} candidates, ` +
+        `quiet cutoff=${summary.quietCutoffPts ?? 'n/a'}`,
+    );
+    return summary;
   }
 
   private async loadTape(
@@ -324,7 +514,8 @@ function toAnalyzed(row: BotV2Trade, events: DossierEvent[]): AnalyzedTrade {
     captureEfficiency: null,
     sampleCount: 0,
     exitReason: row.exitReason,
-    strategies: row.strategies ?? strategiesNearEntry(row.symbol, openedAt, events),
+    strategies:
+      row.strategies ?? strategiesNearEntry(row.symbol, openedAt, events),
   };
 }
 
@@ -346,7 +537,10 @@ function strategiesFromReason(
   payload: Record<string, unknown> | null,
 ): string[] | null {
   const listed = payload?.strategies;
-  if (Array.isArray(listed) && listed.every((item) => typeof item === 'string')) {
+  if (
+    Array.isArray(listed) &&
+    listed.every((item) => typeof item === 'string')
+  ) {
     return listed;
   }
   const match = reason?.match(/^(?:ANY|CONFIRMING) ([A-Z0-9_+]+) →/);
@@ -364,7 +558,8 @@ function strategiesNearEntry(
   for (const event of events) {
     if (event.type !== 'ENTRY' || !event.strategies?.length) continue;
     const eventSymbol = event.payload?.symbol;
-    if (typeof eventSymbol === 'string' && eventSymbol.trim() !== symbol.trim()) continue;
+    if (typeof eventSymbol === 'string' && eventSymbol.trim() !== symbol.trim())
+      continue;
     const distance = Math.abs(event.at - openedAt);
     if (distance > 2 * 60_000) continue;
     if (!best || distance < best.distance) {

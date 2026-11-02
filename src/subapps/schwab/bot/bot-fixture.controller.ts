@@ -29,7 +29,7 @@ import { BotFixtureService } from './bot-fixture.service';
  * Disabled entirely unless `BOT_FIXTURE_TOKEN` is set, so an app that never
  * runs the improvement loop exposes nothing.
  */
-@Throttle({ default: { limit: 20, ttl: 60_000 } })
+@Throttle({ default: { limit: 60, ttl: 60_000 } })
 @Auth(AuthType.None)
 @Controller('bot/fixture')
 export class BotFixtureController {
