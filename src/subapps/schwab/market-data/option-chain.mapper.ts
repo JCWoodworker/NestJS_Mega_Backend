@@ -64,3 +64,26 @@ export function mapOptionChainResponse(
 
   return quotes;
 }
+
+/** Schwab `GET /quotes` for explicit OSI symbols. Far strikes are not in the ATM chain. */
+export function mapOptionQuotesResponse(body: unknown): OptionChainQuote[] {
+  if (!body || typeof body !== 'object') return [];
+  const quotes: OptionChainQuote[] = [];
+  for (const [key, row] of Object.entries(body as Record<string, any>)) {
+    const quote = row?.quote ?? row;
+    const symbol =
+      typeof row?.symbol === 'string' && row.symbol ? row.symbol : key;
+    if (!symbol || symbol === 'errors') continue;
+    quotes.push({
+      symbol,
+      bid: toNullableNumber(quote?.bidPrice ?? quote?.bid),
+      ask: toNullableNumber(quote?.askPrice ?? quote?.ask),
+      last: toNullableNumber(quote?.lastPrice ?? quote?.last),
+      bidSize: toNullableNumber(quote?.bidSize),
+      askSize: toNullableNumber(quote?.askSize),
+      volume: toNullableNumber(quote?.totalVolume ?? quote?.volume),
+      delta: toNullableNumber(quote?.delta),
+    });
+  }
+  return quotes;
+}

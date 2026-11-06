@@ -15,6 +15,7 @@ import {
 } from './expiration-chain.mapper';
 import {
   mapOptionChainResponse,
+  mapOptionQuotesResponse,
   OptionChainQuote,
 } from './option-chain.mapper';
 
@@ -334,6 +335,9 @@ export class MarketDataService {
   ): Promise<OptionChainQuote[]> {
     const symbol = this.resolveOptionSymbol(query.symbol);
     try {
+      if (query.symbols?.trim()) {
+        return await this.fetchNamedOptionQuotes(query.symbols);
+      }
       const strikeCount =
         query.strikeCount === 0 ? undefined : query.strikeCount ?? 16;
       const response = await firstValueFrom(
@@ -356,11 +360,7 @@ export class MarketDataService {
         });
       }
 
-      const quotes = mapOptionChainResponse(response.data);
-      if (!query.symbols) return quotes;
-
-      const wanted = new Set(query.symbols.split(',').map((s) => s.trim()));
-      return quotes.filter((q) => wanted.has(q.symbol));
+      return mapOptionChainResponse(response.data);
     } catch (error) {
       if (error instanceof BadRequestException) throw error;
       this.logger.error(
@@ -371,6 +371,18 @@ export class MarketDataService {
         error?.response?.data?.message || 'Option chain fetch failed',
       );
     }
+  }
+
+  /** Exact OSI quotes. The ATM chain does not include far strikes, so a filter there stays empty. */
+  private async fetchNamedOptionQuotes(
+    symbolsCsv: string,
+  ): Promise<OptionChainQuote[]> {
+    const response = await firstValueFrom(
+      this.httpService.get('/marketdata/v1/quotes', {
+        params: { symbols: symbolsCsv },
+      }),
+    );
+    return mapOptionQuotesResponse(response.data);
   }
 
   /** SPX and SPXW both list under the index symbol `$SPX`. */

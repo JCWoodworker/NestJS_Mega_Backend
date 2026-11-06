@@ -1,4 +1,7 @@
-import { mapOptionChainResponse } from './option-chain.mapper';
+import {
+  mapOptionChainResponse,
+  mapOptionQuotesResponse,
+} from './option-chain.mapper';
 
 describe('mapOptionChainResponse', () => {
   it('flattens callExpDateMap and putExpDateMap into one array, mapping totalVolume to volume', () => {
@@ -98,5 +101,35 @@ describe('mapOptionChainResponse', () => {
   it('returns an empty array for a malformed/empty response', () => {
     expect(mapOptionChainResponse({})).toEqual([]);
     expect(mapOptionChainResponse(null)).toEqual([]);
+  });
+});
+
+describe('mapOptionQuotesResponse', () => {
+  it('reads bid and ask off Schwab quote objects', () => {
+    const symbol = 'SPY   261106C00778000';
+    const quotes = mapOptionQuotesResponse({
+      [symbol]: {
+        symbol,
+        quote: {
+          bidPrice: 0.02,
+          askPrice: 0.03,
+          lastPrice: 0.02,
+          bidSize: 10,
+          askSize: 12,
+        },
+      },
+    });
+    expect(quotes).toEqual([
+      {
+        symbol,
+        bid: 0.02,
+        ask: 0.03,
+        last: 0.02,
+        bidSize: 10,
+        askSize: 12,
+        volume: null,
+        delta: null,
+      },
+    ]);
   });
 });
