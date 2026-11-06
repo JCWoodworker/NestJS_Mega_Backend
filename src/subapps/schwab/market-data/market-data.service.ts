@@ -334,12 +334,14 @@ export class MarketDataService {
   ): Promise<OptionChainQuote[]> {
     const symbol = this.resolveOptionSymbol(query.symbol);
     try {
+      const strikeCount =
+        query.strikeCount === 0 ? undefined : query.strikeCount ?? 16;
       const response = await firstValueFrom(
         this.httpService.get('/marketdata/v1/chains', {
           params: {
             symbol,
             contractType: 'ALL',
-            strikeCount: query.strikeCount ?? 16,
+            ...(strikeCount != null ? { strikeCount } : {}),
             fromDate: expiration,
             toDate: expiration,
           },

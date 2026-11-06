@@ -24,11 +24,14 @@ export class OptionChainQueryDto {
   })
   symbol: string;
 
-  /** Strikes above + below the money to request from Schwab. Default 16. */
+  /**
+   * Strikes above + below the money to request from Schwab. Default 16.
+   * `0` means All — omit the Schwab strikeCount filter.
+   */
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(1)
+  @Min(0)
   strikeCount?: number;
 
   /**

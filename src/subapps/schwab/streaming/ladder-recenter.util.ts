@@ -14,13 +14,27 @@
  */
 export const RECENTER_BUFFER_STRIKES = 3;
 
-/** Total strikes in the desk ladder. The at-the-money strike is one of them. */
-export const LADDER_STRIKE_CHOICES = [8, 12, 16, 24, 32] as const;
+/**
+ * Total strikes in the desk ladder. The at-the-money strike is one of them.
+ * `0` is All — a wide synthetic window so far OTM contracts stay subscribed.
+ */
+export const LADDER_STRIKE_ALL = 0;
+export const LADDER_STRIKE_CHOICES = [
+  8,
+  12,
+  16,
+  24,
+  32,
+  LADDER_STRIKE_ALL,
+] as const;
+/** Streamer window when the desk asks for All. Wide enough for far lottery tickets. */
+export const LADDER_STRIKE_ALL_WINDOW = 200;
 
 export const DEFAULT_LADDER_STRIKE_COUNT = 16;
 
 export function normalizeLadderStrikeCount(count: number | undefined): number {
-  if (count == null || !Number.isFinite(count)) return DEFAULT_LADDER_STRIKE_COUNT;
+  if (count == null || !Number.isFinite(count))
+    return DEFAULT_LADDER_STRIKE_COUNT;
   const rounded = Math.round(count);
   return (LADDER_STRIKE_CHOICES as readonly number[]).includes(rounded)
     ? rounded
@@ -28,8 +42,13 @@ export function normalizeLadderStrikeCount(count: number | undefined): number {
 }
 
 /** Inclusive offsets from the nearest strike. The window length is `count`. */
-export function ladderStrikeOffsets(count: number): { min: number; max: number } {
-  const total = normalizeLadderStrikeCount(count);
+export function ladderStrikeOffsets(count: number): {
+  min: number;
+  max: number;
+} {
+  const normalized = normalizeLadderStrikeCount(count);
+  const total =
+    normalized === LADDER_STRIKE_ALL ? LADDER_STRIKE_ALL_WINDOW : normalized;
   const below = Math.floor((total - 1) / 2);
   return { min: -below, max: total - 1 - below };
 }

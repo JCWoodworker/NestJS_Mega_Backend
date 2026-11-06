@@ -203,6 +203,11 @@ describe('chunkArray', () => {
     expect(normalizeLadderStrikeCount(7)).toBe(16);
   });
 
+  it('keeps All as zero and opens a wide streamer window', () => {
+    expect(normalizeLadderStrikeCount(0)).toBe(0);
+    expect(ladderStrikeOffsets(0)).toEqual({ min: -99, max: 100 });
+  });
+
   it('throws for a non-positive chunk size', () => {
     expect(() => chunkArray(['a'], 0)).toThrow();
     expect(() => chunkArray(['a'], -1)).toThrow();

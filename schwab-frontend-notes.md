@@ -1747,6 +1747,8 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
 
 - **2026-11-02 (Saturday search before a pull request)**: `yarn bot:backtest --from` requests one `etDateKey` at a time. A wide fixture URL was crashing the dyno. The Saturday job replays the trainer the same way, holds out the last two sessions, and writes `bot_search_ledger` even when nothing wins. It does not start the review agent on a week no candidate beat the book. A merged proposal still applies the six sell numbers to both bots. A winning rule list, cooldown, or entry-window end (`11:00`, `12:00`, `13:00`) is written to the trainer only. No new desk route.
 
+- **2026-11-06 (chain strikes All)**: `subscribe-underlying` and `GET /market-data/chain` accept `strikeCount: 0` for All listed strikes that day. The Settings chips add All beside 8–32. The streamer uses a wide window; the REST chain omits Schwab's strikeCount filter. Trainer entry chain stays 16.
+
 - **2026-10-26 (manual desk follows its own underlying)**: The symbol in Settings is the manual chart and option chain. While the house trainer holds the shared socket, the desk does not send `subscribe-underlying` for a different ticker. It loads that chart with `GET /market-data/price-history` and that chain with `GET /market-data/chain`. The trainer's feed is unchanged. No new route.
 
 - **2026-10-26 (trainer replay)**: `GET /bot/fixture` accepts `underlying=SPY|SPX|SPXW` and returns that chain only. Each snapshot includes `underlying`. `yarn bot:backtest` replays the trainer: SPXW chain, 15-second bars built from that chain's spot, and the shared profit-lock ladder. The stored 1-minute bars stay SPY and are not the trainer's signal. No desk route change.
@@ -1775,7 +1777,7 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
 
 - **2026-10-05 (trainer exits on the option, one contract)**: New trainer trades do not set an index stop or index target. They exit on the premium stop, the premium target, the trail, or the time stop. The trainer buys at most one contract. The personal bot's index exits are unchanged. Not a new field.
 
-- **2026-10-05 (desk chain strike count)**: `subscribe-underlying` accepts optional `strikeCount` of 8, 12, 16, 24, or 32. The desk ladder recenters to that many strikes. Omitted, it stays 16. The trainer's own entry chain is unchanged.
+- **2026-10-05 (desk chain strike count)**: `subscribe-underlying` accepts optional `strikeCount` of 8, 12, 16, 24, 32, or 0 (All). The desk ladder recenters to that many strikes. Omitted, it stays 16. The trainer's own entry chain is unchanged.
 
 - **2026-10-02 (trainer time-stop and ORB cross)**: `PUT /bot-v2/settings` accepts `useTimeStop` (default false) and `timeStopSeconds` (default 180). When on, a trainer trade still under +2% after that many seconds exits `TIME_STOP`. New strategy id `ORB_5M_CROSS` fires only on the bar that leaves the opening range. `ORB_5M` is unchanged. A one-time server job after 4:00 PM ET on 2026-10-02 saves the owner's trainer as SPXW, 15-second bars, scale-out, risk-at-stop at $800, the time-stop, and `ORB_5M_CROSS`, once that trainer is flat. Monday's arm is the first session on those settings. Saturday reviews one book at a time (`v2|SPY|60` or `v2|SPXW|15`).
 
