@@ -1747,6 +1747,7 @@ Table: `schwab_account_deletion_requests` (unique pending per `user_id`). FE: Se
 
 - **2026-11-02 (Saturday search before a pull request)**: `yarn bot:backtest --from` requests one `etDateKey` at a time. A wide fixture URL was crashing the dyno. The Saturday job replays the trainer the same way, holds out the last two sessions, and writes `bot_search_ledger` even when nothing wins. It does not start the review agent on a week no candidate beat the book. A merged proposal still applies the six sell numbers to both bots. A winning rule list, cooldown, or entry-window end (`11:00`, `12:00`, `13:00`) is written to the trainer only. No new desk route.
 
+- **2026-11-06 (quote budget)**: `GET /market-data/*` allows 180 requests a minute. The previous 60/min cap was answering the open-position quote poll with 429, so the desk had no bid and no P&L.
 - **2026-11-06 (named option quotes)**: `GET /market-data/chain` with `symbols` quotes those OSI contracts directly. Far strikes are no longer dropped by the 16-strike ATM window.
 - **2026-11-06 (chain strikes All)**: `subscribe-underlying` and `GET /market-data/chain` accept `strikeCount: 0` for All listed strikes that day. The Settings chips add All beside 8–32. The streamer uses a wide window; the REST chain omits Schwab's strikeCount filter. Trainer entry chain stays 16.
 

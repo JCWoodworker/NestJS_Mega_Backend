@@ -12,9 +12,11 @@ import { MarketDataService } from './market-data.service';
  * flipping between chart timeframes (1m/5m/15m/30m/1D) can easily fire more
  * than 10 backfill requests a minute. Schwab's own market-data rate limit is
  * far higher than this, so this just keeps our own guard out of the way.
- * Non-0DTE chain panes poll ~1–2s; 60/min still leaves headroom with Nest cache.
+ * Open positions, the chain, and chart history share this bucket. The desk
+ * polls quotes about every 2s; 60/min was filling up and answering 429, which
+ * left the trade card with no bid and no P&L.
  */
-@Throttle({ default: { limit: 60, ttl: 60000 } })
+@Throttle({ default: { limit: 180, ttl: 60000 } })
 @Controller('market-data')
 export class MarketDataController {
   constructor(private readonly marketDataService: MarketDataService) {}
